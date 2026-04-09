@@ -52,7 +52,7 @@ Privacy-first, selfhosted, no-app wedding photo sharing. Kein vollständiges Hoc
 - **Frontend (Next.js App Router):** Kommuniziert ausschließlich über REST mit dem Fastify-Backend. Kein direkter DB-Zugriff. **App Router** ist explizit gewählt (nicht Pages Router) — ermöglicht Server Components für initiales Foto-Laden ohne Client-JS-Overhead.
 - **Backend (Fastify):** Alle API-Endpunkte, Business-Logik, File-Handling, SSE-Endpunkt für Slideshow, Prisma für DB.
 - **Deployment:** `docker-compose up` startet beide Services. Reverse Proxy (Traefik/Nginx) optional davor.
-- **Monorepo:** `pnpm workspaces` + **Turborepo** — Frontend und Backend teilen das Prisma-Paket und TypeScript-Typen. Build-Reihenfolge: `packages/db` → `apps/backend` → `apps/frontend`.
+- **Monorepo:** `pnpm workspaces` + **Turborepo** — Frontend und Backend teilen das Prisma-Paket und TypeScript-Typen. Build-Reihenfolge: `packages/db`, `packages/shared` → `apps/backend`, `apps/frontend`. Package-Referenzen via `workspace:*` Protokoll: `"@wedding/db": "workspace:*"` in `apps/backend/package.json`.
 - **CORS:** `@fastify/cors` — erlaubt ausschließlich `FRONTEND_URL` als Origin. Keine Wildcard.
 - **TypeScript:** Strikt mandatiert (`strict: true`) in allen Packages. Geteilte Typen via `packages/db` eliminieren Typ-Drift zwischen Frontend und Backend.
 
@@ -119,6 +119,41 @@ export interface UploadResponse {
   duration: number | null
 }
 ```
+
+### Architecture Decision Records (ADRs)
+
+**ADR-001: SQLite als Default-Datenbank**
+- **Status:** Entschieden
+- **Kontext:** Self-hosted, typisch < 5000 Fotos pro Event, Single-Instance
+- **Entscheidung:** SQLite mit WAL-Mode. Zero-Config, Backup = eine Datei, kein separater DB-Service.
+- **Mitigation:** WAL-Mode (`PRAGMA journal_mode=WAL`) aktiviert concurrent reads + serialized writes. Bei > 20 gleichzeitigen Uploads ausreichend für Hochzeits-Workload (Bursts, nicht sustained).
+
+**ADR-002: SSE statt WebSocket für Realtime**
+- **Status:** Entschieden
+- **Entscheidung:** SSE. Unidirektionaler Push (Server→Client) reicht für Slideshow. Einfacher als WebSocket, HTTP-kompatibel, kein Upgrade-Handshake.
+- **Mitigation:** Connection-ID-basiertes Dedup in der SSE-Map (verhindert Phantom-Connections bei Reconnect).
+
+**ADR-003: In-Memory SSE-Map statt Redis**
+- **Status:** Entschieden für MVP
+- **Entscheidung:** In-Memory. Redis wäre Over-Engineering für Single-Instance MVP.
+- **Upgrade-Pfad:** SSE-Handler-Interface bleibt stabil — nur die Map-Implementierung wird gegen Redis Pub/Sub ausgetauscht wenn horizontales Scaling nötig wird.
+
+**ADR-004: REST statt tRPC**
+- **Status:** Entschieden
+- **Entscheidung:** REST. Begründung: (1) Breitere Client-Kompatibilität (Curl, externe Tools), (2) SSE ist native HTTP — kein tRPC-Overhead, (3) Externe API-Nutzung durch Community möglich, (4) `packages/shared` liefert Type-Safety ohne tRPC-Overhead.
+
+**ADR-005: Direkter Upload (Fastify) statt Presigned S3 URLs**
+- **Status:** Entschieden
+- **Option A (gewählt):** `POST /g/:slug/upload` → Fastify → MIME-Check → Sharp/ffmpeg → Storage
+  - Pro: Vollständige Kontrolle, EXIF-Strip vor Storage, Magic-Bytes-Validierung, funktioniert für Local-FS
+  - Con: Fastify leitet alle Bytes durch — Memory-Pressure bei vielen großen Videos
+- **Option B (verworfen):** Client → Presigned S3 URL direkt
+  - Pro: Fastify hat keine Upload-Last
+  - Con: EXIF-Strip und Validierung nur nachgelagert möglich, funktioniert nicht für Local-FS
+
+**ADR-006: Alpine statt Debian für Docker-Images**
+- **Status:** Entschieden
+- **Entscheidung:** `node:20-alpine` + `apk add vips-heif ffmpeg`. ~50MB Base statt ~350MB. Sharp Pre-built-Binaries ab v0.32+ auf Alpine verfügbar.
 
 ### Bekannte Architektur-Einschränkungen
 
@@ -212,7 +247,7 @@ model Gallery {
   weddingId          String
   wedding            Wedding        @relation(fields: [weddingId], references: [id])
   name               String
-  slug               String         @unique
+  slug               String
   description        String?
   coverImage         String?
   layout             GalleryLayout  @default(MASONRY)
@@ -223,6 +258,9 @@ model Gallery {
   createdAt          DateTime       @default(now())
   uploadWindows      UploadWindow[] // Phase 2
   photos             Photo[]
+
+  @@unique([weddingId, slug])  // Slug unique pro Wedding, nicht global
+                               // Zwei verschiedene Weddings können beide "party" haben
 }
 
 // Phase 2
@@ -254,6 +292,9 @@ model Photo {
   exifStripped     Boolean     @default(false)
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
+
+  deletedAt        DateTime?   // Soft Delete — null = aktiv; gesetzt = gelöscht
+                               // Datei-Cleanup via Background-Job (verhindert Inkonsistenz bei S3-Fehler)
 
   @@unique([galleryId, fileHash])
   @@index([galleryId, status, createdAt(sort: Desc)])
@@ -412,67 +453,160 @@ Wenn `secretKey` für eine Galerie gesetzt ist:
 - PIN wird clientseitig mit dem Request mitgeschickt und serverseitig gegen den bcrypt-Hash geprüft
 - Falsche PIN: max. 10 Versuche pro IP, dann temporärer Block (Rate Limiting)
 
-### Data Retention / Event-Abschluss
+### Event-Abschluss-Flow ("Ende der Hochzeit")
 
-- Admin kann eine Galerie "abschließen" (Status: `CLOSED`): Uploads deaktiviert, Galerie lesbar
-- Admin kann eine Galerie "archivieren": Unsichtbar für Gäste, Daten erhalten
-- Admin kann eine Galerie löschen: Alle Fotos und DB-Einträge werden gelöscht (irreversibel, Bestätigungsdialog)
-- **DSGVO-Hinweis** in der Doku: Fotos enthalten ggf. personenbezogene Daten. Empfohlene Löschfrist nach Event: 6–12 Monate. Admin ist verantwortlich.
-- ZIP-Export vor Löschung empfohlen (Hinweis im Lösch-Dialog)
+Wenn das Upload-Zeitfenster endet oder der Admin die Galerie abschließt:
+
+**Gast-Seite:**
+```
+Upload-Zeitfenster endet
+  → Galerie zeigt Banner: "Der Upload-Zeitraum ist beendet. Danke für eure Momente!"
+  → Upload-Button verschwindet (nicht disabled, entfernt)
+  → Galerie bleibt lesbar und downloadbar (falls erlaubt)
+```
+
+**Admin-Abschluss-Flow:**
+- Admin klickt "Galerie abschließen" → Bestätigungsdialog mit ZIP-Export-Hinweis
+- Nach Abschluss: Dashboard zeigt Zusammenfassung (Anzahl Fotos, Gäste, Zeitraum)
+- E-Mail an Admin (falls SMTP konfiguriert): "Eure Galerie ist gesichert — XY Fotos von Z Gästen"
+
+**Status-Übergänge:**
+```
+ACTIVE → CLOSED  (Uploads deaktiviert, Galerie lesbar)
+ACTIVE → ARCHIVED (Unsichtbar für Gäste, Daten erhalten)
+* → DELETED       (irreversibel, Bestätigungsdialog + ZIP-Hinweis)
+```
+
+**DSGVO-Hinweis** in der Doku: Empfohlene Löschfrist 6–12 Monate nach Event. Admin ist Verantwortlicher.
+
+### Moderations-Erschöpfungs-UX
+
+Szenario: 200 pending Fotos um Mitternacht nach der Feier.
+
+- **"Alles freigeben"-Button:** Einmalige Bulk-Freigabe aller pending Fotos (mit Bestätigungsdialog)
+- **Temporärer Auto-Approve-Modus:** Admin kann `moderationMode` auf `AUTO` schalten — neue Uploads erscheinen sofort. Rückkehr zu `MANUAL` jederzeit. Banner im Admin zeigt aktiven Modus.
+- **Prioritäts-Sortierung:** Neueste Fotos zuerst in der Moderations-Queue (Admin will Live-Reaktionen sehen, nicht Fotos von vor 6 Stunden)
+
+### Data Retention
+
+- Admin kann eine Galerie löschen: Alle Fotos + DB-Einträge gelöscht (irreversibel, Bestätigungsdialog + ZIP-Hinweis)
+- Soft-Delete für Photos: `deletedAt` gesetzt → Datei-Cleanup via Background-Job
+- **DSGVO-Hinweis** in der Doku: Empfohlene Löschfrist 6–12 Monate nach Event.
 
 ---
 
 ## Design-System
 
-Das ist ein emotionales Produkt. Die Benutzeroberfläche reflektiert "Moments not files".
+Das ist ein emotionales Produkt. Die UI ist die Bühne — kein Tech-Tool, sondern ein stilles, elegantes Album. Aesthetik: **"Warmes Archiv" — Editorial + Natural**.
 
-### Farbpalette
+### Farbpalette & CSS Variables
 
+```css
+:root {
+  /* Surface */
+  --color-surface-base:   #FAF7F4;  /* cremeweiß, kein Startup-White */
+  --color-surface-card:   #FFFFFF;
+  --color-border:         #E8E2DC;  /* warm, nicht neutral-grau */
+
+  /* Typografie */
+  --color-text-primary:   #2C2C2C;  /* fast-schwarz, warm */
+  --color-text-muted:     #7A746E;
+
+  /* Accent */
+  --color-accent:         #C4956A;  /* warmes Gold */
+  --color-accent-hover:   #B08050;
+
+  /* Status */
+  --color-success:        #4A7C59;
+  --color-error:          #C0392B;
+
+  /* Spacing */
+  --spacing-base: 8px;
+
+  /* Radien */
+  --radius-card:  12px;
+  --radius-thumb: 4px;   /* Fotos: leicht gerundet, nicht circular */
+
+  /* Slideshow (Beamer/TV) */
+  --slideshow-bg:         #0F0E0C;  /* warmschwarzes Tief */
+  --slideshow-surface:    #1A1916;
+  --slideshow-text:       #F0EBE3;
+  --slideshow-accent:     #D4A870;
+}
 ```
-Light Mode:
-  Background:   #FAFAF8  (warmes Off-White)
-  Surface:      #FFFFFF
-  Border:       #E8E4DF
-  Text primary: #1A1714
-  Text muted:   #6B6560
-  Accent:       #C4956A  (warmes Gold — Hochzeits-Assoziation)
-  Accent hover: #B08050
-  Success:      #4A7C59
-  Error:        #C0392B
 
-Dark Mode (primäre Slideshow-Nutzung auf Beamer):
-  Background:   #0D0D0B  (fast Schwarz, warm)
-  Surface:      #1A1A17
-  Border:       #2E2E29
-  Text primary: #F5F1EC
-  Text muted:   #9E9890
-  Accent:       #D4A870  (helles Gold auf dunklem Grund)
-```
+Tailwind nutzt diese Tokens via `tailwind.config.ts` in `packages/shared` — geteilt zwischen allen Apps.
 
 ### Typografie
 
-- **Primär:** `Inter` (system-ui Fallback) — lesbar, modern, weit verbreitet
-- **Display/Titel:** `Playfair Display` (Google Fonts, self-hosted via `next/font`) — elegant, emotional für Galerie-Überschriften
-- **Monospace:** System-default (nur Admin-Panel für technische Inhalte)
-- **Skala:** Tailwind-Standard (`text-sm`, `text-base`, `text-lg`, `text-xl`, `text-2xl`, `text-4xl`)
+- **Body:** `DM Sans` (ruhig, lesbar, nicht korporativ) — ersetzt Inter
+- **Display/Titel:** `Playfair Display` (Serif, romanisch, zeitlos) — für Galerie-Überschriften und emotionale Momente
+- **Monospace:** System-default, nur Admin-Panel für technische Inhalte
+- Beide Fonts via `next/font` self-hosted (kein externer CDN-Request)
 
 ### Icon-Set
 
 **Lucide Icons** (`lucide-react`) — konsistente Strichstärke, MIT-Lizenz, tree-shakeable.
 
-### Animation-Tokens
+### Visuelle Differenzierungen
+
+1. **Foto-Thumbnails:** Leichter Schatten + `--radius-thumb: 4px` — "auf dem Tisch ausgebreitet", nicht brutaler Grid
+2. **Upload-Button:** Warmes Amber/Gold mit Kamera-Icon, sticky bottom. Label: "Moment festhalten" (nicht "Datei hochladen")
+3. **Galerie-Hintergrund:** Subtile Noise-Textur, Opacity 3% — kein reines Weiß
+4. **Slideshow-Hintergrund:** Vignette-Effekt (`box-shadow: inset 0 0 200px rgba(0,0,0,0.8)`) — Kinoatmosphäre
+
+### Animation-Tokens & Motion-Strategie
 
 ```css
 /* Slideshow */
---slideshow-crossfade-duration: 1200ms;
+--slideshow-crossfade-duration: 800ms;    /* weich, nicht träge */
 --slideshow-crossfade-easing: ease-in-out;
---slideshow-display-duration: 8000ms;  /* konfigurierbar via Env */
+--slideshow-display-duration: 8000ms;     /* konfigurierbar via Env */
 
 /* UI Micro-Animations */
 --transition-fast: 150ms ease;
 --transition-base: 250ms ease;
 --transition-slow: 400ms ease;
 ```
+
+**Staggered Gallery Reveal:** Fotos erscheinen nacheinander beim Laden (max. 20 Items, dann synchron):
+```css
+.photo-card { animation: fadeUp 400ms ease-out both; }
+.photo-card:nth-child(n) { animation-delay: calc(n * 60ms); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+```
+
+**Upload-Button Pulse** (nur wenn Galerie leer):
+```css
+@keyframes gentle-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(196, 149, 106, 0); }
+}
+```
+
+**Reduced Motion (WCAG):**
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
+
+**Skeleton Shimmer:** Gradient `#FAF7F4 → #E8E2DC → #FAF7F4` — warm, kein kaltes Grau.
+
+### QR-Code-Design
+
+QR-Code ist das physische Interface zwischen Offline und Online — landet auf Tischkärtchen, Drucken, Präsentationen:
+
+- **Error-Correction:** `M` (15%) für digitale Anzeige; `H` (30%) für gedruckte Karten (verträgt Kaffeeflecken, Knicke)
+- **Farbe:** `#2C2C2C` auf `#FAF7F4` — passt zum Gesamt-Design, kein reines Schwarz-Weiß
+- **Quiet Zone:** Mindestens 4 Module erzwungen (`margin: 4` in `qrcode`-Config)
+- **Formate:** PNG (`scale: 10` = ~300dpi für Druck), SVG (vektorbasiert für Präsentationen)
+- **Logo:** Optionaler Overlay in der Mitte (Phase 3, `qrcode` + Sharp compositing)
+
+**Tischkärtchen-Export (Phase 3):** A6 Querformat (148×105mm). Layout: Galerie-Name oben, QR-Code mittig, kurze Anleitung unten ("Scanne den Code und teile deine Fotos"). PDF-Generierung via `@react-pdf/renderer`.
 
 ### Slideshow-Bilddarstellung (Beamer/TV)
 
@@ -504,6 +638,8 @@ Dark Mode (primäre Slideshow-Nutzung auf Beamer):
 
 **Fastify REST API** — Basis-URL: `/api/v1`
 
+**Versionierungsstrategie:** v1 wird für mindestens 12 Monate nach einem v2-Release supported. Breaking Changes werden per `Sunset`-Header (`Sunset: Sat, 01 Jan 2028 00:00:00 GMT`) angekündigt. Non-breaking Additions (neue optionale Felder) erfordern keine neue Version.
+
 ### URL-Konvention
 
 `/g/:slug` (Kurzform) ist bewusst gewählt für die Gast-URLs: QR-Codes müssen kurz und druckbar sein. Admin-URLs nutzen `/admin/galleries` (ausgeschrieben) für Lesbarkeit. Diese Inkonsistenz ist dokumentiert und intentional.
@@ -517,7 +653,7 @@ GET    /g/:slug?cursor=<id>&limit=20  → GalleryResponse + Photos (cursor-based
 POST   /g/:slug/upload                → UploadResponse (multipart, @fastify/multipart)
 GET    /g/:slug/slideshow/stream      → SSE-Stream (neue Fotos, rate limited)
 GET    /g/:slug/qr?format=png|svg     → QR-Code on-demand
-GET    /g/:slug/download              → ZIP aller freigegebenen Fotos (falls erlaubt)
+GET    /g/:slug/download              → ZIP aller freigegebenen Fotos (Server prüft Gallery.allowGuestDownload — client-seitiges Verstecken des Buttons reicht nicht)
 GET    /health                        → HealthResponse
 GET    /ready                         → ReadyResponse
 ```
@@ -605,6 +741,28 @@ Browser → POST /g/:slug/upload (multipart)
   → SMTP-Notification an Admin (falls konfiguriert)
   → Response: { id, status: "PENDING", thumbUrl, mediaType, duration }
   // thumbUrl zeigt Poster-Frame für Videos — sofortige Vorschau auch für HEIC
+```
+
+**`@fastify/multipart` Limits (explizit konfiguriert):**
+```typescript
+fastify.register(multipart, {
+  limits: {
+    fileSize: MAX_FILE_SIZE_MB * 1024 * 1024,  // Bilder
+    files: 10,       // max Dateien pro Request — verhindert 100-Datei-Angriff
+    fields: 5,
+    headerPairs: 100,
+  }
+})
+// Videos: separater Endpunkt mit MAX_VIDEO_SIZE_MB-Limit
+```
+
+**SMTP ist fire-and-forget:** SMTP-Fehler darf den Upload nicht blockieren:
+```typescript
+async function notifyAdmin(photo: Photo) {
+  try { await sendMail(...) }
+  catch (err) { logger.error({ err }, 'smtp.notification.failed') }
+  // kein rethrow — Upload war erfolgreich
+}
 ```
 
 **Known Limitation — Sharp CPU-Blocking:** Sharp ist CPU-intensiv. Bei vielen gleichzeitigen Uploads kann der Node.js Event Loop kurzzeitig blockieren. Für MVP akzeptabel (Hochzeits-Workload: Bursts, nicht kontinuierlich). Mittel-/langfristig: Worker Threads oder BullMQ-Queue als separates Modul.
@@ -876,7 +1034,8 @@ Das Frontend wird als PWA ausgeliefert. Ziel: "Add to Home Screen" auf iOS und A
 
 - **Tailwind CSS** — Mobile-first, Dark Mode via `class`-Strategy (System-Präferenz + manueller Toggle)
 - **WCAG 2.1 AA** — Kontrastverhältnisse, Alt-Texte, Keyboard-Navigation in Lightbox und Moderation
-- **i18n:** `next-intl` mit App Router. **Sprachbestimmung im Frontend** (nicht Backend): `middleware.ts` liest `Accept-Language`-Header und setzt Locale. Kein `[locale]`-Routing-Wrapper — locale-agnostisches Routing (`/g/[slug]`, nicht `/de/g/[slug]`). `DEFAULT_LANG` Env als Fallback wenn kein `Accept-Language`. Backend liefert immer englische Error-Types (RFC 7807), Frontend übersetzt `title`/`detail`.
+- **i18n:** `next-intl` mit App Router. **Entscheidung: Option C** — Locale nur im Admin; Gäste sehen immer `DEFAULT_LANG`. Begründung: Gast-URLs müssen kurz und QR-Code-freundlich bleiben (`/g/slug`, nicht `/de/g/slug`). Admin nutzt Locale via Cookie (`NEXT_LOCALE`). `middleware.ts` liest Cookie → setzt Locale für Admin-Routen; Gast-Routen ignorieren Locale-Präfix. Backend liefert immer englische Error-Types (RFC 7807), Frontend übersetzt.
+- **Sharp vs. next/image:** Sharp für Upload-Zeit-Thumbnails (feste Größen, gecacht, WEBP). `next/image` nur für Admin-seitige Bilder mit flexiblen Größen (z.B. Cover-Image-Upload-Vorschau). Kein Double-Processing — klare Trennung.
 - **Progressive Loading:** Thumbnails via `next/image` mit Lazy Loading und `blur`-Placeholder (generiert beim Upload)
 - **Slow-Network-Degradation:** Thumbnails auf Mobilgeräten werden in kleinerer Größe angefordert (`sizes` Attribut via `next/image`). Vollbild nur bei Lightbox-Öffnung geladen.
 
@@ -1003,6 +1162,8 @@ Content-Disposition: attachment; filename="wedding-[photoId].jpg"
 | Duplikate | `@@unique([galleryId, fileHash])` — Scope pro Galerie |
 | CORS | `@fastify/cors`, nur `FRONTEND_URL` als erlaubter Origin |
 | SESSION_SECRET Rotation | Rotation invalidiert alle aktiven Sessions. Dokumentiert in `docs/security.md`. Empfehlung: Rotation nach jedem Event. |
+| Timing Attack (Slug-Enumeration) | PIN-geschützte Galerien: Response-Time normalisiert (immer ~gleiche Dauer, egal ob Galerie existiert). Public-Galerien: kein Timing-Schutz nötig (Design-Entscheidung). |
+| Webhook-Sicherheit | HTTPS-only für `WEBHOOK_URL` (HTTP-URLs werden abgelehnt). Payload enthält kein PII, keine Original-Dateipfade — nur Event-Typ, Galerie-Slug, Zeitstempel. HMAC-Signatur via `WEBHOOK_SECRET` (Phase 3). |
 | Path Traversal | `originalPath`/`thumbPath` werden nie direkt als Dateisystem-Pfad verwendet. Immer: `path.join(BASE_UPLOAD_DIR, path.basename(storedPath))`. Raw-DB-Pfad nie an `fs`-Funktionen übergeben. |
 | ZIP-Export Limit | `GET /admin/galleries/:id/export` → max. 500MB oder 1000 Fotos pro Request. Bei Überschreitung: 413 mit Hinweis auf asynchronen Export (Phase 2: BullMQ Job + Download-Link). |
 | noindex | `<meta name="robots" content="noindex,nofollow">` auf allen `/g/*` Seiten + `X-Robots-Tag: noindex` Header vom Backend. Social-Media-Crawler (Facebook, Telegram) ignorieren `robots.txt`. |
@@ -1230,6 +1391,58 @@ jobs:
       - run: docker build ./apps/backend -t wedding-pic-share-backend
       - run: docker build ./apps/frontend -t wedding-pic-share-frontend
 ```
+
+### Multi-Platform Docker Build (ARM64 Support)
+
+Hochzeits-Hosts laufen oft auf Raspberry Pi (ARM64) oder Synology NAS. Sharp braucht plattform-spezifische Binaries:
+
+```dockerfile
+# Backend Dockerfile — platform-aware
+FROM --platform=$TARGETPLATFORM node:20-alpine AS runner
+ARG TARGETPLATFORM
+# Sharp installiert automatisch die richtige Binary für amd64 oder arm64
+RUN apk add --no-cache vips-heif ffmpeg
+```
+
+```yaml
+# docker-compose.yml
+services:
+  backend:
+    build:
+      platforms:
+        - linux/amd64
+        - linux/arm64
+```
+
+CI baut beide Plattformen via `docker buildx`:
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t wedding-pic-share/backend:latest .
+```
+
+### Update-Script (`update.sh`)
+
+```bash
+#!/bin/bash
+set -e
+echo "📦 Backup DB..."
+docker compose exec backend sqlite3 /data/db.sqlite \
+  ".backup /data/backup-$(date +%Y%m%d-%H%M).sqlite"
+
+echo "⬇️  Pulling new version..."
+docker compose pull
+
+echo "🔄 Running migrations..."
+docker compose run --rm backend-migrate
+
+echo "🚀 Restarting..."
+docker compose up -d
+
+echo "✅ Health check..."
+sleep 5
+curl -f http://localhost:4000/health && echo "OK" || echo "WARN: Health check failed"
+```
+
+Im Repo als `update.sh` mit Dokumentation in `docs/deployment.md`.
 
 ### Secrets Management
 
@@ -1468,6 +1681,77 @@ jobs:
 
 **Branches:** Unit + Integration bei jedem Push; E2E nur auf `main` und Pull Requests.
 
+### Konkrete Test-Beispiele
+
+**Race-Condition-Test (Tier 1):**
+```typescript
+it('rejects duplicate upload under concurrent load', async () => {
+  const file = readFixture('test-duplicate.jpg')
+  const uploads = Array(10).fill(null).map(() =>
+    fastify.inject({ method: 'POST', url: '/api/v1/g/test-gallery/upload', payload: file })
+  )
+  const results = await Promise.all(uploads)
+  const accepted = results.filter(r => r.statusCode === 202)
+  expect(accepted).toHaveLength(1)  // genau einer darf durch
+})
+```
+
+**SSE Memory Leak Test (Tier 3):**
+```typescript
+it('removes connection from map on client disconnect', async () => {
+  const connection = await openSSEConnection('/api/v1/g/test/slideshow/stream')
+  expect(sseMap.get('gallery-id')?.size).toBe(1)
+  connection.close()
+  await nextTick()
+  expect(sseMap.get('gallery-id')?.size).toBe(0)
+})
+```
+
+**Wedding Day Smoke Test (E2E):**
+```typescript
+test('complete wedding day flow', async ({ browser }) => {
+  const admin = await browser.newPage()
+  // Admin erstellt Galerie, holt QR-URL
+  await admin.goto('/admin')
+  // ...login, create gallery, get slug
+
+  // 5 gleichzeitige Gäste uploaden
+  const guests = await Promise.all(Array(5).fill(null).map(() => browser.newPage()))
+  await Promise.all(guests.map(async (page, i) => {
+    await page.goto('/g/test-wedding/upload')
+    await page.setInputFiles('input[type=file]', `fixtures/test-${i}.jpg`)
+    await page.click('[data-testid=submit-upload]')
+    await expect(page.locator('[data-testid=pending-confirmation]')).toBeVisible()
+  }))
+
+  // Admin genehmigt alle
+  await admin.goto('/admin/galleries/test-id/moderate')
+  await admin.click('[data-testid=approve-all]')
+
+  // Galerie zeigt Fotos
+  await expect(admin.locator('[data-testid=photo-count]')).toHaveText('5')
+})
+```
+
+### Visual Regression Tests
+
+Playwright Screenshot-Tests für design-sensitive Seiten:
+
+```typescript
+test('gallery page matches snapshot', async ({ page }) => {
+  await page.goto('/g/test-gallery')
+  await expect(page).toHaveScreenshot('gallery-50-photos.png', { threshold: 0.02 })
+})
+```
+
+Getestete States:
+- GalleryPage: leer, 1 Foto, 50 Fotos (Masonry)
+- SlideshowPage: Vollbild 1920×1080 (Dark Mode)
+- UploadPage: mobil 375×812 (iOS-Viewport)
+- AdminModerationPage: mit pending Fotos
+
+Tool: Playwright built-in Screenshot-Comparison (`toHaveScreenshot`). Snapshots in `tests/screenshots/`.
+
 ### Test-Fixtures
 
 Dediziertes Fixtures-Verzeichnis mit Bildern bekannter Eigenschaften:
@@ -1493,6 +1777,44 @@ packages/shared/fixtures/
 
 ---
 
+## Performance-Budgets
+
+| Metrik | Ziel | Messung |
+|---|---|---|
+| LCP (Galerie-Seite) | < 2.5s | Lighthouse / Web Vitals |
+| Time-to-Interactive | < 3s auf 4G | Lighthouse |
+| Time-to-Upload-Start | < 10s (QR → erster Upload-Byte) | Server-Log `createdAt` |
+| Upload-Throughput | 5 gleichzeitige Uploads ohne Degradation | k6 Phase 2 |
+| SSE-Latenz | Photo approved → Event < 500ms | Integration-Test |
+| Gallery-Load (100 Fotos) | < 1.5s initial render | Lighthouse |
+
+**Masonry-Virtualisierung:** `react-masonry-css` rendert alle Elemente gleichzeitig. Ab 200 Fotos: Wechsel zu `masonic` (virtualisiertes Masonry) oder TanStack Virtual. Phase 2 — Entscheidung basierend auf gemessener Performance mit echten Daten.
+
+**SSE Connection-Dedup:** Jede Verbindung erhält eine Connection-ID. Bei Reconnect wird die alte ID aus der Map entfernt bevor die neue eingetragen wird. Verhindert Phantom-Connections bei schlechtem Netz.
+
+## Produktname & Open-Source-Strategie
+
+### Projektname
+
+`wedding-pic-share` ist der technische Repository-Name. Für die Community-Positionierung ist ein emotionalerer Name sinnvoll — "Moments not Files" als Prinzip sollte sich im Namen widerspiegeln. Vorschläge: `Candid` (ehrliche Momentaufnahmen), `Fête`. **Entscheidung steht aus** — nicht MVP-blockierend, sollte vor erstem GitHub-Release getroffen werden.
+
+### Onboarding (First 5 Minutes)
+
+Neuer User nach `docker-compose up`:
+1. Browser öffnet `localhost:3000`
+2. Kein Admin gesetzt → automatisch `/setup` angezeigt (nicht leeres Dashboard)
+3. Setup-Wizard: (1) Dein Name / Hochzeitsname, (2) Passwort wählen, (3) Erste Galerie erstellen, (4) QR-Code anzeigen
+4. Nach Setup: Dashboard mit "Deine erste Galerie ist bereit — QR-Code ausdrucken und loslegen"
+
+### Open-Source-Strategie
+
+- `LICENSE`: MIT ✓
+- `CONTRIBUTING.md`: Wie man beiträgt (Branches, Tests, i18n)
+- `CODE_OF_CONDUCT.md`: Contributor Covenant
+- GitHub Issue-Templates: Bug Report, Feature Request, i18n Contribution
+- Labels: `good first issue` (kleine UI-Fixes, neue Sprachen), `help wanted`, `Phase 2`
+- Roadmap: GitHub Projects Board mit Phase 1/2/3
+
 ## Out-of-Scope (MVP)
 
 - KI-Gesichtserkennung / automatische Foto-Zuordnung
@@ -1513,10 +1835,11 @@ packages/shared/fixtures/
 | Sprache | TypeScript (`strict: true`) überall |
 | Frontend | Next.js 14+ (App Router), Tailwind CSS, next-intl |
 | PWA | `@ducanh2912/next-pwa` (Workbox Service Worker, Manifest, Offline-Support) |
-| Fonts | Inter + Playfair Display via `next/font` (self-hosted) |
+| Fonts | DM Sans + Playfair Display via `next/font` (self-hosted) |
 | Icons | Lucide React |
 | State (Client) | TanStack Query (Server-Daten), Zustand (Upload-Queue, SSE-State) |
-| Masonry | react-masonry-css |
+| Masonry | react-masonry-css (Phase 1); masonic für Virtualisierung ab Phase 2 |
+| PDF | `@react-pdf/renderer` (Tischkärtchen-Export, Phase 3) |
 | Backend | Fastify (Node.js) |
 | ORM | Prisma mit Enums (SQLite default, PostgreSQL optional) |
 | Bild-Processing | Sharp (thumb 400px WEBP, display 1920px WEBP, original; HEIC→JPEG, EXIF-Strip) |
