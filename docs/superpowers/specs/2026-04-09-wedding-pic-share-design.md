@@ -46,6 +46,7 @@ Privacy-first, selfhosted, no-app wedding photo sharing. Kein vollständiges Hoc
 - **Backend (Fastify):** Alle API-Endpunkte, Business-Logik, File-Handling, SSE-Endpunkt für Slideshow, Prisma für DB.
 - **Deployment:** `docker-compose up` startet beide Services. Reverse Proxy (Traefik/Nginx) optional davor.
 - **Monorepo:** `pnpm workspaces` — Frontend und Backend teilen das Prisma-Paket, unabhängig deploybar.
+- **CORS:** `@fastify/cors` auf dem Backend konfiguriert — erlaubt ausschließlich den Frontend-Origin (`FRONTEND_URL` Env-Variable). In Produktion keine Wildcard-Origin.
 
 ### Repo-Struktur
 
@@ -71,17 +72,41 @@ Wedding (1)
   └── Gallery/Sub-Event (n)          ← z.B. Standesamt, Kirche, Party
         ├── uploadWindows (n)        ← Zeitfenster (mehrere möglich)
         ├── Photo (n)
-        │     ├── status: pending | approved | rejected
+        │     ├── status: PENDING | APPROVED | REJECTED  (Enum)
         │     ├── guestName (optional)
-        │     ├── fileHash (SHA-256, Duplikatprüfung)
+        │     ├── fileHash (SHA-256, Duplikatprüfung per Galerie)
         │     ├── originalPath / thumbnailPath
         │     └── exifStripped: boolean
-        └── QRCode (1)               ← generiert beim Erstellen
+        └── QR-Code: on-demand generiert (kein DB-Eintrag)
 ```
+
+**QR-Code:** Wird nicht in der DB gespeichert. Der Endpunkt `GET /g/:slug/qr` generiert den Code on-demand via `qrcode`-Paket aus dem Gallery-Slug. Kein persistenter State nötig.
 
 ### Prisma-Schema
 
 ```prisma
+enum PhotoStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum GalleryLayout {
+  MASONRY
+  GRID
+}
+
+enum GuestNameMode {
+  OPTIONAL
+  REQUIRED
+  HIDDEN
+}
+
+enum ModerationMode {
+  MANUAL
+  AUTO
+}
+
 model Wedding {
   id        String    @id @default(cuid())
   name      String
@@ -98,10 +123,10 @@ model Gallery {
   slug               String         @unique
   description        String?
   coverImage         String?
-  layout             String         @default("masonry") // masonry | grid
+  layout             GalleryLayout  @default(MASONRY)
   allowGuestDownload Boolean        @default(false)
-  guestNameMode      String         @default("optional") // optional | required | hidden
-  moderationMode     String         @default("manual") // manual | auto
+  guestNameMode      GuestNameMode  @default(OPTIONAL)
+  moderationMode     ModerationMode @default(MANUAL)
   secretKey          String?        // bcrypt-gehasht
   createdAt          DateTime       @default(now())
   uploadWindows      UploadWindow[]
@@ -117,28 +142,30 @@ model UploadWindow {
 }
 
 model Photo {
-  id               String   @id @default(cuid())
+  id               String      @id @default(cuid())
   galleryId        String
-  gallery          Gallery  @relation(fields: [galleryId], references: [id])
+  gallery          Gallery     @relation(fields: [galleryId], references: [id])
   guestName        String?
-  fileHash         String   @unique
+  fileHash         String
   originalPath     String
   thumbPath        String
   mimeType         String
-  status           String   @default("pending") // pending | approved | rejected
+  status           PhotoStatus @default(PENDING)
   rejectionReason  String?
-  exifStripped     Boolean  @default(false)
-  createdAt        DateTime @default(now())
+  exifStripped     Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+
+  @@unique([galleryId, fileHash])  // Duplikat-Scope: pro Galerie, nicht global
 }
 
 model AdminUser {
-  id             String    @id @default(cuid())
-  username       String    @unique
-  passwordHash   String
-  totpSecret     String?
-  failedAttempts Int       @default(0)
-  lockedUntil    DateTime?
-  sessions       Session[]
+  id                String    @id @default(cuid())
+  username          String    @unique
+  passwordHash      String
+  totpSecretEncrypted String? // AES-256-GCM verschlüsselt, Key aus TOTP_ENCRYPTION_KEY Env
+  failedAttempts    Int       @default(0)
+  lockedUntil       DateTime?
+  sessions          Session[]
 }
 
 model Session {
@@ -146,6 +173,7 @@ model Session {
   adminUserId String
   admin       AdminUser @relation(fields: [adminUserId], references: [id])
   token       String    @unique
+  createdAt   DateTime  @default(now())
   expiresAt   DateTime
 }
 ```
@@ -153,7 +181,7 @@ model Session {
 ### Gallery-Modi
 
 - **Single-Gallery-Mode:** Eine Wedding + eine Gallery — vereinfachte UI ohne Sub-Event-Navigation.
-- **Multi-Gallery-Mode:** Eine Wedding + mehrere Galleries mit eigenem Slug, QR-Code und Zeitfenster.
+- **Multi-Gallery-Mode:** Eine Wedding + mehrere Galleries mit eigenem Slug, Zeitfenster und on-demand QR-Code.
 
 ---
 
@@ -164,14 +192,16 @@ model Session {
 ### Öffentliche Endpunkte (kein Auth)
 
 ```
-GET    /g/:slug                    → Galerie-Info + freigegebene Fotos
-POST   /g/:slug/upload             → Foto hochladen (multipart)
-GET    /g/:slug/slideshow/stream   → SSE-Stream (neue Fotos)
-GET    /g/:slug/qr                 → QR-Code (PNG/SVG)
-GET    /g/:slug/download           → ZIP aller freigegebenen Fotos (falls erlaubt)
+GET    /g/:slug?cursor=<id>&limit=20  → Galerie-Info + freigegebene Fotos (cursor-based pagination)
+POST   /g/:slug/upload                → Foto hochladen (multipart)
+GET    /g/:slug/slideshow/stream      → SSE-Stream (neue Fotos)
+GET    /g/:slug/qr?format=png|svg     → QR-Code on-demand
+GET    /g/:slug/download              → ZIP aller freigegebenen Fotos (falls erlaubt)
 ```
 
-### Admin-Endpunkte (Session-Auth)
+**Pagination:** `GET /g/:slug` liefert max. 20 Fotos pro Request. Response enthält `nextCursor` (ID des letzten Fotos). Nächste Seite: `?cursor=<nextCursor>`. Kein Offset-basiertes Paging (instabil bei neuem Content).
+
+### Admin-Endpunkte (Session-Auth + CSRF-Token)
 
 ```
 POST   /admin/login
@@ -180,88 +210,147 @@ GET    /admin/galleries
 POST   /admin/galleries
 PATCH  /admin/galleries/:id
 DELETE /admin/galleries/:id
-GET    /admin/galleries/:id/photos?status=pending|approved|rejected
+GET    /admin/galleries/:id/photos?status=PENDING|APPROVED|REJECTED
 PATCH  /admin/photos/:id
 POST   /admin/photos/batch
 DELETE /admin/photos/:id
-GET    /admin/galleries/:id/export  → ZIP (Originalqualität)
+GET    /admin/galleries/:id/export   → ZIP (Originalqualität)
 POST   /admin/webhooks/test
+```
+
+### Batch-Endpunkt: `POST /admin/photos/batch`
+
+```json
+// Request
+{
+  "action": "approve" | "reject" | "move",
+  "photoIds": ["id1", "id2", "id3"],
+  "rejectionReason": "optional, nur bei reject",
+  "targetGalleryId": "optional, nur bei move"
+}
+
+// Response 200
+{
+  "processed": 3,
+  "failed": []
+}
+
+// Response 207 (partial failure)
+{
+  "processed": 2,
+  "failed": [{ "id": "id3", "reason": "not found" }]
+}
 ```
 
 ### Upload-Flow
 
 ```
 Browser → POST /g/:slug/upload (multipart)
+  → Fastify bodyLimit prüfen (MAX_FILE_SIZE_MB, vor Buffer-Verarbeitung)
   → Upload-Zeitfenster prüfen
   → Secret Key prüfen (falls konfiguriert)
-  → SHA-256 Hash berechnen (Duplikat?)
-  → Sharp: Thumbnail + WEBP-Konvertierung
+  → Magic Bytes prüfen (file-type Paket — MIME-Typ aus Dateiinhalt, nicht Content-Type-Header)
+  → Erlaubte Typen: image/jpeg, image/png, image/webp, image/heic, video/mp4, video/quicktime
+  → SHA-256 Hash berechnen → Duplikat in dieser Galerie? → 409 Conflict
+  → Sharp: Thumbnail generieren + WEBP-Konvertierung (Bilder)
   → EXIF entfernen (falls EXIF_STRIP=true)
   → Storage: lokal oder S3
-  → DB: Photo mit status = "pending"
+  → DB: Photo mit status = PENDING, thumbPath gespeichert
   → SMTP-Notification an Admin (falls konfiguriert)
-  → Response: { id, status: "pending" }
+  → Response: { id, status: "PENDING", thumbUrl }
+  // thumbUrl erlaubt sofortige Vorschau im Browser, auch für HEIC (wird serverseitig zu WEBP konvertiert)
 ```
 
 ### SSE-Strategie
 
 - Fastify hält eine In-Memory-Map `galleryId → Set<SSEConnection>`
-- Nach Moderation eines Fotos: Server pusht `event: new-photo` mit Foto-Daten an alle aktiven Slideshow-Verbindungen
+- Rate Limiting auf `GET /g/:slug/slideshow/stream`: max. 10 gleichzeitige Verbindungen pro IP (`@fastify/rate-limit`)
+- Nach Moderation eines Fotos: Server pusht `event: new-photo` mit `{ id, thumbUrl, createdAt }` an alle aktiven Verbindungen dieser Galerie
 - Kein Redis nötig für MVP (Single-Instance)
 - Heartbeat alle 30s (`event: ping`) gegen Proxy-Timeouts
-- Reconnect-Logik im Client via nativer `EventSource` API (automatischer Reconnect)
+- **Client-seitiger SSE-Wrapper** mit exponential backoff (nicht native `EventSource` allein): reconnect bei Netzwerkfehler und HTTP 5xx, nicht bei 401/403 (kein sinnloses Retry bei Auth-Fehler)
 
 ---
 
 ## Frontend-Struktur
 
-### Routing (Next.js)
+### Routing (Next.js App Router)
 
 ```
 /                               → Landing / Redirect zur ersten Galerie
-/g/[slug]                       → Galerie-Ansicht
-/g/[slug]/upload                → Upload-Seite für Gäste
-/g/[slug]/slideshow             → Vollbild-Slideshow (Beamer/TV)
-/admin                          → Login
-/admin/dashboard                → Übersicht aller Galerien
-/admin/galleries/new            → Galerie erstellen
-/admin/galleries/[id]           → Galerie bearbeiten + QR-Code
-/admin/galleries/[id]/moderate  → Moderations-Dashboard
+/g/[slug]                       → Galerie-Ansicht        (Server Component, initiales Laden)
+/g/[slug]/upload                → Upload-Seite           (Client Component)
+/g/[slug]/slideshow             → Vollbild-Slideshow     (Client Component, eigenes layout.tsx)
+/admin                          → Login                  (Client Component)
+/admin/dashboard                → Übersicht              (Server Component)
+/admin/galleries/new            → Galerie erstellen      (Client Component)
+/admin/galleries/[id]           → Galerie bearbeiten     (Client Component)
+/admin/galleries/[id]/moderate  → Moderations-Dashboard  (Client Component)
 ```
+
+**Layout-Regeln:**
+- `/g/[slug]/slideshow` erhält eine eigene `layout.tsx` (`export default function SlideshowLayout`) die das globale Layout vollständig überschreibt — kein Header, kein Footer, `<html>` mit `overflow: hidden`.
+- Alle anderen Routen erben das globale `app/layout.tsx`.
+
+### Server vs. Client Components
+
+| Route / Komponente | Typ | Begründung |
+|---|---|---|
+| `GalleryPage` | Server Component | Initiales Foto-Laden via fetch, kein Client-State |
+| `PhotoGrid` | Server Component | Statisches Rendering der Thumbnails |
+| `Lightbox` | Client Component | Interaktion, DOM-Events |
+| `UploadPage` | Client Component | FileDropzone, Fortschrittsbalken, AbortController |
+| `SlideshowPage` | Client Component | SSE-Stream, Animations-State |
+| `AdminModerationPage` | Client Component | Batch-Auswahl, optimistic updates |
+
+### State Management
+
+- **TanStack Query** für alle Server-Daten (Gallery-Fotos, Admin-Listen) — automatischer Refetch, optimistic updates bei Moderation.
+- **Zustand** für lokalen Client-State:
+  - Upload-Queue (Dateiliste, Fortschritt pro Datei, AbortController-Referenzen)
+  - SSE-Photo-Stream in der Slideshow (neues Foto → Array-Append → Render-Trigger)
+- Kein globaler State für alles andere — React local state reicht.
 
 ### Komponenten-Hierarchie
 
 ```
-GalleryPage
-  ├── GalleryHeader       (Name, Beschreibung, Foto-Anzahl, QR-Hint)
-  ├── PhotoGrid           (Masonry oder gleichmäßig, konfigurierbar)
-  │     └── PhotoCard     (Thumbnail, Lazy Load)
-  ├── Lightbox            (Vollbild, Vor/Zurück, Download-Button)
-  └── UploadButton        (→ /upload, prominent, mobile-first)
+GalleryPage (Server Component)
+  ├── GalleryHeader         (Name, Beschreibung, Foto-Anzahl, QR-Hint)
+  ├── PhotoGrid (Server)    (Masonry oder Grid — react-masonry-css für Masonry-Layout)
+  │     └── PhotoCard       (Thumbnail, Lazy Load via next/image)
+  ├── Lightbox (Client)     (Vollbild, Vor/Zurück, Download-Button, Error Boundary)
+  └── UploadButton          (→ /upload, prominent, mobile-first)
 
-UploadPage
-  ├── GuestNameInput      (optional/pflicht/versteckt per Config)
-  ├── FileDropzone        (Drag & Drop + capture="camera")
-  ├── FileQueue           (Liste mit Fortschrittsbalken pro Datei)
+UploadPage (Client Component)
+  ├── GuestNameInput        (optional/pflicht/versteckt per Config)
+  ├── FileDropzone          (Drag & Drop + capture="camera", HEIC akzeptiert)
+  ├── FileQueue             (pro Datei: Fortschrittsbalken, Cancel-Button via AbortController)
   └── SubmitButton
 
-SlideshowPage             (kein Layout, Vollbild)
-  ├── PhotoDisplay        (Überblend-Effekt, SSE-getrieben)
-  ├── QRHintSlide         (konfigurierbar, zwischen Fotos)
-  └── Controls            (Play/Pause, Vor/Zurück, Tastatur)
+SlideshowPage (Client Component, eigenes layout.tsx)
+  ├── PhotoDisplay          (Überblend-Effekt, SSE-getrieben via Zustand-Store)
+  ├── QRHintSlide           (konfigurierbar, zwischen Fotos eingeblendet)
+  ├── Controls              (Play/Pause, Vor/Zurück, Tastatur)
+  └── SlideshowErrorBoundary (graceful degradation: zeigt letztes Foto bei SSE-Fehler)
 
-AdminModerationPage
-  ├── PhotoQueue          (pending Fotos, Batch-Auswahl)
-  │     └── ModerationCard (Freigeben / Ablehnen / Verschieben)
+AdminModerationPage (Client Component)
+  ├── PhotoQueue            (pending Fotos, Batch-Auswahl via TanStack Query)
+  │     └── ModerationCard  (Freigeben / Ablehnen / Verschieben)
   └── BatchActionBar
 ```
 
+**Masonry:** `react-masonry-css` — CSS-basiertes Multi-Column-Layout, kein JavaScript-Resize-Observer, performant auf Mobile.
+
+**HEIC-Vorschau:** Keine clientseitige Konvertierung. Der Upload-Response enthält `thumbUrl` (serverseitig generiertes WEBP-Thumbnail). Die FileQueue zeigt diesen Thumb nach erfolgreichem Upload — kein kaputtes `<img>` für HEIC.
+
+**Upload-Abbruch:** Jeder Upload-Task in der FileQueue hält eine `AbortController`-Instanz. Cancel-Button ruft `controller.abort()` auf — bricht den `fetch`-Request ab und entfernt den Eintrag aus der Queue.
+
 ### Styling & UX
 
-- **Tailwind CSS** — Mobile-first, Dark Mode via `class`-Strategy
+- **Tailwind CSS** — Mobile-first, Dark Mode via `class`-Strategy (System-Präferenz + manueller Toggle)
 - **WCAG 2.1 AA** — Kontrastverhältnisse, Alt-Texte, Keyboard-Navigation
 - **i18n:** `next-intl`, Sprachdateien `src/i18n/de.json` + `en.json`; Sprache via `DEFAULT_LANG` Env oder `Accept-Language`-Header
-- Thumbnails serverseitig via Sharp, Lazy Loading im Browser
+- Thumbnails via `next/image` mit Lazy Loading, serverseitig via Sharp generiert
 
 ---
 
@@ -270,15 +359,19 @@ AdminModerationPage
 | Bereich | Maßnahme |
 |---|---|
 | Passwörter | bcrypt (cost 12) |
-| Sessions | HTTP-only Cookie, 24h TTL, serverseitig invalidierbar |
+| Sessions | HTTP-only Cookie, 24h TTL, serverseitig invalidierbar, `createdAt` für Audit |
+| CSRF | `@fastify/csrf-protection` — Double Submit Cookie auf allen Admin-POST/PATCH/DELETE-Endpunkten |
 | Brute-Force | Lockout nach X Fehlversuchen (default: 5), konfigurierbar |
-| 2FA | TOTP (otplib), optional per `TOTP_ENABLED=true` |
-| Rate Limiting | `@fastify/rate-limit` auf Upload + Login-Endpunkten |
-| EXIF | Sharp entfernt Geo-Metadaten vor Speicherung (konfigurierbar) |
+| 2FA | TOTP (otplib), optional per `TOTP_ENABLED=true`; Secret AES-256-GCM verschlüsselt at-rest |
+| MIME-Validierung | Magic Bytes Prüfung via `file-type` Paket — kein Vertrauen in `Content-Type`-Header |
+| Rate Limiting | `@fastify/rate-limit` auf Upload, Login **und SSE-Endpunkt** (max. 10 Verbindungen/IP) |
+| File-Size-Enforcement | Fastify `bodyLimit` = `MAX_FILE_SIZE_MB × 1024 × 1024` — Limit vor Buffer-Verarbeitung |
+| EXIF | Sharp entfernt Geo-Metadaten vor Speicherung (konfigurierbar via `EXIF_STRIP`) |
 | Galerie-Schutz | Optionaler Secret Key (PIN) pro Galerie, bcrypt-gehasht |
 | robots.txt | `Disallow: /g/` — keine Indexierung von Galerien |
 | HTTPS | Redirect HTTP→HTTPS konfigurierbar, HSTS-Header |
-| Duplikate | SHA-256 Hash-Prüfung vor Speicherung |
+| Duplikate | SHA-256 Hash-Prüfung, Scope: pro Galerie (`@@unique([galleryId, fileHash])`) |
+| CORS | `@fastify/cors`, nur `FRONTEND_URL` als erlaubter Origin — keine Wildcard |
 
 ---
 
@@ -299,8 +392,12 @@ S3_ACCESS_KEY=
 S3_SECRET_KEY=
 
 # Admin
-ADMIN_PASSWORD_HASH=                 # bcrypt-Hash (Setup-Script generiert)
-SESSION_SECRET=
+ADMIN_PASSWORD_HASH=                 # bcrypt-Hash (via setup-script generiert)
+SESSION_SECRET=                      # zufälliger String, min. 32 Zeichen
+TOTP_ENCRYPTION_KEY=                 # 32-Byte Hex-String für AES-256 TOTP-Secret-Verschlüsselung
+
+# Frontend
+FRONTEND_URL=http://localhost:3000   # für CORS-Konfiguration
 
 # Features
 EXIF_STRIP=true
@@ -320,40 +417,52 @@ WEBHOOK_URL=
 NTFY_TOPIC=
 ```
 
+### Initial-Setup / First-Run
+
+Neuer Nutzer ohne Entwickler-Hintergrund durchläuft folgende Schritte:
+
+1. `docker-compose up` startet beide Services
+2. Beim ersten Start erkennt das Backend, dass kein `ADMIN_PASSWORD_HASH` gesetzt ist
+3. Backend startet im **Setup-Modus**: einmaliger Setup-Endpunkt `POST /setup` ist aktiv (deaktiviert sich nach erstem erfolgreichen Aufruf)
+4. Frontend zeigt automatisch `/setup`-Seite: Nutzer gibt Username + Passwort ein
+5. Backend hasht das Passwort, schreibt `ADMIN_PASSWORD_HASH` in die `.env`-Datei (Docker-Volume) und startet in den Normal-Modus
+6. Alternativ: `pnpm setup` CLI-Script für manuelle Installation ohne Docker
+
 ---
 
 ## Features
 
 ### Kern-Features (MVP — Phase 1)
 
-1. Admin-Login mit Passwort + Session + Brute-Force-Schutz
+1. Admin-Login mit Passwort + Session + Brute-Force-Schutz + CSRF-Schutz
 2. Single-Gallery-Mode: Galerie erstellen, bearbeiten
 3. Gäste-Upload per QR-Code ohne Account (JPEG, PNG, WEBP, HEIC, MP4, MOV)
-4. Pre-Moderation: Freigeben / Ablehnen / Batch-Aktionen
-5. Galerie-Ansicht: Masonry-Grid, Lightbox, Lazy Loading
-6. QR-Code-Export (PNG + SVG)
-7. Basis-Slideshow (manuell, kein Realtime)
-8. Docker Compose Setup
+4. Magic Bytes MIME-Validierung + Fastify bodyLimit
+5. Pre-Moderation: Freigeben / Ablehnen / Batch-Aktionen
+6. Galerie-Ansicht: Masonry-Grid (react-masonry-css), Lightbox, Lazy Loading
+7. QR-Code-Export on-demand (PNG + SVG)
+8. Basis-Slideshow (manuell, kein Realtime)
+9. Docker Compose Setup + First-Run Setup-Flow
 
 ### Phase 2
 
-9. Live-Slideshow mit SSE-Realtime-Updates
-10. Multi-Galerie-Mode / Sub-Events
-11. ZIP-Download (Admin + optional Gäste)
-12. E-Mail-Benachrichtigungen (SMTP)
-13. Upload-Zeitfenster (inkl. mehrtägige Events)
-14. S3-Speicher-Backend
-15. Duplikatprüfung (SHA-256)
+10. Live-Slideshow mit SSE-Realtime-Updates + custom Reconnect-Wrapper
+11. Multi-Galerie-Mode / Sub-Events
+12. ZIP-Download (Admin + optional Gäste)
+13. E-Mail-Benachrichtigungen (SMTP)
+14. Upload-Zeitfenster (inkl. mehrtägige Events)
+15. S3-Speicher-Backend
+16. Cursor-based Pagination für Galerie-Ansicht
 
 ### Phase 3
 
-16. HEIC-Konvertierung serverseitig
-17. EXIF-Daten-Entfernung
-18. 2FA (TOTP)
-19. Weitere i18n-Sprachen (Community)
-20. Druckbares Tischkärtchen (PDF-Export)
-21. Webhook- und NTFY-Integration
-22. Galerie-Schutz per Secret Key (PIN)
+17. HEIC-Konvertierung serverseitig (bereits in Upload-Flow für Thumbnails)
+18. EXIF-Daten-Entfernung (konfigurierbar)
+19. 2FA (TOTP) mit verschlüsseltem Secret
+20. Weitere i18n-Sprachen (Community)
+21. Druckbares Tischkärtchen (PDF-Export)
+22. Webhook- und NTFY-Integration
+23. Galerie-Schutz per Secret Key (PIN)
 
 ---
 
@@ -374,14 +483,20 @@ NTFY_TOPIC=
 
 | Bereich | Technologie |
 |---|---|
-| Frontend | Next.js 14+, Tailwind CSS, next-intl |
+| Frontend | Next.js 14+ (App Router), Tailwind CSS, next-intl |
+| State (Client) | TanStack Query (Server-Daten), Zustand (Upload-Queue, SSE-State) |
+| Masonry | react-masonry-css |
 | Backend | Fastify (Node.js) |
-| ORM | Prisma (SQLite default, PostgreSQL optional) |
-| Bild-Processing | Sharp |
-| QR-Code | `qrcode` npm-Paket (serverseitig) |
-| Realtime | Server-Sent Events (SSE) |
+| ORM | Prisma mit Enums (SQLite default, PostgreSQL optional) |
+| Bild-Processing | Sharp (Thumbnails, WEBP-Konvertierung, EXIF-Strip) |
+| MIME-Validierung | `file-type` (Magic Bytes) |
+| QR-Code | `qrcode` npm-Paket (serverseitig, on-demand) |
+| Realtime | Server-Sent Events (SSE) + custom Reconnect-Wrapper |
 | Storage | Lokales FS / S3-kompatibel (AWS SDK v3) |
-| Auth | bcrypt, HTTP-only Sessions, otplib (TOTP) |
+| Auth | bcrypt, HTTP-only Sessions, otplib (TOTP), AES-256-GCM für TOTP-Secrets |
+| CSRF | `@fastify/csrf-protection` |
+| CORS | `@fastify/cors` |
+| Rate Limiting | `@fastify/rate-limit` |
 | Monorepo | pnpm workspaces |
 | Container | Docker + Docker Compose |
 | Lizenz | MIT |
