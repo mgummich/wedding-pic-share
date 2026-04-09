@@ -596,7 +596,86 @@ AdminModerationPage (Client Component)
 
 - **Swipe-Gesture:** `touch-start` / `touch-end` Delta > 50px → Vor/Zurück. Implementiert ohne externe Library (native Touch-Events).
 - **Tastatur:** ArrowLeft/ArrowRight navigieren, Escape schließt.
-- **Download:** Direktlink auf `/files/:gallerySlug/:filename` (nur sichtbar falls `allowGuestDownload = true`).
+- **Download:** Direktlink auf `/files/:gallerySlug/:filename?original=true` (nur sichtbar falls `allowGuestDownload = true`). Lädt das Originalbild, nicht die optimierte Anzeige-Version.
+
+---
+
+## Browser-Kompatibilität & PWA
+
+### Unterstützte Browser
+
+**Mobile (primäre Zielgruppe):**
+
+| Browser | Mindestversion | Besonderheiten |
+|---|---|---|
+| Safari iOS | 15+ | HEIC-Upload nativ, `capture="environment"` öffnet Kamera, `vh`-Einheit via `dvh` (dynamic viewport height) |
+| Chrome Android | 108+ | Standard-Verhalten, kein HEIC-Support → serverseitige Konvertierung |
+| Firefox Android | 115+ | Vollständig unterstützt |
+| Samsung Internet | 20+ | Chromium-basiert, kein Sonderbedarf |
+
+**Desktop:**
+
+| Browser | Mindestversion |
+|---|---|
+| Chrome | 108+ |
+| Firefox | 115+ |
+| Safari macOS | 16+ |
+| Edge (Chromium) | 108+ |
+
+**Nicht unterstützt:** Internet Explorer, Legacy Edge (vor Chromium-Basis).
+
+### iOS-spezifische Besonderheiten
+
+- **Viewport Height:** `100vh` ist auf iOS Safari fehlerhaft (schließt URL-Leiste nicht ein). Slideshow und Fullscreen-UI nutzen `100dvh` (dynamic viewport height) mit `100vh` als Fallback.
+- **HEIC-Upload:** iOS-Kamera schießt standardmäßig HEIC. `<input accept="image/*">` erlaubt iOS Safari, HEIC-Dateien zu liefern. Serverseitige WEBP-Konvertierung via Sharp.
+- **Camera-Capture:** `<input capture="environment">` öffnet direkt die Rückkamera. Auf iOS nur in Safari vollständig unterstützt.
+- **Scroll-Bounce:** `-webkit-overflow-scrolling: touch` deaktiviert für Slideshow-Vollbild.
+- **Safe Areas:** `padding: env(safe-area-inset-*)` für Notch und Home-Indicator (iPhone X+).
+
+### Progressive Web App (PWA)
+
+Das Frontend wird als PWA ausgeliefert. Ziel: "Add to Home Screen" auf iOS und Android — kein App Store, kein Download, aber App-ähnliche UX.
+
+**Implementierung:** `@ducanh2912/next-pwa` (basiert auf Workbox, aktiv gepflegt, Next.js App Router kompatibel).
+
+**Web App Manifest (`/manifest.json`):**
+```json
+{
+  "name": "Wedding Pics",
+  "short_name": "WeddingPics",
+  "description": "Teile deine Hochzeitsfotos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF8",
+  "theme_color": "#C4956A",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
+```
+
+**Service Worker — Caching-Strategie:**
+
+| Asset-Typ | Strategie | Begründung |
+|---|---|---|
+| Next.js Static Assets (JS, CSS) | `CacheFirst` | Selten geändert, sofort verfügbar |
+| Galerie-Thumbnails | `StaleWhileRevalidate` | Zeige gecachte Version, update im Hintergrund |
+| API-Responses (`/api/v1/g/*`) | `NetworkFirst` | Fotos müssen aktuell sein |
+| Upload-Endpunkt | Kein Cache | Immer online |
+
+**Offline-Verhalten:**
+- Galerie bereits geladener Fotos ist offline lesbar (gecachte Thumbnails + API-Response)
+- Upload offline nicht möglich → klare Fehlermeldung: "Kein Internet. Bitte versuche es erneut wenn du verbunden bist."
+- Admin-Panel: offline nicht nutzbar → Offline-Fallback-Page
+
+**"Add to Home Screen"-Prompt:**
+- Kein aggressiver Install-Banner
+- Dezenter Hinweis nach erstem erfolgreichem Upload: "Füge diese Seite zum Startbildschirm hinzu für schnelleren Zugriff"
+- iOS: manuell via Share → "Zum Home-Bildschirm" (iOS unterstützt kein `beforeinstallprompt`)
+- Android Chrome: `beforeinstallprompt` Event abfangen, Button anzeigen
 
 ### Styling & UX
 
@@ -605,6 +684,59 @@ AdminModerationPage (Client Component)
 - **i18n:** `next-intl`, Sprachdateien `src/i18n/de.json` + `en.json`; Sprache via `DEFAULT_LANG` Env oder `Accept-Language`-Header
 - **Progressive Loading:** Thumbnails via `next/image` mit Lazy Loading und `blur`-Placeholder (generiert beim Upload)
 - **Slow-Network-Degradation:** Thumbnails auf Mobilgeräten werden in kleinerer Größe angefordert (`sizes` Attribut via `next/image`). Vollbild nur bei Lightbox-Öffnung geladen.
+
+---
+
+## Bild-Pipeline (Optimierung & Qualitätsstufen)
+
+### Serverseitige Verarbeitungsstufen (Sharp, beim Upload)
+
+Jedes hochgeladene Bild erzeugt **drei Varianten**:
+
+| Variante | Größe | Format | Qualität | Verwendung |
+|---|---|---|---|---|
+| `thumb` | max. 400px (längste Seite) | WEBP | 75% | Grid-Ansicht, Moderations-Dashboard |
+| `display` | max. 1920px (längste Seite) | WEBP | 85% | Lightbox, Slideshow |
+| `original` | unverändert | Original (JPEG/PNG/HEIC→JPEG) | 100% | Download (Admin + Gast falls erlaubt) |
+
+- HEIC wird zu JPEG konvertiert für das Original (verlustfrei relativ zu HEIC-Qualität, universell kompatibel)
+- Videos (MP4, MOV): kein Reencoding in Phase 1 — Original gespeichert, `thumb` ist ein Standbild (via Sharp `extract` auf ersten Frame — oder Poster via ffprobe in Phase 2)
+- `blur`-Placeholder: 10px breiter WEBP-Blur aus `thumb` generiert, als Base64 in DB gespeichert → `next/image` `blurDataURL`
+
+### Dateinamen-Schema im Storage
+
+```
+uploads/
+  [galleryId]/
+    [photoId]-thumb.webp
+    [photoId]-display.webp
+    [photoId]-original.jpg   (oder .png, .mp4, .mov)
+```
+
+### Was der Browser bekommt
+
+```
+Galerie-Grid:        → thumbUrl      (400px WEBP, ~20–50 KB)
+Lightbox öffnen:     → displayUrl    (1920px WEBP, ~150–400 KB) — on-demand geladen
+Slideshow:           → displayUrl    (1920px WEBP)
+Download (Gast):     → originalUrl   (nur wenn allowGuestDownload = true)
+Download (Admin):    → originalUrl   (immer verfügbar)
+```
+
+### API-Endpunkt: Datei-Serving
+
+```
+GET /files/:gallerySlug/:photoId?variant=thumb|display|original
+  → Auth prüfen (original: immer Auth; display/thumb: nur bei secretKey)
+  → Datei streamen (fs.createReadStream oder S3 presigned URL)
+  → Cache-Control: public, max-age=31536000, immutable  (für thumb + display)
+  → Cache-Control: private, no-store                    (für original)
+```
+
+Download-Header für Original:
+```
+Content-Disposition: attachment; filename="wedding-[photoId].jpg"
+```
 
 ---
 
@@ -715,8 +847,12 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 9. Empty States für alle Leer-Szenarien
 10. QR-Code on-demand (PNG + SVG)
 11. Basis-Slideshow (manuell, kein Realtime) mit Dark-Mode-optimierter UI
-12. Health-Check-Endpunkte, Pino-Logging
-13. Docker Compose + automatische Migrations
+12. PWA (Manifest, Service Worker, Offline-Galerie, "Add to Home Screen")
+13. Bild-Pipeline: 3 Varianten (thumb/display/original), WEBP-Optimierung, HEIC→JPEG
+14. Browser-Kompatibilität: iOS Safari 15+, Chrome Android 108+, Chrome/Firefox/Safari/Edge Desktop
+15. Health-Check-Endpunkte, Pino-Logging
+16. Docker Compose + automatische Migrations
+17. Unit + Integration Tests (Vitest), E2E Tests (Playwright, Chromium + WebKit)
 
 ### Phase 2
 
@@ -743,6 +879,93 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 
 ---
 
+## Test-Konzept
+
+### Philosophie
+
+Drei Ebenen: Unit → Integration → E2E. Kein Over-Testing von Implementierungsdetails — Tests sichern Verhalten, nicht Struktur. Hochzeits-kritische Pfade (Upload, Moderation, Slideshow) haben die höchste Testdichte.
+
+### Ebene 1 — Unit Tests (Vitest)
+
+**Was:** Isolierte Funktionen und Utilities ohne I/O.  
+**Wo:** `*.test.ts` neben der Quell-Datei.
+
+| Bereich | Beispiele |
+|---|---|
+| Backend Utilities | `hashFile(buffer)`, `isMimeTypeAllowed(bytes)`, `isWithinUploadWindow(now, windows)` |
+| Slug-Generierung | `generateSlug("Standesamt Berlin")` → `"standesamt-berlin"` |
+| Duplikat-Erkennung | Hash-Kollision-Logik |
+| Bild-Varianten-Pfade | `getPhotoPath(photoId, "thumb")` |
+| i18n | Alle Übersetzungskeys vorhanden in DE + EN |
+
+**Ziel:** >90% Coverage auf Utility-Funktionen.
+
+### Ebene 2 — Integration Tests (Vitest + Supertest / Fastify inject)
+
+**Was:** API-Endpunkte mit echter Datenbank (SQLite in-memory via Prisma) und gemocktem Storage.  
+**Wo:** `apps/backend/tests/integration/`
+
+| Endpunkt | Getestete Szenarien |
+|---|---|
+| `POST /g/:slug/upload` | Erfolgreicher Upload; Duplikat → 409; falscher MIME-Typ → 415; Datei zu groß → 413; Zeitfenster abgelaufen → 403 (Phase 2) |
+| `GET /g/:slug` | Nur APPROVED Fotos zurückgegeben; Pagination korrekt; leere Galerie |
+| `POST /admin/login` | Erfolg; falsches Passwort → 401; Lockout nach 5 Fehlversuchen |
+| `POST /admin/photos/batch` | approve/reject/move; partial failure (207) |
+| `GET /files/:gallerySlug/:photoId` | thumb/display ohne Auth; original erfordert Auth; 404 bei unbekanntem Foto |
+| `GET /health` | DB up → 200; DB down → 503 |
+
+**Prisma-Test-Setup:** `prisma migrate deploy` auf SQLite-Testdatei; nach jedem Test-Suite `prisma db push --force-reset`.
+
+### Ebene 3 — E2E Tests (Playwright)
+
+**Was:** Vollständige User Journeys im echten Browser (Chromium, WebKit für iOS-Safari-Simulation).  
+**Wo:** `apps/frontend/tests/e2e/`
+
+**Kritische Journeys:**
+
+| Journey | Browser |
+|---|---|
+| Gast: QR-Scan-Simulation → Upload → Pending-Confirmation | Chromium + WebKit |
+| Gast: Upload mit HEIC-Datei → Thumbnail sichtbar | WebKit (iOS-Simulation) |
+| Gast: Galerie ansehen, Lightbox öffnen, Swipe-Navigation | Chromium + WebKit (touch) |
+| Gast: Download einzelnes Foto | Chromium |
+| Admin: Login → Galerie erstellen → QR-Code herunterladen | Chromium |
+| Admin: Foto freigeben → erscheint in Galerie | Chromium |
+| Admin: Batch-Ablehnen mehrerer Fotos | Chromium |
+| Slideshow: startet, Foto erscheint nach Freigabe (SSE) | Chromium |
+| PWA: Offline-Verhalten (gecachte Galerie sichtbar) | Chromium (Service Worker) |
+
+**Playwright-Konfiguration:**
+- `baseURL`: lokale Docker-Compose-Instanz (`http://localhost:3000`)
+- Parallelausführung: 4 Worker
+- Screenshots bei Fehler: automatisch
+- Retry: 2x bei flaky Tests
+
+### CI-Pipeline (GitHub Actions)
+
+```yaml
+jobs:
+  test:
+    steps:
+      - pnpm install
+      - turbo build --filter=packages/db  # Prisma generate
+      - vitest run                         # Unit + Integration
+      - playwright install --with-deps chromium webkit
+      - docker-compose up -d              # Test-Instanz
+      - playwright test                   # E2E
+      - docker-compose down
+```
+
+**Branches:** Unit + Integration bei jedem Push; E2E nur auf `main` und Pull Requests.
+
+### Test-Utilities
+
+- **Fixtures:** `createTestGallery()`, `createTestPhoto(status)`, `createAdminSession()` — wiederverwendbare Prisma-Seeder für Tests
+- **Storage-Mock:** Lokaler Temp-Ordner für Integration Tests, kein S3-Aufruf
+- **Zeitreise:** `vi.setSystemTime()` für Upload-Zeitfenster-Tests (Phase 2)
+
+---
+
 ## Out-of-Scope (MVP)
 
 - KI-Gesichtserkennung / automatische Foto-Zuordnung
@@ -762,13 +985,14 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 |---|---|
 | Sprache | TypeScript (`strict: true`) überall |
 | Frontend | Next.js 14+ (App Router), Tailwind CSS, next-intl |
+| PWA | `@ducanh2912/next-pwa` (Workbox Service Worker, Manifest, Offline-Support) |
 | Fonts | Inter + Playfair Display via `next/font` (self-hosted) |
 | Icons | Lucide React |
 | State (Client) | TanStack Query (Server-Daten), Zustand (Upload-Queue, SSE-State) |
 | Masonry | react-masonry-css |
 | Backend | Fastify (Node.js) |
 | ORM | Prisma mit Enums (SQLite default, PostgreSQL optional) |
-| Bild-Processing | Sharp (Thumbnails, WEBP, EXIF-Strip, HEIC→WEBP) |
+| Bild-Processing | Sharp (3 Varianten: thumb 400px, display 1920px, original; WEBP, HEIC→JPEG, EXIF-Strip) |
 | MIME-Validierung | `file-type` (Magic Bytes) |
 | QR-Code | `qrcode` npm-Paket (serverseitig, on-demand) |
 | Realtime | Server-Sent Events (SSE) + custom Reconnect-Wrapper |
@@ -777,6 +1001,9 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 | Verschlüsselung | Node.js `crypto` (AES-256-GCM für TOTP-Secrets, Phase 3) |
 | Security | `@fastify/csrf-protection`, `@fastify/helmet`, `@fastify/cors`, `@fastify/rate-limit` |
 | Logging | Pino (Fastify built-in) |
+| Unit + Integration Tests | Vitest + Supertest |
+| E2E Tests | Playwright (Chromium + WebKit) |
+| CI | GitHub Actions |
 | Monorepo | pnpm workspaces + Turborepo |
 | Container | Docker + Docker Compose |
 | Lizenz | MIT |
