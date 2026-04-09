@@ -886,19 +886,18 @@ Das Frontend wird als PWA ausgeliefert. Ziel: "Add to Home Screen" auf iOS und A
 
 ### Docker-Abhängigkeiten für Media-Verarbeitung
 
-Das Backend-Image braucht **Sharp (libheif)** für Bilder und **ffmpeg** für Videos.
+Das Backend-Image braucht **Sharp (libheif via vips-heif)** für Bilder und **ffmpeg** für Videos.
 
-**Entscheidung: Debian-basiertes Image (`node:20`)** — vermeidet Alpine-Kompatibilitätsprobleme mit nativen Addons:
+**Entscheidung: `node:20-alpine`** — leichtgewichtig (~50MB Base statt ~350MB Debian). Alpine stellt `vips-heif` und `ffmpeg` direkt im Package-Repository bereit:
 
 ```dockerfile
-FROM node:20 AS runner
-# Sharp: libheif für HEIC
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libheif-dev \
-    # ffmpeg für Video-Poster-Frame-Extraktion
-    ffmpeg \
-  && rm -rf /var/lib/apt/lists/*
+FROM node:20-alpine AS runner
+RUN apk add --no-cache \
+    vips-heif \   # Sharp HEIC-Support (libvips + libheif)
+    ffmpeg        # Poster-Frame-Extraktion + ffprobe
 ```
+
+Sharp installiert auf Alpine automatisch Pre-built-Binaries (seit Sharp 0.32+, kein Kompilieren nötig). `vips-heif` stellt die HEIC-Codec-Unterstützung für libvips bereit.
 
 ### Media-Pipeline — Bilder (Sharp)
 
@@ -1119,29 +1118,57 @@ volumes:
 ### Multi-Stage Dockerfile (Backend)
 
 ```dockerfile
-FROM node:20 AS deps
+# Backend — Multi-Stage Alpine
+FROM node:20-alpine AS deps
 WORKDIR /app
+RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
-FROM node:20 AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
 
-FROM node:20 AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
+# Native Deps: Sharp (HEIC) + ffmpeg
+RUN apk add --no-cache vips-heif ffmpeg
 # Security: non-root user
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
 COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
 COPY --from=builder /app/packages/db/prisma ./prisma
 USER appuser
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD curl -f http://localhost:4000/health || exit 1
+  CMD wget -qO- http://localhost:4000/health || exit 1
 CMD ["node", "dist/server.js"]
+
+# Frontend — Multi-Stage Alpine
+FROM node:20-alpine AS fe-deps
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM node:20-alpine AS fe-builder
+WORKDIR /app
+COPY --from=fe-deps /app/node_modules ./node_modules
+COPY . .
+ARG NEXT_PUBLIC_API_URL
+RUN pnpm build
+
+FROM node:20-alpine AS fe-runner
+WORKDIR /app
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+COPY --from=fe-builder --chown=appuser:appgroup /app/.next/standalone ./
+COPY --from=fe-builder --chown=appuser:appgroup /app/.next/static ./.next/static
+COPY --from=fe-builder --chown=appuser:appgroup /app/public ./public
+USER appuser
+EXPOSE 3000
+CMD ["node", "server.js"]
 ```
 
 ### Graceful Shutdown
@@ -1509,5 +1536,5 @@ packages/shared/fixtures/
 | Load Tests | k6 (Phase 2, Hochzeits-Peak-Simulation) |
 | CI | GitHub Actions (lint+typecheck, unit+integration, E2E auf main/PRs) |
 | Monorepo | pnpm workspaces + Turborepo |
-| Container | Docker + Docker Compose |
+| Container | Docker (Alpine-Images) + Docker Compose |
 | Lizenz | MIT |
