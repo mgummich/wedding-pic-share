@@ -99,11 +99,24 @@ export interface GalleryResponse {
   // KEIN secretKey, KEINE internen Felder
 }
 
+// packages/shared/types/photo.ts (erweitert)
+export interface PhotoResponse {
+  id: string
+  mediaType: 'IMAGE' | 'VIDEO'
+  thumbUrl: string        // Für Videos: Poster-Frame URL
+  displayUrl: string      // Für Videos: Original-Video URL
+  duration: number | null // Videos: Länge in Sekunden
+  guestName: string | null
+  createdAt: string
+}
+
 // packages/shared/types/upload.ts
 export interface UploadResponse {
   id: string
   status: 'PENDING' | 'APPROVED'
+  mediaType: 'IMAGE' | 'VIDEO'
   thumbUrl: string
+  duration: number | null
 }
 ```
 
@@ -161,6 +174,11 @@ enum PhotoStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
 }
 
 enum GalleryLayout {
@@ -223,20 +241,23 @@ model Photo {
   gallery          Gallery     @relation(fields: [galleryId], references: [id])
   guestName        String?
   fileHash         String
+  mediaType        MediaType   @default(IMAGE)
   originalPath     String
-  thumbPath        String
-  displayPath      String      // 1920px WEBP Anzeige-Variante
-  blurDataUrl      String      // Base64 10px blur placeholder
+  thumbPath        String      // Für Bilder: 400px WEBP; für Videos: Poster-Frame WEBP
+  displayPath      String      // Für Bilder: 1920px WEBP; für Videos: identisch mit originalPath
+  posterPath       String?     // Videos: Pfad zum extrahierten Poster-Frame (ffmpeg)
+  blurDataUrl      String      // Base64 10px blur placeholder (aus thumbPath)
+  duration         Int?        // Videos: Länge in Sekunden (aus ffprobe)
   mimeType         String
   status           PhotoStatus @default(PENDING)
   rejectionReason  String?
   exifStripped     Boolean     @default(false)
   createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt  // Audit-Trail für Status-Änderungen
+  updatedAt        DateTime    @updatedAt
 
   @@unique([galleryId, fileHash])
-  @@index([galleryId, status, createdAt(sort: Desc)])  // Galerie-Ansicht Query
-  @@index([galleryId, status])                          // Moderation-Queue Query
+  @@index([galleryId, status, createdAt(sort: Desc)])
+  @@index([galleryId, status])
 }
 
 // Phase 1
@@ -563,16 +584,27 @@ Browser → POST /g/:slug/upload (multipart)
   → Fastify bodyLimit = MAX_FILE_SIZE_MB × 1024² (Limit VOR Buffer-Verarbeitung)
   → Upload-Zeitfenster prüfen (Phase 2)
   → Secret Key prüfen (Phase 3, falls konfiguriert)
-  → Magic Bytes prüfen (file-type Paket — MIME aus Dateiinhalt, nicht Content-Type-Header)
+  → Magic Bytes prüfen (file-type — MIME aus Dateiinhalt)
   → Erlaubte Typen: image/jpeg, image/png, image/webp, image/heic, video/mp4, video/quicktime
-  → SHA-256 Hash berechnen → @@unique([galleryId, fileHash]) — Duplikat? → 409 Conflict
-  → Sharp: Thumbnail (300px) + WEBP-Konvertierung (Bilder); HEIC → WEBP serverseitig
-  → EXIF entfernen (falls EXIF_STRIP=true)
-  → Storage: lokal oder S3
-  → DB: Photo mit status = PENDING, thumbPath gespeichert
+  → SHA-256 Hash berechnen → @@unique([galleryId, fileHash]) — Duplikat? → 409
+  → mediaType bestimmen: image/* → IMAGE, video/* → VIDEO
+
+  [IMAGE]
+  → Sharp: thumb (400px WEBP) + display (1920px WEBP) + blur placeholder
+  → EXIF: withMetadata({ icc: true }) — GPS entfernt, Farbprofil erhalten
+  → Storage: thumb, display, original
+
+  [VIDEO]
+  → Original speichern
+  → ffmpeg: Poster-Frame bei 1s → WEBP 400px (= thumbPath)
+  → ffprobe: Dauer in Sekunden → Photo.duration
+  → Sharp: blur placeholder aus Poster-Frame
+  → Storage: original + poster
+
+  → DB: Photo { status: PENDING, mediaType, thumbPath, displayPath, posterPath?, duration? }
   → SMTP-Notification an Admin (falls konfiguriert)
-  → Response: { id, status: "PENDING", thumbUrl }
-  // thumbUrl: sofortige Vorschau im Browser auch für HEIC (serverseitiges WEBP-Thumbnail)
+  → Response: { id, status: "PENDING", thumbUrl, mediaType, duration }
+  // thumbUrl zeigt Poster-Frame für Videos — sofortige Vorschau auch für HEIC
 ```
 
 **Known Limitation — Sharp CPU-Blocking:** Sharp ist CPU-intensiv. Bei vielen gleichzeitigen Uploads kann der Node.js Event Loop kurzzeitig blockieren. Für MVP akzeptabel (Hochzeits-Workload: Bursts, nicht kontinuierlich). Mittel-/langfristig: Worker Threads oder BullMQ-Queue als separates Modul.
@@ -626,7 +658,7 @@ Definierte Error-Types:
 
 ```
 event: new-photo
-data: {"id":"clxyz","thumbUrl":"/api/v1/files/standesamt/clxyz?v=thumb","guestName":"Max M.","createdAt":"2026-04-09T18:30:00Z"}
+data: {"id":"clxyz","mediaType":"VIDEO","thumbUrl":"/api/v1/files/standesamt/clxyz?v=thumb","displayUrl":"/api/v1/files/standesamt/clxyz?v=display","duration":42,"guestName":"Max M.","createdAt":"2026-04-09T18:30:00Z"}
 
 event: ping
 data: {"ts":1744220400}
@@ -713,10 +745,13 @@ GalleryPage (Server Component)
   ├── GalleryHeader           (Name, Beschreibung, Foto-Anzahl, QR-Hint)
   ├── PhotoGridSkeleton        (Skeleton beim Laden, Tailwind animate-pulse)
   ├── PhotoGrid (Server)       (react-masonry-css für Masonry; CSS Grid für gleichmäßig)
-  │     └── PhotoCard          (next/image, Lazy Load)
-  ├── Lightbox (Client)        (Vollbild, Vor/Zurück, Swipe-Gesture, Download, Error Boundary)
+  │     └── MediaCard          (Bild: next/image + blur; Video: <video> inline mit Poster-Frame,
+  │                             Play-Button-Overlay, Dauer-Badge, autoplay on hover auf Desktop,
+  │                             tap-to-play auf Mobile; muted default, Ton-Toggle)
+  ├── MediaLightbox (Client)   (Vollbild; Bilder: next/image; Videos: <video controls autoplay>;
+  │                             Vor/Zurück, Swipe-Gesture, Download, Error Boundary)
   ├── UploadButton             (→ /upload, prominent, sticky bottom auf Mobile)
-  └── EmptyState               (falls keine freigegebenen Fotos)
+  └── EmptyState               (falls keine freigegebenen Medien)
 
 UploadPage (Client Component)
   ├── GuestNameInput           (optional/pflicht/versteckt per Config)
@@ -726,10 +761,14 @@ UploadPage (Client Component)
   └── SubmitFeedback           (Pending-Confirmation-Screen nach erfolgreichem Upload)
 
 SlideshowPage (Client Component, eigenes layout.tsx)
-  ├── PhotoDisplay             (object-fit: contain, Crossfade 1.2s, SSE-getrieben)
-  ├── QRHintSlide              (text-2xl, konfigurierbar, alle N Fotos eingeblendet)
+  ├── MediaDisplay             (Bilder: <img> object-fit: contain, Crossfade 1.2s;
+  │                             Videos: <video autoplay muted playsinline loop>,
+  │                             läuft für `duration` Sekunden (oder max. SLIDESHOW_INTERVAL),
+  │                             dann automatisch weiter zum nächsten Medium;
+  │                             kein Crossfade bei Videos — harter Schnitt)
+  ├── QRHintSlide              (text-2xl, alle N Medien eingeblendet)
   ├── Controls                 (Play/Pause, Vor/Zurück, Tastatur-Shortcuts)
-  └── SlideshowErrorBoundary   (zeigt letztes Foto bei SSE-Fehler, kein Crash)
+  └── SlideshowErrorBoundary   (zeigt letztes Medium bei SSE-Fehler)
 
 AdminModerationPage (Client Component)
   ├── ModerationStats          (gesamt / freigegeben / ausstehend / abgelehnt)
@@ -845,61 +884,66 @@ Das Frontend wird als PWA ausgeliefert. Ziel: "Add to Home Screen" auf iOS und A
 
 ## Bild-Pipeline (Optimierung & Qualitätsstufen)
 
-### HEIC und Docker-Abhängigkeiten
+### Docker-Abhängigkeiten für Media-Verarbeitung
 
-Sharp benötigt `libheif` für HEIC-Verarbeitung. `node:20-alpine` hat dies **nicht** vorinstalliert — das Dockerfile muss explizit:
+Das Backend-Image braucht **Sharp (libheif)** für Bilder und **ffmpeg** für Videos.
+
+**Entscheidung: Debian-basiertes Image (`node:20`)** — vermeidet Alpine-Kompatibilitätsprobleme mit nativen Addons:
 
 ```dockerfile
-# Option A: Alpine mit vips-heif
-FROM node:20-alpine
-RUN apk add --no-cache vips-dev vips-heif python3 make g++
-
-# Option B: Debian (einfacher, größeres Image)
-FROM node:20
-# libheif via apt: apt-get install -y libheif-dev
+FROM node:20 AS runner
+# Sharp: libheif für HEIC
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libheif-dev \
+    # ffmpeg für Video-Poster-Frame-Extraktion
+    ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 ```
 
-**Entscheidung: Debian-basiertes Image (`node:20`)** für das Backend — vermeidet Alpine-Kompatibilitätsprobleme mit nativen Addons. Größer (~200MB mehr), aber zuverlässiger für Sharp + HEIC.
+### Media-Pipeline — Bilder (Sharp)
 
-### Serverseitige Verarbeitungsstufen (Sharp, beim Upload)
-
-Jedes hochgeladene **Bild** erzeugt **drei Varianten**:
+Jedes hochgeladene Bild erzeugt drei Varianten:
 
 | Variante | Größe | Format | Qualität | Fit | Verwendung |
 |---|---|---|---|---|---|
-| `thumb` | max. 400px (längste Seite) | WEBP | 75% | `inside` (kein Crop) | Grid, Moderation |
-| `display` | max. 1920px (längste Seite) | WEBP | 85% | `inside` | Lightbox, Slideshow |
+| `thumb` | max. 400px | WEBP | 75% | `inside` | Grid, Moderation, Poster-Placeholder |
+| `display` | max. 1920px | WEBP | 85% | `inside` | Lightbox |
 | `original` | unverändert | JPEG (HEIC→JPEG) oder PNG | 100% | — | Download |
 
-Sharp-Konfiguration:
 ```typescript
 // thumb
-sharp(input)
-  .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
-  .webp({ quality: 75 })
-
+sharp(input).resize(400, 400, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 75 })
 // display
-sharp(input)
-  .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-  .webp({ quality: 85 })
-
-// EXIF: nur GPS entfernen, ICC-Profil für Farbgenauigkeit behalten
-.withMetadata({ icc: true })  // GPS, Kamera-Infos entfernt; Farbprofil erhalten
+sharp(input).resize(1920, 1920, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 })
+// EXIF: ICC-Profil behalten (Farbgenauigkeit), nur GPS entfernen
+.withMetadata({ icc: true })
 ```
 
-- HEIC → JPEG für Original (universell kompatibel, kein Qualitätsverlust relevant)
-- `blur`-Placeholder: 10px breites WEBP aus thumb generiert, Base64-codiert in `Photo.blurDataUrl` → `next/image blurDataURL`
+- HEIC → JPEG für Original (universell kompatibel)
+- `blurDataUrl`: 10px breites WEBP aus thumb, Base64-codiert → `next/image blurDataURL`
 
-### Video-Handling (MP4, MOV)
+### Media-Pipeline — Videos (ffmpeg)
 
-Sharp verarbeitet keine Videos. Video-Handling in Phase 1 ist bewusst minimal:
+Videos werden **nicht** reencoded — Original bleibt unverändert. ffmpeg extrahiert nur einen Poster-Frame:
 
-- **Original:** direkt gespeichert, kein Reencoding
-- **Thumb:** Platzhalter-Icon (kein Screenshot in Phase 1) — bekannte Einschränkung
-- **Display:** nicht generiert — Video wird in Slideshow via `<video>`-Tag abgespielt
-- **Größenlimit für Videos:** separater Env-Parameter `MAX_VIDEO_SIZE_MB=200` (Standard: 200MB)
-- **Phase 2:** ffprobe für Poster-Frame-Extraktion (erstes Frame als Thumbnail)
-- **Slideshow:** `<video autoplay muted loop>` statt `<img>` wenn `mimeType` `video/*`
+```
+Video-Upload (MP4 / MOV)
+  → Original gespeichert (kein Reencoding)
+  → ffmpeg: Poster-Frame bei 1s extrahieren → WEBP 400px (thumb-Größe)
+  → Sharp: Poster-Frame → blur placeholder
+  → ffprobe: Videodauer in Sekunden → Photo.duration
+  → Photo.thumbPath = posterPath (WEBP)
+  → Photo.displayPath = originalPath (Video wird direkt gestreamt)
+```
+
+ffmpeg-Kommando für Poster-Frame:
+```bash
+ffmpeg -ss 00:00:01 -i input.mp4 -vframes 1 -vf "scale=400:-1" -f image2 poster.jpg
+```
+
+- **Größenlimit:** `MAX_VIDEO_SIZE_MB=200` (separates Limit von `MAX_FILE_SIZE_MB` für Bilder)
+- **Kein Transcoding** in Phase 1 — 4K MOV wird direkt gespeichert
+- **Phase 2:** Transcoding zu H.264 MP4 für universelle Browser-Kompatibilität (MOV auf Android-Geräten problematisch)
 
 ### Dateinamen-Schema im Storage
 
@@ -1204,8 +1248,9 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 1. Admin-Login (Passwort + Session + Brute-Force + CSRF + Security-Headers)
 2. First-Run Setup Flow
 3. Single-Gallery-Mode und Multi-Gallery-Mode (Feature-Flag)
-4. Gäste-Upload ohne Account (JPEG, PNG, WEBP, HEIC, MP4, MOV)
-5. Client-side Größencheck, Magic Bytes Validierung, Fastify bodyLimit
+4. Gäste-Upload ohne Account (Bilder: JPEG, PNG, WEBP, HEIC; Videos: MP4, MOV)
+5. Video-Support: Poster-Frame via ffmpeg, Inline-Player in Galerie, Videos in Slideshow (autoplay muted)
+6. Client-side Größencheck (separates Limit für Videos: `MAX_VIDEO_SIZE_MB`), Magic Bytes Validierung, Fastify bodyLimit
 6. Pre-Moderation (Freigeben / Ablehnen / Batch), Admin-Direct-Upload
 7. Galerie-Ansicht: Masonry-Grid (react-masonry-css), Lightbox mit Swipe, Lazy Loading
 8. Pending-Confirmation-Screen nach Upload, vollständige Fehler-Screens
@@ -1281,7 +1326,9 @@ Drei Ebenen: Unit → Integration → E2E. Kein Over-Testing von Implementierung
 | Gleichzeitige Uploads (Race Condition) | Doppelter SHA-256 übersteht DB-Unique-Check | Integration: concurrent requests, DB-Constraint als letzter Schutz |
 | SSE-Connection nie geschlossen | Memory Leak in In-Memory-Map | Integration: disconnect → Map-Größe = 0 |
 | Galerie-Slug mit Sonderzeichen | URL-Routing bricht | Unit: slug validation regex |
-| Video-Upload (50MB MOV) | Sharp-Fehler (verarbeitet kein Video) | Integration: Video → kein Sharp-Aufruf, direkt gespeichert |
+| Video-Upload (50MB MOV) | Sharp-Fehler (verarbeitet kein Video) | Integration: Video → ffmpeg, kein Sharp-Aufruf |
+| ffmpeg wirft bei korruptem Video | Unkontrollierter 500er | Unit: graceful error → HTTP 422 |
+| Video ohne Audio-Spur | Slideshow-Player-Verhalten undefined | Integration: `muted` immer gesetzt, kein Fehler |
 
 ### Monorepo Test-Konfiguration
 
@@ -1406,7 +1453,8 @@ packages/shared/fixtures/
   ├── test-corrupt.jpg          # Korrupte Datei → graceful HTTP 422
   ├── test-5mb.jpg              # Normal-Fall
   ├── test-duplicate.jpg        # Bekannter SHA-256 für Duplikat-Tests
-  └── test-video.mp4            # 10s Video → kein Sharp-Aufruf
+  ├── test-video.mp4            # 10s MP4 → Poster-Frame + Duration
+  └── test-video.mov            # iOS MOV → Poster-Frame + Duration (Android-Kompatibilität Phase 2)
 ```
 
 ### Test-Utilities
@@ -1444,7 +1492,8 @@ packages/shared/fixtures/
 | Masonry | react-masonry-css |
 | Backend | Fastify (Node.js) |
 | ORM | Prisma mit Enums (SQLite default, PostgreSQL optional) |
-| Bild-Processing | Sharp (3 Varianten: thumb 400px, display 1920px, original; WEBP, HEIC→JPEG, EXIF-Strip) |
+| Bild-Processing | Sharp (thumb 400px WEBP, display 1920px WEBP, original; HEIC→JPEG, EXIF-Strip) |
+| Video-Processing | ffmpeg (Poster-Frame-Extraktion), ffprobe (Dauer); kein Reencoding in Phase 1 |
 | MIME-Validierung | `file-type` (Magic Bytes) |
 | QR-Code | `qrcode` npm-Paket (serverseitig, on-demand) |
 | Realtime | Server-Sent Events (SSE) + custom Reconnect-Wrapper |
