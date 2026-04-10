@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-surface-base:   #FAF7F4;
+  --color-surface-card:   #FFFFFF;
+  --color-border:         #E8E2DC;
+  --color-text-primary:   #2C2C2C;
+  --color-text-muted:     #7A746E;
+  --color-accent:         #C4956A;
+  --color-accent-hover:   #B08050;
+  --color-success:        #4A7C59;
+  --color-error:          #C0392B;
+  --spacing-base:         8px;
+  --radius-card:          12px;
+  --radius-thumb:         4px;
+  --slideshow-bg:         #0F0E0C;
+  --slideshow-surface:    #1A1916;
+  --slideshow-text:       #F0EBE3;
+  --slideshow-accent:     #D4A870;
+  --slideshow-crossfade-duration: 800ms;
+  --slideshow-crossfade-easing:   ease-in-out;
+  --slideshow-display-duration:   8000ms;
+  --transition-fast:  150ms ease;
+  --transition-base:  250ms ease;
+  --transition-slow:  400ms ease;
+}
+
+@keyframes gentle-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(196, 149, 106, 0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(196, 149, 106, 0); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  background-color: var(--color-surface-base);
+  color: var(--color-text-primary);
+}
