@@ -10,6 +10,9 @@ import { authPlugin } from './plugins/auth.js'
 import { adminAuthRoutes } from './routes/admin/auth.js'
 import { adminGalleryRoutes } from './routes/admin/galleries.js'
 import { guestGalleryRoutes } from './routes/guest/gallery.js'
+import { guestUploadRoutes } from './routes/guest/upload.js'
+import { createStorage } from './services/storage.js'
+import { createSseManager } from './services/sse.js'
 import type { AppConfig } from './config.js'
 
 export async function buildApp(config?: AppConfig) {
@@ -50,6 +53,15 @@ export async function buildApp(config?: AppConfig) {
     },
   })
 
+  const storage = createStorage({
+    provider: config?.storageProvider ?? 'local',
+    localPath: config?.storageLocalPath ?? './data/uploads',
+  })
+  const sse = createSseManager()
+
+  fastify.decorate('storage', storage)
+  fastify.decorate('sse', sse)
+
   await fastify.register(healthRoutes)
 
   await fastify.register(authPlugin)
@@ -58,6 +70,7 @@ export async function buildApp(config?: AppConfig) {
     await instance.register(adminAuthRoutes)
     await instance.register(adminGalleryRoutes)
     await instance.register(guestGalleryRoutes)
+    await instance.register(guestUploadRoutes, { storage, sse })
   }, { prefix: '/api/v1' })
 
   return fastify
