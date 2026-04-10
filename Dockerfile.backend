@@ -1,7 +1,7 @@
 # Stage 1: Install dependencies
-FROM node:20-alpine AS deps
+FROM node:20.19-alpine3.21 AS deps
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/shared/package.json ./packages/shared/
@@ -9,9 +9,9 @@ COPY apps/backend/package.json ./apps/backend/
 RUN pnpm install --frozen-lockfile
 
 # Stage 2: Build
-FROM node:20-alpine AS builder
+FROM node:20.19-alpine3.21 AS builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm --filter @wedding/shared build
@@ -19,20 +19,23 @@ RUN pnpm --filter @wedding/db build
 RUN pnpm --filter @wedding/backend build
 
 # Stage 3: Runtime
-FROM node:20-alpine AS runner
+FROM node:20.19-alpine3.21 AS runner
 WORKDIR /app
-RUN apk add --no-cache vips-heif ffmpeg wget
+# su-exec: lightweight privilege-drop tool (Alpine main repo)
+RUN apk add --no-cache vips-heif ffmpeg wget curl su-exec
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --from=builder --chown=appuser:appgroup /app/apps/backend/dist ./dist
-COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
-COPY --from=builder --chown=appuser:appgroup /app/packages/db/node_modules ./packages/db/node_modules
-COPY --from=builder --chown=appuser:appgroup /app/packages/db/prisma ./prisma
+COPY --from=builder /app/apps/backend/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=builder /app/packages/db/prisma ./prisma
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-USER appuser
+RUN mkdir -p /app/data/uploads && chown -R appuser:appgroup /app/data
+
 EXPOSE 4000
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD wget -qO- http://localhost:4000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
+  CMD curl -fs http://localhost:4000/health || exit 1
 
-CMD ["sh", "-c", "packages/db/node_modules/.bin/prisma migrate deploy && node dist/main.js"]
+ENTRYPOINT ["docker-entrypoint.sh"]

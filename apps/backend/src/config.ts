@@ -29,6 +29,12 @@ export function loadConfig(): AppConfig {
 
   const adminPassword = process.env.ADMIN_PASSWORD
   if (!adminPassword) throw new Error('ADMIN_PASSWORD is required')
+  if (adminPassword.length < 12) throw new Error('ADMIN_PASSWORD must be at least 12 characters')
+
+  const storageProvider = process.env.STORAGE_PROVIDER ?? 'local'
+  if (storageProvider !== 'local' && storageProvider !== 's3') {
+    throw new Error(`Invalid STORAGE_PROVIDER: "${storageProvider}". Must be "local" or "s3"`)
+  }
 
   return {
     port: Number(process.env.PORT ?? 4000),
@@ -37,7 +43,7 @@ export function loadConfig(): AppConfig {
     sessionSecret,
     adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
     adminPassword,
-    storageProvider: (process.env.STORAGE_PROVIDER ?? 'local') as 'local' | 's3',
+    storageProvider: storageProvider as 'local' | 's3',
     storageLocalPath: process.env.STORAGE_LOCAL_PATH ?? './data/uploads',
     s3Endpoint: process.env.S3_ENDPOINT ?? null,
     s3Bucket: process.env.S3_BUCKET ?? null,

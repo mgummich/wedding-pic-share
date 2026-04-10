@@ -27,7 +27,8 @@ export async function buildApp(config?: AppConfig) {
   })
 
   const maxVideoSize = (config?.maxVideoSizeMb ?? 200) * 1024 * 1024
-  const sessionSecret = config?.sessionSecret ?? 'dev-secret-minimum-32-chars-xxx'
+  const sessionSecret = config?.sessionSecret
+  if (!sessionSecret) throw new Error('sessionSecret is required to build the app')
 
   await fastify.register(helmet)
 
