@@ -8,6 +8,8 @@ import rateLimit from '@fastify/rate-limit'
 import { healthRoutes } from './routes/health.js'
 import { authPlugin } from './plugins/auth.js'
 import { adminAuthRoutes } from './routes/admin/auth.js'
+import { adminGalleryRoutes } from './routes/admin/galleries.js'
+import { guestGalleryRoutes } from './routes/guest/gallery.js'
 import type { AppConfig } from './config.js'
 
 export async function buildApp(config?: AppConfig) {
@@ -54,6 +56,8 @@ export async function buildApp(config?: AppConfig) {
 
   await fastify.register(async (instance) => {
     await instance.register(adminAuthRoutes)
+    await instance.register(adminGalleryRoutes)
+    await instance.register(guestGalleryRoutes)
   }, { prefix: '/api/v1' })
 
   return fastify
