@@ -25,7 +25,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
 
     const user = await db.adminUser.findUnique({ where: { username } })
     // Always hash-compare to prevent timing attacks / user enumeration
-    const dummyHash = '$2a$12$dummyhashforpreventimingtimingattacks000000000000000'
+    const dummyHash = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaOaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     const hashToCheck = user?.passwordHash ?? dummyHash
 
     if (user?.lockedUntil && user.lockedUntil > new Date()) {
