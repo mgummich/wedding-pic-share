@@ -1,6 +1,6 @@
 'use client'
 
-import { PhotoCard } from './PhotoCard.js'
+import { PhotoCard } from './PhotoCard'
 import type { PhotoResponse } from '@wedding/shared'
 
 interface PhotoGridProps {

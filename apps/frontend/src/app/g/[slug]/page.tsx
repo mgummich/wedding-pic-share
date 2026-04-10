@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getGallery, ApiError } from '@/lib/api'
-import { GalleryClient } from './GalleryClient.js'
+import { GalleryClient } from './GalleryClient'
 
 interface PageProps {
   params: Promise<{ slug: string }>
