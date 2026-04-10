@@ -6,6 +6,8 @@ import csrf from '@fastify/csrf-protection'
 import multipart from '@fastify/multipart'
 import rateLimit from '@fastify/rate-limit'
 import { healthRoutes } from './routes/health.js'
+import { authPlugin } from './plugins/auth.js'
+import { adminAuthRoutes } from './routes/admin/auth.js'
 import type { AppConfig } from './config.js'
 
 export async function buildApp(config?: AppConfig) {
@@ -47,6 +49,12 @@ export async function buildApp(config?: AppConfig) {
   })
 
   await fastify.register(healthRoutes)
+
+  await fastify.register(authPlugin)
+
+  await fastify.register(async (instance) => {
+    await instance.register(adminAuthRoutes)
+  }, { prefix: '/api/v1' })
 
   return fastify
 }
