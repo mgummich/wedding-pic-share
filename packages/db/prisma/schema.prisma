@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum PhotoStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum GalleryLayout {
+  MASONRY
+  GRID
+}
+
+enum GuestNameMode {
+  OPTIONAL
+  REQUIRED
+  HIDDEN
+}
+
+enum ModerationMode {
+  MANUAL
+  AUTO
+}
+
+model Wedding {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  galleries Gallery[]
+}
+
+model Gallery {
+  id                 String         @id @default(cuid())
+  weddingId          String
+  wedding            Wedding        @relation(fields: [weddingId], references: [id])
+  name               String
+  slug               String
+  description        String?
+  coverImage         String?
+  layout             GalleryLayout  @default(MASONRY)
+  allowGuestDownload Boolean        @default(false)
+  guestNameMode      GuestNameMode  @default(OPTIONAL)
+  moderationMode     ModerationMode @default(MANUAL)
+  secretKey          String?
+  createdAt          DateTime       @default(now())
+  photos             Photo[]
+
+  @@unique([weddingId, slug])
+}
+
+model Photo {
+  id              String      @id @default(cuid())
+  galleryId       String
+  gallery         Gallery     @relation(fields: [galleryId], references: [id])
+  guestName       String?
+  fileHash        String
+  mediaType       MediaType   @default(IMAGE)
+  originalPath    String
+  thumbPath       String
+  displayPath     String
+  posterPath      String?
+  blurDataUrl     String      @default("")
+  duration        Int?
+  mimeType        String
+  status          PhotoStatus @default(PENDING)
+  rejectionReason String?
+  exifStripped    Boolean     @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([galleryId, fileHash])
+  @@index([galleryId, status, createdAt(sort: Desc)])
+  @@index([galleryId, status])
+}
+
+model AdminUser {
+  id                  String    @id @default(cuid())
+  username            String    @unique
+  passwordHash        String
+  totpSecretEncrypted String?
+  failedAttempts      Int       @default(0)
+  lockedUntil         DateTime?
+  sessions            Session[]
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  adminUserId String
+  admin       AdminUser @relation(fields: [adminUserId], references: [id])
+  token       String    @unique
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+}
