@@ -1,1 +1,12 @@
+node_modules/
+dist/
+.next/
+.turbo/
+*.db
+*.db-shm
+*.db-wal
+data/
+coverage/
+.env
+.env.local
 .worktrees/
