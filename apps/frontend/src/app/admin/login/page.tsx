@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { adminLogin, ApiError } from '@/lib/api.js'
+import { adminLogin, ApiError } from '@/lib/api'
 
 export default function AdminLoginPage() {
   const router = useRouter()

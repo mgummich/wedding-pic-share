@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Camera } from 'lucide-react'
-import { uploadFile, ApiError } from '@/lib/api.js'
+import { uploadFile, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
 
 const MAX_FILE_SIZE_MB = 50

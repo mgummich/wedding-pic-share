@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { PhotoGrid } from '@/components/PhotoGrid.js'
-import { UploadButton } from '@/components/UploadButton.js'
-import { EmptyState } from '@/components/EmptyState.js'
-import { useSSE } from '@/lib/sse.js'
-import { getGallery } from '@/lib/api.js'
+import { PhotoGrid } from '@/components/PhotoGrid'
+import { UploadButton } from '@/components/UploadButton'
+import { EmptyState } from '@/components/EmptyState'
+import { useSSE } from '@/lib/sse'
+import { getGallery } from '@/lib/api'
 import type { PhotoResponse, GalleryResponse } from '@wedding/shared'
 
 interface GalleryClientProps {

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, use } from 'react'
 import Image from 'next/image'
-import { getGallery } from '@/lib/api.js'
-import { useSSE } from '@/lib/sse.js'
+import { getGallery } from '@/lib/api'
+import { useSSE } from '@/lib/sse'
 import type { PhotoResponse } from '@wedding/shared'
 
 const DISPLAY_DURATION_MS = Number(process.env.NEXT_PUBLIC_SLIDESHOW_INTERVAL_MS ?? 8000)

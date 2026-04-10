@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { getGallery, ApiError } from '@/lib/api.js'
+import { getGallery, ApiError } from '@/lib/api'
 import { UploadForm } from './UploadForm.js'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'

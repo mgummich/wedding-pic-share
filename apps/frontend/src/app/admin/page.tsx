@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getAdminGalleries, adminLogout, ApiError } from '@/lib/api.js'
+import { getAdminGalleries, adminLogout, ApiError } from '@/lib/api'
 import { Plus, LogOut, Settings } from 'lucide-react'
 
 export default function AdminDashboardPage() {

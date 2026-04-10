@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { getGallery, ApiError } from '@/lib/api.js'
+import { getGallery, ApiError } from '@/lib/api'
 import { GalleryClient } from './GalleryClient.js'
 
 interface PageProps {

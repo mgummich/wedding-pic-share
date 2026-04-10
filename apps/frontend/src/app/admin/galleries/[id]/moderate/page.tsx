@@ -4,8 +4,8 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { CheckCircle, XCircle } from 'lucide-react'
-import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api.js'
-import type { AdminPhotoResponse } from '@/lib/api.js'
+import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api'
+import type { AdminPhotoResponse } from '@/lib/api'
 
 interface PageProps {
   params: Promise<{ id: string }>
