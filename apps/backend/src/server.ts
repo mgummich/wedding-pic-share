@@ -11,7 +11,12 @@ import { adminAuthRoutes } from './routes/admin/auth.js'
 import { adminGalleryRoutes } from './routes/admin/galleries.js'
 import { guestGalleryRoutes } from './routes/guest/gallery.js'
 import { guestUploadRoutes } from './routes/guest/upload.js'
+import { guestSlideshowRoutes } from './routes/guest/slideshow.js'
+import { guestQrRoutes } from './routes/guest/qr.js'
+import { guestDownloadRoutes } from './routes/guest/download.js'
 import { adminPhotoRoutes } from './routes/admin/photos.js'
+import { adminExportRoutes } from './routes/admin/export.js'
+import { fileRoutes } from './routes/files.js'
 import { createStorage } from './services/storage.js'
 import { createSseManager } from './services/sse.js'
 import type { AppConfig } from './config.js'
@@ -72,7 +77,12 @@ export async function buildApp(config?: AppConfig) {
     await instance.register(adminGalleryRoutes)
     await instance.register(guestGalleryRoutes)
     await instance.register(guestUploadRoutes, { storage, sse })
+    await instance.register(guestSlideshowRoutes, { sse })
+    await instance.register(guestQrRoutes)
+    await instance.register(guestDownloadRoutes, { storage })
     await instance.register(adminPhotoRoutes, { sse })
+    await instance.register(adminExportRoutes, { storage })
+    await instance.register(fileRoutes, { storage })
   }, { prefix: '/api/v1' })
 
   return fastify
