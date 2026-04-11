@@ -84,4 +84,10 @@ describe('Lightbox', () => {
     fireEvent.keyDown(window, { key: 'ArrowRight' })
     expect(onNext).not.toHaveBeenCalled()
   })
+
+  it('does not call onPrev on ArrowLeft when on first photo', () => {
+    render(<Lightbox photos={photos} index={0} onClose={onClose} onNext={onNext} onPrev={onPrev} />)
+    fireEvent.keyDown(window, { key: 'ArrowLeft' })
+    expect(onPrev).not.toHaveBeenCalled()
+  })
 })

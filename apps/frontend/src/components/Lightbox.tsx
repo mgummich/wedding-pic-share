@@ -99,8 +99,6 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev }: LightboxPro
       <div
         className="relative"
         onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
       >
         {photo.mediaType === 'VIDEO' ? (
           <video
