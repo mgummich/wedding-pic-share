@@ -1485,47 +1485,51 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 
 ### Phase 1 — MVP
 
-1. Admin-Login (Passwort + Session + Brute-Force + CSRF + Security-Headers)
-2. First-Run Setup Flow
-3. Single-Gallery-Mode und Multi-Gallery-Mode (Feature-Flag)
-4. Gäste-Upload ohne Account (Bilder: JPEG, PNG, WEBP, HEIC; Videos: MP4, MOV)
-5. Video-Support: Poster-Frame via ffmpeg, Inline-Player in Galerie, Videos in Slideshow (autoplay muted)
-6. Client-side Größencheck (separates Limit für Videos: `MAX_VIDEO_SIZE_MB`), Magic Bytes Validierung, Fastify bodyLimit
-6. Pre-Moderation (Freigeben / Ablehnen / Batch), Admin-Direct-Upload
-7. Galerie-Ansicht: Masonry-Grid (react-masonry-css), Lightbox mit Swipe, Lazy Loading
-8. Pending-Confirmation-Screen nach Upload, vollständige Fehler-Screens
-9. Empty States für alle Leer-Szenarien
+1. Admin-Login (Passwort + Session + CSRF + Security-Headers)
+2. First-Run via Umgebungsvariablen (`ADMIN_USERNAME` / `ADMIN_PASSWORD`)
+3. Gäste-Upload ohne Account (Bilder: JPEG, PNG, WEBP, HEIC; Videos: MP4, MOV)
+4. Video-Support: Poster-Frame via ffmpeg, Videos in Slideshow (autoplay muted)
+5. Client-side Größencheck (`MAX_VIDEO_SIZE_MB`), Magic Bytes Validierung, Fastify bodyLimit
+6. Pre-Moderation (Freigeben / Ablehnen / Batch)
+7. Galerie-Ansicht: Masonry-Grid, Lightbox mit Swipe + Tastatur-Navigation, Lazy Loading
+8. Navigation: Gast-Top-Bar (Galerie / Hochladen / Slideshow) + Admin-Sidebar (Galerie-Liste + Logout)
+9. Pending-Confirmation-Screen nach Upload, vollständige Fehler-Screens, Empty States
 10. QR-Code on-demand (PNG + SVG)
-11. Basis-Slideshow (manuell, kein Realtime) mit Dark-Mode-optimierter UI
-12. PWA (Manifest, Service Worker, Offline-Galerie, "Add to Home Screen")
-13. Bild-Pipeline: 3 Varianten (thumb/display/original), WEBP-Optimierung, HEIC→JPEG
-14. Browser-Kompatibilität: iOS Safari 15+, Chrome Android 108+, Chrome/Firefox/Safari/Edge Desktop
-15. Health-Check-Endpunkte, Pino-Logging
-16. Docker Compose + automatische Migrations
-17. Unit + Integration Tests (Vitest), E2E Tests (Playwright, Chromium + WebKit)
+11. Live-Slideshow mit SSE + custom Reconnect-Wrapper, Dark-Mode-optimierter UI
+12. SSE Disconnect-Cleanup (Memory-Leak-Schutz via `request.raw.on('close')`)
+13. ZIP-Download (Admin Originalqualität + optional Gäste)
+14. Cursor-based Pagination
+15. PWA (Manifest, Service Worker, Offline-Shell, "Add to Home Screen")
+16. Bild-Pipeline: 3 Varianten (thumb/display/original), WEBP-Optimierung, HEIC→JPEG, EXIF standardmäßig entfernt
+17. Browser-Kompatibilität: iOS Safari 15+, Chrome Android 108+, Chrome/Firefox/Safari/Edge Desktop
+18. Health-Check-Endpunkte, Pino-Logging
+19. Docker Compose + automatische Migrations
+20. Unit + Integration Tests (Vitest), E2E Tests (Playwright, Chromium + WebKit)
 
 ### Phase 2
 
-14. Live-Slideshow mit SSE + custom Reconnect-Wrapper
-15. Multi-Galerie-Mode UI (falls in Phase 1 nur Single-Mode)
-16. ZIP-Download (Admin Originalqualität + optional Gäste)
-17. E-Mail-Benachrichtigungen (SMTP)
-18. Upload-Zeitfenster (inkl. mehrtägige Events)
-19. S3-Speicher-Backend
-20. Cursor-based Pagination
-21. Retry-Mechanismus für fehlgeschlagene Uploads
+1. Single-Gallery-Mode Feature-Flag (Routing + konditionelle UI)
+2. First-Run Setup UI (`/setup`-Seite, interaktive Admin-Erstellung)
+3. Brute-Force-Schutz (> 5 Fehlversuche → IP-Block)
+4. Video Inline-Player in Gast-Galerie (Play/Pause/Seek/Volume)
+5. Admin Direct-Upload mit Auto-Approval
+6. Multi-Galerie-Mode UI
+7. E-Mail-Benachrichtigungen (SMTP)
+8. Upload-Zeitfenster (inkl. mehrtägige Events)
+9. S3-Speicher-Backend
+10. Retry-Mechanismus für fehlgeschlagene Uploads
 
 ### Phase 3
 
-22. EXIF-Entfernung (konfigurierbar, Sharp)
-23. 2FA (TOTP) mit AES-256-GCM verschlüsseltem Secret
-24. Galerie-PIN-Schutz (Secret Key)
-25. Weitere i18n-Sprachen (Community)
-26. Druckbares Tischkärtchen (PDF-Export)
-27. Webhook + NTFY-Integration
-28. Worker Threads / BullMQ für Sharp-Processing
-29. Galerie-Abschluss und Archivierungs-Flow
-30. Fotograf-Modus (direkter Bulk-Upload mit Auto-Approval)
+1. Konfigurierbare EXIF-Policy (aktuell immer entfernt; per-Galerie-Toggle)
+2. 2FA (TOTP) mit AES-256-GCM verschlüsseltem Secret
+3. Galerie-PIN-Schutz (Secret Key)
+4. Weitere i18n-Sprachen (Community)
+5. Druckbares Tischkärtchen (PDF-Export)
+6. Webhook + NTFY-Integration
+7. Worker Threads / BullMQ für Sharp-Processing
+8. Galerie-Abschluss und Archivierungs-Flow
+9. Fotograf-Modus (direkter Bulk-Upload mit Auto-Approval)
 
 ---
 
