@@ -10,12 +10,12 @@
       "cache": false
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "outputs": ["coverage/**"]
     },
     "lint": {},
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["build", "^build"]
     },
     "db:generate": {
       "outputs": ["node_modules/.prisma/**", "node_modules/@prisma/client/**"]

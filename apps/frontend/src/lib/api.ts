@@ -1,11 +1,17 @@
 import type {
   GalleryResponse,
+  WeddingResponse,
   PhotoResponse,
   PaginatedResponse,
   UploadResponse,
 } from '@wedding/shared'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+// Client-side: use relative paths so requests go through the Next.js proxy (/api/v1/* → backend).
+// Server-side (SSR/RSC): call the backend directly via the internal service URL.
+const BASE_URL =
+  typeof window === 'undefined'
+    ? (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000')
+    : ''
 
 class ApiError extends Error {
   constructor(
@@ -20,7 +26,10 @@ class ApiError extends Error {
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      ...(init?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers,
+    },
     credentials: 'include',
   })
   if (!res.ok) {
@@ -89,7 +98,10 @@ export async function adminLogout(): Promise<void> {
 export async function getAdminGalleries(): Promise<
   Array<GalleryResponse & { weddingName: string; weddingSlug: string }>
 > {
-  return apiFetch('/api/v1/admin/galleries')
+  const weddings = await apiFetch<WeddingResponse[]>('/api/v1/admin/galleries')
+  return weddings.flatMap((w) =>
+    w.galleries.map((g) => ({ ...g, weddingName: w.name, weddingSlug: w.slug }))
+  )
 }
 
 export async function createGallery(data: {
@@ -111,6 +123,10 @@ export async function updateGallery(
   data: Partial<GalleryResponse>
 ): Promise<GalleryResponse> {
   return apiFetch(`/api/v1/admin/galleries/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export async function deleteGallery(id: string): Promise<void> {
+  await apiFetch(`/api/v1/admin/galleries/${id}`, { method: 'DELETE' })
 }
 
 // ─── Admin Photos ────────────────────────────────────────────────────────────

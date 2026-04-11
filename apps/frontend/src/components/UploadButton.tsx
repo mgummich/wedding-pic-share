@@ -19,7 +19,7 @@ export function UploadButton({ gallerySlug, isEmpty = false }: UploadButtonProps
           transition-colors duration-[--transition-base]
           ${isEmpty ? 'animate-[gentle-pulse_2s_ease-in-out_infinite]' : ''}
         `}
-        aria-label="Upload photos"
+        aria-label="Moment festhalten"
       >
         <Camera className="w-5 h-5" />
         <span>Moment festhalten</span>

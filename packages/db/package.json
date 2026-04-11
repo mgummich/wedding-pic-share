@@ -5,8 +5,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "prisma generate && tsc",
-    "db:generate": "prisma generate",
+    "build": "XDG_CACHE_HOME=../../.cache prisma generate && tsc",
+    "db:generate": "XDG_CACHE_HOME=../../.cache prisma generate",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "typecheck": "tsc --noEmit",

@@ -15,6 +15,7 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - NODE_ENV=production
     volumes:
       - ./data:/app/data
@@ -38,10 +39,14 @@ services:
       args:
         # Public URL that browsers use to reach the API (not the internal Docker hostname)
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        # Internal backend URL for Next.js server-to-server calls (rewrites + SSR)
+        # Hardcoded to the Docker service name — never read from .env
+        BACKEND_URL: http://backend:4000
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - BACKEND_URL=http://backend:4000
     depends_on:
       backend:
         condition: service_healthy

@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  --font-dm-sans:        "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-playfair:       "Iowan Old Style", Baskerville, "Times New Roman", serif;
   --color-surface-base:   #FAF7F4;
   --color-surface-card:   #FFFFFF;
   --color-border:         #E8E2DC;

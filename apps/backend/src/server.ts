@@ -19,27 +19,26 @@ import { adminExportRoutes } from './routes/admin/export.js'
 import { fileRoutes } from './routes/files.js'
 import { createStorage } from './services/storage.js'
 import { createSseManager } from './services/sse.js'
-import type { AppConfig } from './config.js'
+import { loadConfig, type AppConfig } from './config.js'
 
 export async function buildApp(config?: AppConfig) {
+  const resolvedConfig = config ?? loadConfig()
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
   })
 
-  const maxVideoSize = (config?.maxVideoSizeMb ?? 200) * 1024 * 1024
-  const sessionSecret = config?.sessionSecret
-  if (!sessionSecret) throw new Error('sessionSecret is required to build the app')
+  const maxVideoSize = resolvedConfig.maxVideoSizeMb * 1024 * 1024
 
   await fastify.register(helmet)
 
   await fastify.register(cors, {
-    origin: config?.frontendUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:3000',
+    origin: resolvedConfig.frontendUrl,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   })
 
   await fastify.register(cookie, {
-    secret: sessionSecret,
+    secret: resolvedConfig.sessionSecret,
   })
 
   await fastify.register(csrf, {
@@ -61,11 +60,12 @@ export async function buildApp(config?: AppConfig) {
   })
 
   const storage = createStorage({
-    provider: config?.storageProvider ?? 'local',
-    localPath: config?.storageLocalPath ?? './data/uploads',
+    provider: resolvedConfig.storageProvider,
+    localPath: resolvedConfig.storageLocalPath,
   })
   const sse = createSseManager()
 
+  fastify.decorate('config', resolvedConfig)
   fastify.decorate('storage', storage)
   fastify.decorate('sse', sse)
 

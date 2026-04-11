@@ -61,6 +61,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       f.status === 'pending' ? { ...f, status: 'uploading' } : f
     ))
 
+    let allSucceeded = true
     for (const item of pending) {
       try {
         const result = await uploadFile(gallerySlug, item.file, guestName.trim() || undefined)
@@ -68,6 +69,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
           prev.map((f) => f.file === item.file ? { ...f, status: 'done', result } : f)
         )
       } catch (err) {
+        allSucceeded = false
         const message =
           err instanceof ApiError
             ? (ERROR_MESSAGES[err.status] ?? 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
@@ -78,8 +80,8 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       }
     }
 
-    const allDone = files.every((f) => f.status === 'done' || f.status === 'error')
-    if (allDone) setSubmitted(true)
+    // Use local tracking (not the stale `files` closure) to determine success
+    if (allSucceeded && pending.length > 0) setSubmitted(true)
   }
 
   if (submitted && files.every((f) => f.status === 'done')) {

@@ -87,6 +87,7 @@ export default function AdminDashboardPage() {
                 </Link>
                 <Link
                   href={`/admin/galleries/${gallery.id}`}
+                  aria-label="Einstellungen"
                   className="p-1.5 text-text-muted hover:text-accent transition-colors"
                 >
                   <Settings className="w-4 h-4" />

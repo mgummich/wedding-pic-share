@@ -9,7 +9,7 @@ beforeAll(async () => {
   process.env.DATABASE_URL = 'file::memory:?cache=shared'
   process.env.NODE_ENV = 'test'
   process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_PASSWORD = 'password123'
+  process.env.ADMIN_PASSWORD = 'password12345'
   app = await buildApp()
   await app.ready()
 })

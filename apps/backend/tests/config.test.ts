@@ -7,7 +7,7 @@ describe('loadConfig', () => {
   beforeEach(() => {
     process.env = { ...originalEnv }
     process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-    process.env.ADMIN_PASSWORD = 'password123'
+    process.env.ADMIN_PASSWORD = 'password12345'
   })
 
   afterEach(() => {

@@ -3,6 +3,7 @@ export interface AppConfig {
   databaseUrl: string
   frontendUrl: string
   sessionSecret: string
+  cookieSecure: boolean
   adminUsername: string
   adminPassword: string
   storageProvider: 'local' | 's3'
@@ -41,6 +42,9 @@ export function loadConfig(): AppConfig {
     databaseUrl: process.env.DATABASE_URL ?? 'file:./data/db.sqlite',
     frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
     sessionSecret,
+    cookieSecure: process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === 'true'
+      : process.env.NODE_ENV === 'production',
     adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
     adminPassword,
     storageProvider: storageProvider as 'local' | 's3',

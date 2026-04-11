@@ -73,7 +73,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     reply.setCookie('session', token, {
       httpOnly: true,
       sameSite: 'strict',
-      secure: process.env.NODE_ENV === 'production',
+      secure: fastify.config.cookieSecure,
       maxAge: SESSION_TTL_MS / 1000,
       path: '/',
     })

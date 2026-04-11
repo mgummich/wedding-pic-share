@@ -15,6 +15,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # NEXT_PUBLIC_* vars are inlined at build time — pass the public API URL here
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# Internal URL for Next.js → backend server-to-server calls (rewrites + SSR fetches)
+ARG BACKEND_URL=http://backend:4000
+ENV BACKEND_URL=${BACKEND_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm --filter @wedding/shared build
@@ -29,9 +32,9 @@ ENV HOSTNAME=0.0.0.0
 RUN apk add --no-cache curl
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/public ./public
+COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/public ./apps/frontend/public
 COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/.next/standalone ./
-COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/.next/static ./.next/static
+COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/.next/static ./apps/frontend/.next/static
 
 USER appuser
 EXPOSE 3000

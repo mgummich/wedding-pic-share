@@ -1,9 +1,11 @@
 import fp from 'fastify-plugin'
 import { getClient } from '@wedding/db'
 import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify'
+import type { AppConfig } from '../config.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
+    config: AppConfig
     requireAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
   interface FastifyRequest {
