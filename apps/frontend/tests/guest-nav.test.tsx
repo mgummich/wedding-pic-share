@@ -43,5 +43,7 @@ describe('GuestNavClient', () => {
     vi.mocked(usePathname).mockReturnValue('/g/test-slug/slideshow')
     render(<GuestNavClient gallerySlug="test-slug" />)
     expect(screen.getByRole('link', { name: /slideshow/i })).toHaveClass('text-accent')
+    expect(screen.getByRole('link', { name: /galerie/i })).not.toHaveClass('text-accent')
+    expect(screen.getByRole('link', { name: /hochladen/i })).not.toHaveClass('text-accent')
   })
 })
