@@ -97,6 +97,8 @@ export function GalleryClient({
           photos={photos}
           index={openIndex}
           onClose={() => setOpenIndex(null)}
+          // photos.length is captured from the closure — safe because Math.min/Math.max
+          // guards against going out of bounds if SSE adds photos while lightbox is open.
           onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
           onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
         />

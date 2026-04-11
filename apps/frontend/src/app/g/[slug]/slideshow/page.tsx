@@ -53,7 +53,7 @@ export default function SlideshowPage({ params }: PageProps) {
   return (
     <>
       {/* GuestNav floats above the full-screen slideshow */}
-      <div className="fixed top-0 left-0 right-0 z-20">
+      <div className="fixed top-0 left-0 right-0 z-30">
         <GuestNav gallerySlug={slug} galleryName={galleryName} />
       </div>
 
