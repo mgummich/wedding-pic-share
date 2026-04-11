@@ -3,7 +3,9 @@
 import { useEffect, useRef } from 'react'
 import type { PhotoResponse } from '@wedding/shared'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+// SSE runs client-side only; use empty base URL so requests go through the
+// Next.js rewrite proxy (/api/v1/* → backend), matching the api.ts pattern.
+const BASE_URL = ''
 
 const INITIAL_RECONNECT_DELAY_MS = 1000
 const MAX_RECONNECT_DELAY_MS = 30_000

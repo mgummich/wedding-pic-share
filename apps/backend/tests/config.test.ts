@@ -41,4 +41,22 @@ describe('loadConfig', () => {
     expect(config.port).toBe(5000)
     expect(config.maxFileSizeMb).toBe(100)
   })
+
+  it('cookieSecure defaults to false when NODE_ENV is not production', () => {
+    process.env.NODE_ENV = 'development'
+    delete process.env.COOKIE_SECURE
+    expect(loadConfig().cookieSecure).toBe(false)
+  })
+
+  it('cookieSecure defaults to true when NODE_ENV is production', () => {
+    process.env.NODE_ENV = 'production'
+    delete process.env.COOKIE_SECURE
+    expect(loadConfig().cookieSecure).toBe(true)
+  })
+
+  it('COOKIE_SECURE=false overrides production NODE_ENV', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.COOKIE_SECURE = 'false'
+    expect(loadConfig().cookieSecure).toBe(false)
+  })
 })

@@ -1,3 +1,4 @@
+import { type APIRequestContext } from '@playwright/test'
 import { test, expect } from './fixtures'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { ModerationPage } from './pages/ModerationPage'
@@ -11,7 +12,7 @@ const API_URL = process.env.E2E_API_URL ?? 'http://localhost:4000'
  * Each call uses a unique buffer (random suffix after IEND) so SHA256 differs
  * and the backend's duplicate-detection never returns 409.
  */
-async function uploadPendingPhoto(request: { post: Function }) {
+async function uploadPendingPhoto(request: Pick<APIRequestContext, 'post'>) {
   // Append 8 random bytes after the PNG IEND marker — PNG decoders ignore
   // trailing data, but the SHA256 hash changes, bypassing duplicate detection.
   const uniqueBuffer = Buffer.concat([TINY_PNG, randomBytes(8)])
