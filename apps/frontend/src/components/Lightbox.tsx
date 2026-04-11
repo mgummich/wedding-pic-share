@@ -31,6 +31,9 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev }: LightboxPro
   }, [onClose, onNext, onPrev, hasPrev, hasNext])
 
   // Scroll lock
+  // NOTE: If two Lightbox instances are ever open simultaneously (currently impossible
+  // given parent usage), the second instance captures 'hidden' as the prev value and
+  // restores it on unmount, leaving the body locked. Safe for single-instance usage.
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -60,6 +63,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev }: LightboxPro
       onClick={onClose}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
+      onPointerCancel={() => { pointerStart.current = null }}
     >
       {/* Close */}
       <button
