@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getGallery, ApiError } from '@/lib/api'
 import { GalleryClient } from './GalleryClient'
+import { GuestNav } from '@/components/GuestNav'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -29,13 +30,14 @@ export default async function GalleryPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-surface-base">
-      <header className="px-4 pt-8 pb-6">
-        <h1 className="font-display text-3xl text-text-primary">{galleryData.name}</h1>
+      <GuestNav gallerySlug={slug} galleryName={galleryData.name} />
+
+      <div className="px-4 pt-6 pb-3">
         {galleryData.description && (
-          <p className="text-text-muted mt-1">{galleryData.description}</p>
+          <p className="text-text-muted">{galleryData.description}</p>
         )}
         <p className="text-text-muted text-sm mt-1">{galleryData.photoCount} Fotos</p>
-      </header>
+      </div>
 
       <div className="px-2 pb-32">
         <GalleryClient

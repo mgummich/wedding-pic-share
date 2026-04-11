@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getGallery, ApiError } from '@/lib/api'
 import { UploadForm } from './UploadForm'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { GuestNav } from '@/components/GuestNav'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -21,16 +20,10 @@ export default async function UploadPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-surface-base max-w-lg mx-auto">
-      <header className="flex items-center gap-3 px-4 pt-6 pb-4">
-        <Link href={`/g/${slug}`} className="text-text-muted hover:text-accent transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="font-display text-xl text-text-primary">{gallery.name}</h1>
-          <p className="text-sm text-text-muted">Fotos hochladen</p>
-        </div>
-      </header>
-
+      <GuestNav gallerySlug={slug} galleryName={gallery.name} />
+      <div className="px-4 pt-4">
+        <h1 className="font-display text-xl text-text-primary mb-1">Fotos hochladen</h1>
+      </div>
       <UploadForm gallerySlug={slug} guestNameMode={gallery.guestNameMode} />
     </main>
   )

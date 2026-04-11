@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { PhotoGrid } from '@/components/PhotoGrid'
 import { UploadButton } from '@/components/UploadButton'
 import { EmptyState } from '@/components/EmptyState'
+import { Lightbox } from '@/components/Lightbox'
 import { useSSE } from '@/lib/sse'
 import { getGallery } from '@/lib/api'
 import type { PhotoResponse, GalleryResponse } from '@wedding/shared'
@@ -25,6 +26,7 @@ export function GalleryClient({
   const [cursor, setCursor] = useState(initialCursor)
   const [hasMore, setHasMore] = useState(initialHasMore)
   const [loading, setLoading] = useState(false)
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   // SSE: prepend new photos approved by admin in real-time
   useSSE(gallery.slug, {
@@ -49,6 +51,11 @@ export function GalleryClient({
     }
   }
 
+  function handlePhotoClick(photo: PhotoResponse) {
+    const index = photos.findIndex((p) => p.id === photo.id)
+    if (index !== -1) setOpenIndex(index)
+  }
+
   if (photos.length === 0) {
     return (
       <>
@@ -66,6 +73,7 @@ export function GalleryClient({
       <PhotoGrid
         photos={photos}
         layout={gallery.layout}
+        onPhotoClick={handlePhotoClick}
       />
 
       {hasMore && (
@@ -83,6 +91,16 @@ export function GalleryClient({
       )}
 
       <UploadButton gallerySlug={gallery.slug} />
+
+      {openIndex !== null && (
+        <Lightbox
+          photos={photos}
+          index={openIndex}
+          onClose={() => setOpenIndex(null)}
+          onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
+          onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
+        />
+      )}
     </>
   )
 }
