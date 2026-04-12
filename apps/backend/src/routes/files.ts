@@ -20,12 +20,13 @@ export async function fileRoutes(
         type: 'object',
         properties: {
           v: { type: 'string', enum: ['thumb', 'display', 'original', 'poster'] },
+          download: { type: 'string' },
         },
       },
     },
   }, async (req, reply) => {
     const { gallerySlug, photoId } = req.params as { gallerySlug: string; photoId: string }
-    const { v = 'display' } = req.query as { v?: string }
+    const { v = 'display', download } = req.query as { v?: string; download?: string }
 
     // Validate photoId contains no path traversal
     if (photoId.includes('/') || photoId.includes('..') || photoId.includes('\0')) {
@@ -61,6 +62,9 @@ export async function fileRoutes(
 
     reply.header('Content-Type', contentType)
     reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+    if (download) {
+      reply.header('Content-Disposition', `attachment; filename="${photoId}.webp"`)
+    }
 
     const stream = createReadStream(filePath)
     return reply.send(stream)

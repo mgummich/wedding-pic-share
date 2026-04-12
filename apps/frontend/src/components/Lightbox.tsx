@@ -79,7 +79,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
       {/* Download */}
       {allowDownload && photo.mediaType === 'IMAGE' && (
         <a
-          href={photo.displayUrl}
+          href={`${photo.displayUrl}&download=1`}
           download
           onClick={(e) => e.stopPropagation()}
           className="absolute top-4 right-16 z-10 p-2 rounded-full bg-black/50 text-white
