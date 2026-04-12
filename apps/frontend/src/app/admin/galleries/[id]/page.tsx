@@ -96,14 +96,19 @@ export default function GallerySettingsPage({ params }: PageProps) {
     setExporting(true)
     try {
       const res = await fetch(`/api/v1/admin/galleries/${id}/export`, { credentials: 'include' })
-      if (!res.ok) return
+      if (!res.ok) {
+        setSaveError('Export fehlgeschlagen. Bitte versuche es erneut.')
+        return
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `${gallery.slug}-export.zip`
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 100)
     } finally {
       setExporting(false)
     }
