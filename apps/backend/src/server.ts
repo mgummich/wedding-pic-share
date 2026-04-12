@@ -9,6 +9,7 @@ import { healthRoutes } from './routes/health.js'
 import { authPlugin } from './plugins/auth.js'
 import { bruteForcePlugin } from './plugins/bruteForce.js'
 import { adminAuthRoutes } from './routes/admin/auth.js'
+import { setupRoutes } from './routes/setup.js'
 import { adminGalleryRoutes } from './routes/admin/galleries.js'
 import { guestGalleryRoutes } from './routes/guest/gallery.js'
 import { guestUploadRoutes } from './routes/guest/upload.js'
@@ -76,6 +77,7 @@ export async function buildApp(config?: AppConfig) {
   await fastify.register(bruteForcePlugin)
 
   await fastify.register(async (instance) => {
+    await instance.register(setupRoutes)
     await instance.register(adminAuthRoutes)
     await instance.register(adminGalleryRoutes)
     await instance.register(guestGalleryRoutes)
