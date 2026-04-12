@@ -93,6 +93,28 @@ export async function adminLogout(): Promise<void> {
   await apiFetch('/api/v1/admin/logout', { method: 'POST' })
 }
 
+// ─── Setup ──────────────────────────────────────────────────────────────────
+
+export type SetupStatusResponse = {
+  setupRequired: boolean
+}
+
+export async function getSetupStatus(): Promise<SetupStatusResponse> {
+  return apiFetch('/api/v1/setup/status')
+}
+
+export async function submitSetup(data: {
+  username: string
+  password: string
+  weddingName?: string
+  galleryName?: string
+}): Promise<void> {
+  await apiFetch('/api/v1/setup', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 // ─── Admin Galleries ─────────────────────────────────────────────────────────
 
 export async function getAdminGalleries(): Promise<
