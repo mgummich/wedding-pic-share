@@ -92,6 +92,19 @@ export function GalleryClient({
 
       <UploadButton gallerySlug={gallery.slug} />
 
+      {gallery.allowGuestDownload && (
+        <div className="flex justify-center mt-4 pb-4">
+          <a
+            href={`/api/v1/g/${gallery.slug}/download`}
+            download
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-border
+                       text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
+          >
+            Alle Fotos herunterladen
+          </a>
+        </div>
+      )}
+
       {openIndex !== null && (
         <Lightbox
           photos={photos}
@@ -101,6 +114,7 @@ export function GalleryClient({
           // guards against going out of bounds if SSE adds photos while lightbox is open.
           onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
           onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
+          allowDownload={gallery.allowGuestDownload}
         />
       )}
     </>

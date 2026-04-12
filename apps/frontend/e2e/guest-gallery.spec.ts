@@ -179,3 +179,10 @@ test.describe('Guest Gallery Lightbox', () => {
     await expect(lightbox.overlay).not.toBeVisible()
   })
 })
+
+test.describe('Guest Download', () => {
+  test('download button is not visible when allowGuestDownload is false', async ({ page }) => {
+    await page.goto(`/g/${TEST_GALLERY_SLUG}`)
+    await expect(page.getByRole('link', { name: /alle fotos herunterladen/i })).not.toBeVisible()
+  })
+})
