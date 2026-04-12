@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
 
 interface LightboxProps {
@@ -11,9 +11,10 @@ interface LightboxProps {
   onClose: () => void
   onNext: () => void
   onPrev: () => void
+  allowDownload?: boolean
 }
 
-export function Lightbox({ photos, index, onClose, onNext, onPrev }: LightboxProps) {
+export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload }: LightboxProps) {
   const photo = photos[index]
   const hasPrev = index > 0
   const hasNext = index < photos.length - 1
@@ -74,6 +75,20 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev }: LightboxPro
       >
         <X className="w-6 h-6" />
       </button>
+
+      {/* Download */}
+      {allowDownload && photo.mediaType === 'IMAGE' && (
+        <a
+          href={photo.displayUrl}
+          download
+          onClick={(e) => e.stopPropagation()}
+          className="absolute top-4 right-16 z-10 p-2 rounded-full bg-black/50 text-white
+                     hover:bg-black/70 transition-colors"
+          aria-label="Foto herunterladen"
+        >
+          <Download className="w-6 h-6" />
+        </a>
+      )}
 
       {/* Prev */}
       {hasPrev && (

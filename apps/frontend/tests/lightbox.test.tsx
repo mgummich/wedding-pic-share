@@ -90,4 +90,14 @@ describe('Lightbox', () => {
     fireEvent.keyDown(window, { key: 'ArrowLeft' })
     expect(onPrev).not.toHaveBeenCalled()
   })
+
+  it('shows download link when allowDownload is true', () => {
+    render(<Lightbox photos={photos} index={1} onClose={onClose} onNext={onNext} onPrev={onPrev} allowDownload />)
+    expect(screen.getByRole('link', { name: /herunterladen/i })).toBeInTheDocument()
+  })
+
+  it('does not show download link when allowDownload is false', () => {
+    render(<Lightbox photos={photos} index={1} onClose={onClose} onNext={onNext} onPrev={onPrev} />)
+    expect(screen.queryByRole('link', { name: /herunterladen/i })).toBeNull()
+  })
 })
