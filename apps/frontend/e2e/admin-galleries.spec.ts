@@ -1,8 +1,14 @@
 import { test, expect } from './fixtures'
+import { randomBytes } from 'crypto'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
-import { TEST_GALLERY_NAME, TEST_GALLERY_SLUG } from './global-setup'
+import { LightboxPage } from './pages/LightboxPage'
+import { TEST_GALLERY_NAME, TEST_GALLERY_SLUG, TEST_WEDDING_SLUG, TINY_PNG } from './global-setup'
 import { GallerySettingsPage } from './pages/GallerySettingsPage'
 import { NewGalleryPage } from './pages/NewGalleryPage'
+
+function uniquePng() {
+  return Buffer.concat([TINY_PNG, randomBytes(8)])
+}
 
 test.describe('Admin Dashboard', () => {
   test('shows gallery list after login', async ({ adminPage }) => {
@@ -73,6 +79,55 @@ test.describe('Admin Dashboard', () => {
     await settingsPage.saveButton.click()
     await expect(settingsPage.savedMessage).toBeVisible()
   })
+
+  test('sidebar is visible on admin dashboard', async ({ adminPage }) => {
+    const dashboard = new AdminDashboardPage(adminPage)
+    await dashboard.goto()
+    await expect(dashboard.sidebar).toBeVisible()
+  })
+
+  test('test gallery appears in sidebar', async ({ adminPage }) => {
+    const dashboard = new AdminDashboardPage(adminPage)
+    await dashboard.goto()
+    await expect(dashboard.sidebarGallery(TEST_GALLERY_NAME)).toBeVisible()
+  })
+
+  test('clicking gallery in sidebar navigates to settings', async ({ adminPage }) => {
+    const dashboard = new AdminDashboardPage(adminPage)
+    await dashboard.goto()
+    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await expect(adminPage).toHaveURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
+  })
+
+  test('sidebar is not shown on login page', async ({ page }) => {
+    await page.goto('/admin/login')
+    await expect(page.locator('aside')).toHaveCount(0)
+  })
+
+  test('clicking a moderation photo opens the lightbox', async ({ adminPage, request }) => {
+    const uploadRes = await request.post(`${process.env.E2E_API_URL ?? 'http://localhost:4000'}/api/v1/g/${TEST_GALLERY_SLUG}/upload`, {
+      multipart: {
+        file: {
+          name: 'moderation-lightbox.png',
+          mimeType: 'image/png',
+          buffer: uniquePng(),
+        },
+      },
+    })
+    expect(uploadRes.ok()).toBeTruthy()
+
+    const dashboard = new AdminDashboardPage(adminPage)
+    const lightbox = new LightboxPage(adminPage)
+
+    await dashboard.goto()
+    await dashboard.moderateButton(TEST_GALLERY_NAME).click()
+
+    const firstPhoto = adminPage.getByRole('button', { name: /foto vergrößern/i }).first()
+    await expect(firstPhoto).toBeVisible()
+    await firstPhoto.click()
+    await expect(lightbox.overlay).toBeVisible()
+    await expect(lightbox.closeButton).toBeVisible()
+  })
 })
 
 test.describe('New Gallery', () => {
@@ -103,15 +158,15 @@ test.describe('New Gallery', () => {
   })
 
   test('duplicate slug shows error message', async ({ adminPage }) => {
-    // The test gallery created in global-setup has slug TEST_GALLERY_SLUG;
-    // attempting to create another with the same slug triggers a 409.
+    // Gallery slugs are unique per wedding, so reuse both the existing wedding slug
+    // and gallery slug created during global setup to trigger the expected 409.
     const newPage = new NewGalleryPage(adminPage)
     await newPage.goto()
 
     await newPage.weddingNameInput.fill('Duplicate Wedding')
-    await newPage.weddingSlugInput.fill('duplicate-wedding')
+    await newPage.weddingSlugInput.fill(TEST_WEDDING_SLUG)
     await newPage.galleryNameInput.fill('Duplicate Gallery')
-    await newPage.gallerySlugInput.fill(TEST_GALLERY_SLUG) // already exists
+    await newPage.gallerySlugInput.fill(TEST_GALLERY_SLUG)
     await newPage.submitButton.click()
 
     await expect(newPage.errorMessage).toBeVisible()

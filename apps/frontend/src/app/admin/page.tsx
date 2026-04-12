@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getAdminGalleries, adminLogout, ApiError } from '@/lib/api'
-import { Plus, LogOut, Settings } from 'lucide-react'
+import { getAdminGalleries, ApiError } from '@/lib/api'
+import { Settings } from 'lucide-react'
 
 export default function AdminDashboardPage() {
   const router = useRouter()
@@ -20,31 +20,10 @@ export default function AdminDashboardPage() {
       .finally(() => setLoading(false))
   }, [router])
 
-  async function handleLogout() {
-    await adminLogout()
-    router.replace('/admin/login')
-  }
-
   return (
     <main className="min-h-screen bg-surface-base">
       <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-border">
         <h1 className="font-display text-2xl text-text-primary">Galerien</h1>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin/galleries/new"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-accent text-white text-sm hover:bg-accent-hover transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Neu
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="p-2 text-text-muted hover:text-text-primary transition-colors"
-            title="Abmelden"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
       </header>
 
       <div className="px-4 py-4 space-y-3">

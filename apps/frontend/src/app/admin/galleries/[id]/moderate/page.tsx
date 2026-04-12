@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { CheckCircle, XCircle } from 'lucide-react'
 import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api'
+import { Lightbox } from '@/components/Lightbox'
 import type { AdminPhotoResponse } from '@/lib/api'
 
 interface PageProps {
@@ -16,12 +17,11 @@ export default function ModerationPage({ params }: PageProps) {
   const router = useRouter()
   const [photos, setPhotos] = useState<AdminPhotoResponse[]>([])
   const [loading, setLoading] = useState(true)
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   useEffect(() => {
     getAdminPhotos(id, { status: 'PENDING' })
-      .then((r) => {
-        setPhotos(r.data)
-      })
+      .then((r) => setPhotos(r.data))
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) router.replace('/admin/login')
       })
@@ -31,6 +31,7 @@ export default function ModerationPage({ params }: PageProps) {
   async function handleModerate(photoId: string, action: 'APPROVED' | 'REJECTED') {
     await moderatePhoto(photoId, { status: action })
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))
+    setOpenIndex(null)
   }
 
   async function handleApproveAll() {
@@ -38,6 +39,7 @@ export default function ModerationPage({ params }: PageProps) {
     if (ids.length === 0) return
     await batchModerate({ action: 'approve', photoIds: ids })
     setPhotos([])
+    setOpenIndex(null)
   }
 
   if (loading) {
@@ -76,18 +78,24 @@ export default function ModerationPage({ params }: PageProps) {
       </header>
 
       <div className="grid grid-cols-2 gap-2 p-2">
-        {photos.map((photo) => (
+        {photos.map((photo, index) => (
           <div key={photo.id} className="relative rounded-card overflow-hidden bg-surface-card">
-            <Image
-              src={photo.thumbUrl}
-              alt="Pending photo"
-              width={400}
-              height={400}
-              className="w-full aspect-square object-cover"
-              unoptimized
-            />
+            <button
+              className="w-full text-left"
+              onClick={() => setOpenIndex(index)}
+              aria-label="Foto vergrößern"
+            >
+              <Image
+                src={photo.thumbUrl}
+                alt="Ausstehendes Foto"
+                width={400}
+                height={400}
+                className="w-full aspect-square object-cover"
+                unoptimized
+              />
+            </button>
             {photo.guestName && (
-              <p className="absolute top-2 left-2 text-xs text-white bg-black/50 px-2 py-0.5 rounded-full">
+              <p className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white">
                 {photo.guestName}
               </p>
             )}
@@ -110,6 +118,16 @@ export default function ModerationPage({ params }: PageProps) {
           </div>
         ))}
       </div>
+
+      {openIndex !== null && (
+        <Lightbox
+          photos={photos}
+          index={openIndex}
+          onClose={() => setOpenIndex(null)}
+          onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
+          onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
+        />
+      )}
     </main>
   )
 }

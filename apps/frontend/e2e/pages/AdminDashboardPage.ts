@@ -5,11 +5,13 @@ export class AdminDashboardPage {
   readonly newGalleryLink: Locator
   readonly logoutButton: Locator
   readonly emptyState: Locator
+  readonly sidebar: Locator
 
   constructor(private page: Page) {
     this.heading = page.getByRole('heading', { name: 'Galerien' })
-    this.newGalleryLink = page.getByRole('link', { name: 'Neu' })
-    this.logoutButton = page.getByTitle('Abmelden')
+    this.sidebar = page.locator('aside')
+    this.newGalleryLink = this.sidebar.getByRole('link', { name: /neue galerie erstellen/i })
+    this.logoutButton = this.sidebar.getByRole('button', { name: 'Abmelden' })
     this.emptyState = page.getByText(/noch keine galerien/i)
   }
 
@@ -17,19 +19,28 @@ export class AdminDashboardPage {
     await this.page.goto('/admin')
   }
 
+  galleryListItem(name: string) {
+    return this.page
+      .locator('main div.bg-surface-card')
+      .filter({ has: this.page.getByRole('heading', { name }) })
+      .first()
+  }
+
   galleryCard(name: string) {
-    return this.page.getByText(name).first()
+    return this.galleryListItem(name)
+  }
+
+  sidebarGallery(name: string) {
+    return this.sidebar.getByRole('link', { name: new RegExp(name, 'i') })
   }
 
   moderateButton(galleryName: string) {
-    return this.page
-      .locator('div', { has: this.page.getByText(galleryName) })
+    return this.galleryListItem(galleryName)
       .getByRole('link', { name: 'Moderieren' })
   }
 
   settingsButton(galleryName: string) {
-    return this.page
-      .locator('div', { has: this.page.getByText(galleryName) })
+    return this.galleryListItem(galleryName)
       .getByRole('link', { name: 'Einstellungen' })
   }
 }

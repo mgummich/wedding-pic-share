@@ -10,7 +10,7 @@ function makePhoto(id: string): PhotoResponse {
     mediaType: 'IMAGE',
     thumbUrl: `/thumb/${id}.webp`,
     displayUrl: `/display/${id}.webp`,
-    blurDataUrl: null,
+    blurDataUrl: undefined,
     guestName: null,
     duration: null,
     createdAt: new Date().toISOString(),

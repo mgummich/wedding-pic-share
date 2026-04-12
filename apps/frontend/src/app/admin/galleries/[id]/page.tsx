@@ -3,8 +3,11 @@
 import { useEffect, useState, use, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowLeft, Trash2 } from 'lucide-react'
-import { getAdminGalleries, updateGallery, deleteGallery, ApiError } from '@/lib/api'
+import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, ApiError } from '@/lib/api'
+import { Lightbox } from '@/components/Lightbox'
+import type { AdminPhotoResponse } from '@/lib/api'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -18,6 +21,8 @@ export default function GallerySettingsPage({ params }: PageProps) {
 
   const [gallery, setGallery] = useState<GalleryData | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [photos, setPhotos] = useState<AdminPhotoResponse[]>([])
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -46,6 +51,10 @@ export default function GallerySettingsPage({ params }: PageProps) {
         if (err instanceof ApiError && err.status === 401) router.replace('/admin/login')
         else setLoadError(true)
       })
+
+    getAdminPhotos(id, { status: 'APPROVED' })
+      .then((response) => setPhotos(response.data))
+      .catch(() => {})
   }, [id, router])
 
   async function handleSave(e: FormEvent) {
@@ -204,6 +213,32 @@ export default function GallerySettingsPage({ params }: PageProps) {
         </button>
       </form>
 
+      {photos.length > 0 && (
+        <section className="max-w-lg px-4 pb-8">
+          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-text-muted">
+            Freigegebene Fotos ({photos.length})
+          </h2>
+          <div className="grid grid-cols-3 gap-2">
+            {photos.map((photo, index) => (
+              <button
+                key={photo.id}
+                onClick={() => setOpenIndex(index)}
+                className="group relative aspect-square overflow-hidden rounded-card"
+                aria-label="Foto vergrößern"
+              >
+                <Image
+                  src={photo.thumbUrl}
+                  alt={photo.guestName ?? 'Hochzeitsfoto'}
+                  fill
+                  className="object-cover transition-transform duration-200 group-hover:scale-105"
+                  unoptimized
+                />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Danger zone */}
       <div className="px-4 pb-10 max-w-lg">
         <div className="border border-error/30 rounded-card p-4">
@@ -238,6 +273,16 @@ export default function GallerySettingsPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {openIndex !== null && (
+        <Lightbox
+          photos={photos}
+          index={openIndex}
+          onClose={() => setOpenIndex(null)}
+          onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
+          onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
+        />
+      )}
     </main>
   )
 }
