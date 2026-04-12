@@ -8,6 +8,9 @@ export class GallerySettingsPage {
   readonly deleteButton: Locator
   readonly confirmDeleteButton: Locator
   readonly cancelDeleteButton: Locator
+  readonly qrDownloadPng: Locator
+  readonly qrDownloadSvg: Locator
+  readonly exportButton: Locator
 
   constructor(private page: Page) {
     this.nameInput = page.getByLabel('Name')
@@ -17,6 +20,9 @@ export class GallerySettingsPage {
     this.deleteButton = page.getByRole('button', { name: 'Galerie löschen' })
     this.confirmDeleteButton = page.getByRole('button', { name: 'Wirklich löschen' })
     this.cancelDeleteButton = page.getByRole('button', { name: 'Abbrechen' })
+    this.qrDownloadPng = page.getByRole('link', { name: /qr-code als png herunterladen/i })
+    this.qrDownloadSvg = page.getByRole('link', { name: /qr-code als svg herunterladen/i })
+    this.exportButton = page.getByRole('button', { name: /zip exportieren/i })
   }
 
   async goto(id: string) {

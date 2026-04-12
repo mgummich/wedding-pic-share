@@ -173,3 +173,36 @@ test.describe('New Gallery', () => {
     await expect(adminPage).toHaveURL(/\/admin\/galleries\/new/)
   })
 })
+
+test.describe('Gallery Settings Actions', () => {
+  test('QR-Code PNG and SVG download links are visible', async ({ adminPage }) => {
+    const dashboard = new AdminDashboardPage(adminPage)
+    await dashboard.goto()
+    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await adminPage.waitForURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
+
+    const settings = new GallerySettingsPage(adminPage)
+    await expect(settings.qrDownloadPng).toBeVisible()
+    await expect(settings.qrDownloadSvg).toBeVisible()
+  })
+
+  test('ZIP export button is visible', async ({ adminPage }) => {
+    const dashboard = new AdminDashboardPage(adminPage)
+    await dashboard.goto()
+    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await adminPage.waitForURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
+
+    const settings = new GallerySettingsPage(adminPage)
+    await expect(settings.exportButton).toBeVisible()
+  })
+
+  test('QR-Code PNG link has correct href', async ({ adminPage }) => {
+    const dashboard = new AdminDashboardPage(adminPage)
+    await dashboard.goto()
+    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await adminPage.waitForURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
+
+    const settings = new GallerySettingsPage(adminPage)
+    await expect(settings.qrDownloadPng).toHaveAttribute('href', new RegExp(`/g/${TEST_GALLERY_SLUG}/qr`))
+  })
+})

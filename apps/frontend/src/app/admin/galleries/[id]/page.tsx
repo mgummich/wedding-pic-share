@@ -4,7 +4,7 @@ import { useEffect, useState, use, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Trash2, QrCode, Download } from 'lucide-react'
 import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import type { AdminPhotoResponse } from '@/lib/api'
@@ -34,6 +34,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [saved, setSaved] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     getAdminGalleries()
@@ -87,6 +88,24 @@ export default function GallerySettingsPage({ params }: PageProps) {
       setSaveError('Löschen fehlgeschlagen.')
       setDeleting(false)
       setConfirmDelete(false)
+    }
+  }
+
+  async function handleExport() {
+    if (!gallery) return
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/v1/admin/galleries/${id}/export`, { credentials: 'include' })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${gallery.slug}-export.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -212,6 +231,48 @@ export default function GallerySettingsPage({ params }: PageProps) {
           {saving ? 'Wird gespeichert…' : 'Speichern'}
         </button>
       </form>
+
+      {/* Gallery actions: QR download + ZIP export */}
+      {gallery && (
+        <section className="px-4 pb-6 max-w-lg">
+          <h2 className="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">
+            Aktionen
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href={`/api/v1/g/${gallery.slug}/qr?format=png`}
+              download={`${gallery.slug}-qr.png`}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+                         text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
+              aria-label="QR-Code als PNG herunterladen"
+            >
+              <QrCode className="w-4 h-4" />
+              QR-Code (PNG)
+            </a>
+            <a
+              href={`/api/v1/g/${gallery.slug}/qr?format=svg`}
+              download={`${gallery.slug}-qr.svg`}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+                         text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
+              aria-label="QR-Code als SVG herunterladen"
+            >
+              <QrCode className="w-4 h-4" />
+              QR-Code (SVG)
+            </a>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+                         text-text-muted hover:border-accent hover:text-accent transition-colors text-sm
+                         disabled:opacity-50"
+              aria-label="Fotos als ZIP exportieren"
+            >
+              <Download className="w-4 h-4" />
+              {exporting ? 'Wird exportiert…' : 'ZIP exportieren'}
+            </button>
+          </div>
+        </section>
+      )}
 
       {photos.length > 0 && (
         <section className="max-w-lg px-4 pb-8">
