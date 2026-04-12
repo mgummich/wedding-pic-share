@@ -37,11 +37,23 @@ test.describe('Admin Auth', () => {
     await loginPage.login(USERNAME, PASSWORD)
     await expect(page).toHaveURL(/\/admin$/)
 
-    await page.getByTitle('Abmelden').click()
+    await page.getByRole('button', { name: 'Abmelden' }).click()
     await expect(page).toHaveURL(/\/admin\/login/)
 
     // Verify session is gone: navigating to /admin redirects to login again
     await page.goto('/admin')
+    await expect(page).toHaveURL(/\/admin\/login/)
+  })
+
+  test('repeated bad passwords show the account lockout message', async ({ page }) => {
+    const loginPage = new LoginPage(page)
+    await loginPage.goto()
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await loginPage.login(USERNAME, 'falsches-passwort-xyz')
+    }
+
+    await expect(page.getByText(/konto gesperrt/i)).toBeVisible()
     await expect(page).toHaveURL(/\/admin\/login/)
   })
 })

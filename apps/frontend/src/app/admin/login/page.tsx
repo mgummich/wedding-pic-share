@@ -21,6 +21,11 @@ export default function AdminLoginPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError('Falscher Benutzername oder Passwort.')
+      } else if (err instanceof ApiError && err.status === 429) {
+        const title = (err.body as { title?: unknown })?.title
+        setError(typeof title === 'string'
+          ? title
+          : 'Zu viele Fehlversuche. Bitte versuche es später erneut.')
       } else {
         setError('Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
       }
