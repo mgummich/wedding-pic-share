@@ -57,4 +57,22 @@ describe('AdminDashboardPage', () => {
       expect(replace).toHaveBeenCalledWith('/admin/login')
     })
   })
+
+  it('renders loaded galleries on successful responses', async () => {
+    vi.mocked(getAdminGalleries).mockResolvedValue([
+      {
+        id: 'g1',
+        name: 'Afterparty',
+        slug: 'afterparty',
+        weddingName: 'Emma & Max',
+        weddingSlug: 'emma-max',
+        photoCount: 12,
+      },
+    ] as Awaited<ReturnType<typeof getAdminGalleries>>)
+
+    render(<AdminDashboardPage />)
+
+    expect(await screen.findByText('Afterparty')).toBeInTheDocument()
+    expect(screen.getByText('/g/afterparty')).toBeInTheDocument()
+  })
 })

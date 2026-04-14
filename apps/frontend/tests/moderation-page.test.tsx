@@ -87,6 +87,45 @@ describe('ModerationPage', () => {
     expect(screen.getByText('Anna')).toBeInTheDocument()
   })
 
+  it('removes a photo from the queue after successful moderation', async () => {
+    vi.mocked(getAdminPhotos).mockResolvedValue({
+      data: [photo('p1', 'Anna')],
+      pagination: { nextCursor: null, hasMore: false },
+    })
+    vi.mocked(moderatePhoto).mockResolvedValue(photo('p1', 'Anna'))
+
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(await screen.findByText('Anna')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^freigeben$/i }))
+
+    await waitFor(() => {
+      expect(moderatePhoto).toHaveBeenCalledWith('p1', { status: 'APPROVED' })
+    })
+    expect(screen.queryByText(/aktion fehlgeschlagen/i)).not.toBeInTheDocument()
+  })
+
+  it('clears the queue when approve-all succeeds without failed ids', async () => {
+    vi.mocked(getAdminPhotos).mockResolvedValue({
+      data: [photo('p1', 'Anna'), photo('p2', 'Ben')],
+      pagination: { nextCursor: null, hasMore: false },
+    })
+    vi.mocked(batchModerate).mockResolvedValue({ processed: 2, failed: [] })
+
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(await screen.findByText('Anna')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /alle freigeben/i }))
+
+    await waitFor(() => {
+      expect(batchModerate).toHaveBeenCalledWith({ action: 'approve', photoIds: ['p1', 'p2'] })
+    })
+    expect(screen.queryByText(/aktion fehlgeschlagen/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/konnten nicht freigegeben werden/i)).not.toBeInTheDocument()
+  })
+
   it('shows partial-batch feedback and sends all ids on approve-all', async () => {
     vi.mocked(getAdminPhotos).mockResolvedValue({
       data: [photo('p1', 'Anna'), photo('p2', 'Ben')],
