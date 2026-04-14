@@ -1,6 +1,29 @@
 import type { FastifyInstance } from 'fastify'
 import { getClient } from '@wedding/db'
 import type { GalleryResponse, WeddingResponse } from '@wedding/shared'
+import { toGalleryResponse } from '../../services/uploadWindows.js'
+
+type UploadWindowInput = {
+  start: string
+  end: string
+}
+
+function parseUploadWindows(input: unknown): Array<{ start: Date; end: Date }> | null {
+  if (!Array.isArray(input)) return null
+
+  const windows = input.map((item) => {
+    if (!item || typeof item !== 'object') return null
+    const { start, end } = item as UploadWindowInput
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate >= endDate) {
+      return null
+    }
+    return { start: startDate, end: endDate }
+  })
+
+  return windows.every(Boolean) ? windows as Array<{ start: Date; end: Date }> : null
+}
 
 export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void> {
   // GET all weddings with galleries
@@ -11,26 +34,20 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
     const weddings = await db.wedding.findMany({
       include: {
         galleries: {
-          include: { _count: { select: { photos: true } } },
+          include: {
+            _count: { select: { photos: true } },
+            uploadWindows: { orderBy: { start: 'asc' } },
+          },
         },
       },
     })
     return reply.send(weddings.map((w) => ({
       id: w.id,
-      name: w.name,
-      slug: w.slug,
-      createdAt: w.createdAt.toISOString(),
-      galleries: w.galleries.map((g) => ({
-        id: g.id,
-        name: g.name,
-        slug: g.slug,
-        description: g.description,
-        layout: g.layout,
-        allowGuestDownload: g.allowGuestDownload,
-        guestNameMode: g.guestNameMode,
-        photoCount: g._count.photos,
-      } satisfies GalleryResponse)),
-    } satisfies WeddingResponse)))
+        name: w.name,
+        slug: w.slug,
+        createdAt: w.createdAt.toISOString(),
+        galleries: w.galleries.map((g) => toGalleryResponse(g, g._count.photos) satisfies GalleryResponse),
+      } satisfies WeddingResponse)))
   })
 
   // POST create gallery (upserts wedding by slug, then creates gallery)
@@ -98,11 +115,8 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
     })
 
     return reply.code(201).send({
-      ...gallery,
+      ...toGalleryResponse({ ...gallery, uploadWindows: [] }, 0),
       weddingId: wedding.id,
-      photoCount: 0,
-      layout: gallery.layout,
-      guestNameMode: gallery.guestNameMode,
     })
   })
 
@@ -123,6 +137,18 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
           allowGuestDownload: { type: 'boolean' },
           guestNameMode: { type: 'string', enum: ['OPTIONAL', 'REQUIRED', 'HIDDEN'] },
           moderationMode: { type: 'string', enum: ['MANUAL', 'AUTO'] },
+          isActive: { type: 'boolean' },
+          uploadWindows: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['start', 'end'],
+              properties: {
+                start: { type: 'string', format: 'date-time' },
+                end: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
         },
       },
     },
@@ -132,10 +158,76 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
     const db = getClient()
 
     try {
-      const gallery = await db.gallery.update({ where: { id }, data: body })
+      const {
+        uploadWindows: rawUploadWindows,
+        isActive,
+        ...rest
+      } = body
+
+      const parsedUploadWindows = rawUploadWindows === undefined
+        ? undefined
+        : parseUploadWindows(rawUploadWindows)
+
+      if (rawUploadWindows !== undefined && parsedUploadWindows === null) {
+        return reply.code(400).send({
+          type: 'validation-error',
+          title: 'Ungueltiges Upload-Zeitfenster.',
+          status: 400,
+        })
+      }
+
+      const uploadWindows = parsedUploadWindows ?? undefined
+
+      const gallery = await db.$transaction(async (tx) => {
+        const existing = await tx.gallery.findUnique({ where: { id } })
+        if (!existing) {
+          throw new Error('gallery-not-found')
+        }
+
+        if (isActive === true) {
+          await tx.gallery.updateMany({
+            where: { id: { not: id } },
+            data: { isActive: false },
+          })
+        }
+
+        if (uploadWindows !== undefined) {
+          await tx.uploadWindow.deleteMany({ where: { galleryId: id } })
+        }
+
+        const updateData: Record<string, unknown> = { ...rest }
+        if (typeof isActive === 'boolean') {
+          updateData.isActive = isActive
+        }
+
+        await tx.gallery.update({
+          where: { id },
+          data: updateData,
+        })
+
+        if (uploadWindows !== undefined && uploadWindows.length > 0) {
+          await tx.uploadWindow.createMany({
+            data: uploadWindows.map((window) => ({
+              galleryId: id,
+              start: window.start,
+              end: window.end,
+            })),
+          })
+        }
+
+        return tx.gallery.findUniqueOrThrow({
+          where: { id },
+          include: {
+            uploadWindows: { orderBy: { start: 'asc' } },
+          },
+        })
+      })
       const count = await db.photo.count({ where: { galleryId: id } })
-      return reply.send({ ...gallery, photoCount: count })
-    } catch {
+      return reply.send(toGalleryResponse(gallery, count))
+    } catch (error) {
+      if (error instanceof Error && error.message === 'gallery-not-found') {
+        return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
+      }
       return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
     }
   })

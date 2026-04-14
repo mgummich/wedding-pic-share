@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getGallery, uploadFile } from '../src/lib/api.js'
+import { getGallery, updateGallery } from '../src/lib/api.js'
 
 describe('api client', () => {
   beforeEach(() => {
@@ -48,5 +48,50 @@ describe('api client', () => {
     } as Response)
 
     await expect(getGallery('not-found')).rejects.toThrow('404')
+  })
+
+  it('updateGallery sends active state and upload windows', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'g1',
+        name: 'Test',
+        slug: 'test',
+        description: null,
+        layout: 'MASONRY',
+        allowGuestDownload: false,
+        guestNameMode: 'OPTIONAL',
+        photoCount: 0,
+        isActive: true,
+        isUploadOpen: true,
+        uploadWindows: [],
+      }),
+    } as Response)
+
+    await updateGallery('g1', {
+      isActive: true,
+      uploadWindows: [
+        {
+          start: '2035-06-01T12:00:00.000Z',
+          end: '2035-06-01T16:00:00.000Z',
+        },
+      ],
+    })
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/admin/galleries/g1'),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          isActive: true,
+          uploadWindows: [
+            {
+              start: '2035-06-01T12:00:00.000Z',
+              end: '2035-06-01T16:00:00.000Z',
+            },
+          ],
+        }),
+      })
+    )
   })
 })

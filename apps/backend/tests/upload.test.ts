@@ -15,6 +15,7 @@ const DB_PATH = '/tmp/wps-upload-test.db'
 let app: FastifyInstance
 let sessionCookie: string
 let gallerySlug: string
+let galleryId: string
 
 beforeAll(async () => {
   if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
@@ -57,6 +58,7 @@ beforeAll(async () => {
       gallerySlug: 'uploads',
     },
   })
+  galleryId = createRes.json().id
   gallerySlug = createRes.json().slug
 }, 30000)
 
@@ -127,6 +129,38 @@ describe('POST /api/v1/g/:slug/upload', () => {
       payload: body,
     })
     expect(res.statusCode).toBe(415)
+  })
+
+  it('rejects uploads outside configured windows', async () => {
+    const update = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        uploadWindows: [
+          {
+            start: '2035-06-01T12:00:00.000Z',
+            end: '2035-06-01T16:00:00.000Z',
+          },
+        ],
+      },
+    })
+    expect(update.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: '#00ff00' },
+    }).jpeg().toBuffer()
+
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'closed.jpg')
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().type).toBe('upload-window-closed')
   })
 })
 

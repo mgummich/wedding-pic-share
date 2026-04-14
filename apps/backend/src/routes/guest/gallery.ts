@@ -1,8 +1,31 @@
 import type { FastifyInstance } from 'fastify'
 import { getClient } from '@wedding/db'
 import type { PhotoResponse, PaginatedResponse } from '@wedding/shared'
+import { toGalleryResponse } from '../../services/uploadWindows.js'
 
 export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.get('/g/active', async (_req, reply) => {
+    const db = getClient()
+    const gallery = await db.gallery.findFirst({
+      where: { isActive: true },
+      include: { uploadWindows: { orderBy: { start: 'asc' } } },
+    })
+
+    if (!gallery) {
+      return reply.code(404).send({
+        type: 'active-gallery-not-found',
+        title: 'No active gallery configured',
+        status: 404,
+      })
+    }
+
+    const photoCount = await db.photo.count({
+      where: { galleryId: gallery.id, status: 'APPROVED', deletedAt: null },
+    })
+
+    return reply.send(toGalleryResponse(gallery, photoCount))
+  })
+
   fastify.get('/g/:slug', {
     schema: {
       params: {
@@ -25,6 +48,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
 
     const gallery = await db.gallery.findFirst({
       where: { slug },
+      include: { uploadWindows: { orderBy: { start: 'asc' } } },
     })
     if (!gallery) {
       return reply.code(404).send({
@@ -57,14 +81,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
     })
 
     return reply.send({
-      id: gallery.id,
-      name: gallery.name,
-      slug: gallery.slug,
-      description: gallery.description,
-      layout: gallery.layout,
-      allowGuestDownload: gallery.allowGuestDownload,
-      guestNameMode: gallery.guestNameMode,
-      photoCount,
+      ...toGalleryResponse(gallery, photoCount),
       data: items.map((p): PhotoResponse => ({
         id: p.id,
         mediaType: p.mediaType as 'IMAGE' | 'VIDEO',

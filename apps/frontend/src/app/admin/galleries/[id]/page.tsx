@@ -8,12 +8,25 @@ import { ArrowLeft, Trash2, QrCode, Download } from 'lucide-react'
 import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import type { AdminPhotoResponse } from '@/lib/api'
+import type { UploadWindowResponse } from '@wedding/shared'
 
 interface PageProps {
   params: Promise<{ id: string }>
 }
 
 type GalleryData = Awaited<ReturnType<typeof getAdminGalleries>>[number]
+type UploadWindowDraft = Pick<UploadWindowResponse, 'id'> & { start: string; end: string }
+
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60_000))
+  return localDate.toISOString().slice(0, 16)
+}
+
+function toIsoString(value: string): string {
+  return new Date(value).toISOString()
+}
 
 export default function GallerySettingsPage({ params }: PageProps) {
   const { id } = use(params)
@@ -29,6 +42,8 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [layout, setLayout] = useState<'MASONRY' | 'GRID'>('MASONRY')
   const [guestNameMode, setGuestNameMode] = useState<'OPTIONAL' | 'REQUIRED' | 'HIDDEN'>('OPTIONAL')
   const [allowGuestDownload, setAllowGuestDownload] = useState(false)
+  const [isActive, setIsActive] = useState(false)
+  const [uploadWindows, setUploadWindows] = useState<UploadWindowDraft[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -47,6 +62,12 @@ export default function GallerySettingsPage({ params }: PageProps) {
         setLayout(found.layout)
         setGuestNameMode(found.guestNameMode)
         setAllowGuestDownload(found.allowGuestDownload)
+        setIsActive(found.isActive)
+        setUploadWindows(found.uploadWindows.map((window) => ({
+          id: window.id,
+          start: toDateTimeLocal(window.start),
+          end: toDateTimeLocal(window.end),
+        })))
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) router.replace('/admin/login')
@@ -64,13 +85,34 @@ export default function GallerySettingsPage({ params }: PageProps) {
     setSaving(true)
     setSaved(false)
     try {
-      await updateGallery(id, {
+      if (uploadWindows.some((window) => !window.start || !window.end)) {
+        setSaveError('Bitte fuelle alle Start- und Endzeiten aus oder entferne das unvollstaendige Zeitfenster.')
+        return
+      }
+      if (uploadWindows.some((window) => new Date(window.start) >= new Date(window.end))) {
+        setSaveError('Jedes Upload-Zeitfenster braucht ein Ende nach dem Start.')
+        return
+      }
+
+      const updated = await updateGallery(id, {
         name,
         description: description.trim() || null,
         layout,
         guestNameMode,
         allowGuestDownload,
+        isActive,
+        uploadWindows: uploadWindows.map((window) => ({
+          start: toIsoString(window.start),
+          end: toIsoString(window.end),
+        })),
       })
+      setGallery((prev) => prev ? { ...prev, ...updated } : prev)
+      setIsActive(updated.isActive)
+      setUploadWindows(updated.uploadWindows.map((window) => ({
+        id: window.id,
+        start: toDateTimeLocal(window.start),
+        end: toDateTimeLocal(window.end),
+      })))
       setSaved(true)
     } catch {
       setSaveError('Speichern fehlgeschlagen. Bitte versuche es erneut.')
@@ -224,6 +266,97 @@ export default function GallerySettingsPage({ params }: PageProps) {
           />
           <span className="text-sm text-text-primary">Gäste dürfen Fotos herunterladen</span>
         </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isActive}
+            onChange={(e) => {
+              setIsActive(e.target.checked)
+              setSaved(false)
+            }}
+            className="w-4 h-4 accent-accent"
+          />
+          <span className="text-sm text-text-primary">Haupt-Galerie für Root-URLs verwenden</span>
+        </label>
+
+        <section className="space-y-3 rounded-card border border-border p-4">
+          <div>
+            <h2 className="text-sm font-medium text-text-primary">Upload-Zeitfenster</h2>
+            <p className="text-xs text-text-muted mt-1">
+              Ohne Zeitfenster bleiben Uploads dauerhaft geöffnet.
+            </p>
+          </div>
+
+          {uploadWindows.length === 0 ? (
+            <p className="text-sm text-text-muted">Keine Zeitfenster konfiguriert.</p>
+          ) : (
+            <div className="space-y-3">
+              {uploadWindows.map((window, index) => (
+                <div key={window.id} className="rounded-card border border-border p-3 space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="text-sm text-text-primary">
+                      <span className="block mb-1">Start</span>
+                      <input
+                        type="datetime-local"
+                        value={window.start}
+                        onChange={(e) => {
+                          setUploadWindows((prev) => prev.map((entry, entryIndex) => (
+                            entryIndex === index ? { ...entry, start: e.target.value } : entry
+                          )))
+                          setSaved(false)
+                        }}
+                        className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                      />
+                    </label>
+                    <label className="text-sm text-text-primary">
+                      <span className="block mb-1">Ende</span>
+                      <input
+                        type="datetime-local"
+                        value={window.end}
+                        onChange={(e) => {
+                          setUploadWindows((prev) => prev.map((entry, entryIndex) => (
+                            entryIndex === index ? { ...entry, end: e.target.value } : entry
+                          )))
+                          setSaved(false)
+                        }}
+                        className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                      />
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadWindows((prev) => prev.filter((entry) => entry.id !== window.id))
+                      setSaved(false)
+                    }}
+                    className="text-sm text-error hover:underline"
+                  >
+                    Zeitfenster löschen
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setUploadWindows((prev) => [
+                ...prev,
+                {
+                  id: `new-${Date.now()}`,
+                  start: '',
+                  end: '',
+                },
+              ])
+              setSaved(false)
+            }}
+            className="px-4 py-2 rounded-full border border-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
+          >
+            Zeitfenster hinzufügen
+          </button>
+        </section>
 
         {saveError && <p className="text-sm text-error">{saveError}</p>}
         {saved && <p className="text-sm text-success">Gespeichert ✓</p>}

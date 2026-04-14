@@ -5,6 +5,7 @@ import { processImage, processVideo, computeSha256 } from '../../services/media.
 import type { StorageService } from '../../services/storage.js'
 import type { SseManager } from '../../services/sse.js'
 import type { UploadResponse, PhotoResponse } from '@wedding/shared'
+import { isUploadOpenAt } from '../../services/uploadWindows.js'
 
 const ALLOWED_MIMES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/heic',
@@ -19,9 +20,20 @@ export async function guestUploadRoutes(
     const { slug } = req.params as { slug: string }
     const db = getClient()
 
-    const gallery = await db.gallery.findFirst({ where: { slug } })
+    const gallery = await db.gallery.findFirst({
+      where: { slug },
+      include: { uploadWindows: true },
+    })
     if (!gallery) {
       return reply.code(404).send({ type: 'gallery-not-found', title: 'Gallery Not Found', status: 404 })
+    }
+
+    if (!isUploadOpenAt(gallery.uploadWindows)) {
+      return reply.code(403).send({
+        type: 'upload-window-closed',
+        title: 'Upload-Zeitfenster abgelaufen',
+        status: 403,
+      })
     }
 
     const data = await req.file()

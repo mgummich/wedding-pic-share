@@ -54,11 +54,24 @@ model Gallery {
   allowGuestDownload Boolean        @default(false)
   guestNameMode      GuestNameMode  @default(OPTIONAL)
   moderationMode     ModerationMode @default(MANUAL)
+  isActive           Boolean        @default(false)
   secretKey          String?
   createdAt          DateTime       @default(now())
   photos             Photo[]
+  uploadWindows      UploadWindow[]
 
   @@unique([weddingId, slug])
+}
+
+model UploadWindow {
+  id        String   @id @default(cuid())
+  galleryId String
+  gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+  start     DateTime
+  end       DateTime
+  createdAt DateTime @default(now())
+
+  @@index([galleryId, start, end])
 }
 
 model Photo {

@@ -1,3 +1,10 @@
+export interface UploadWindowResponse {
+  id: string
+  start: string
+  end: string
+  createdAt: string
+}
+
 export interface GalleryResponse {
   id: string
   name: string
@@ -7,6 +14,9 @@ export interface GalleryResponse {
   allowGuestDownload: boolean
   guestNameMode: 'OPTIONAL' | 'REQUIRED' | 'HIDDEN'
   photoCount: number
+  isActive: boolean
+  isUploadOpen: boolean
+  uploadWindows: UploadWindowResponse[]
 }
 
 export interface WeddingResponse {

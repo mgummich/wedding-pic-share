@@ -3,12 +3,15 @@ dist/
 .next/
 .turbo/
 .cache/
+.DS_Store
 e2e/.auth/
 playwright-report/
 test-results/
 *.db
 *.db-shm
 *.db-wal
+apps/frontend/public/sw.js
+apps/frontend/public/workbox-*.js
 data/
 coverage/
 .env

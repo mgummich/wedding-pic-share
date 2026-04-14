@@ -6,6 +6,7 @@ export type {
   Photo,
   AdminUser,
   Session,
+  UploadWindow,
   PhotoStatus,
   MediaType,
   GalleryLayout,

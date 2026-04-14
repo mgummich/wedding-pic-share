@@ -4,6 +4,7 @@ import type {
   PhotoResponse,
   PaginatedResponse,
   UploadResponse,
+  UploadWindowResponse,
 } from '@wedding/shared'
 
 // Client-side: use relative paths so requests go through the Next.js proxy (/api/v1/* → backend).
@@ -142,7 +143,12 @@ export async function createGallery(data: {
 
 export async function updateGallery(
   id: string,
-  data: Partial<GalleryResponse>
+  data: Partial<Pick<
+    GalleryResponse,
+    'name' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'isActive'
+  >> & {
+    uploadWindows?: Array<Pick<UploadWindowResponse, 'start' | 'end'>>
+  }
 ): Promise<GalleryResponse> {
   return apiFetch(`/api/v1/admin/galleries/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
