@@ -6,6 +6,33 @@ import type { StorageService } from '../../services/storage.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 import type { MediaProcessor } from '../../services/mediaProcessor.js'
 
+type PaginationCursor = {
+  id: string
+  createdAt: Date
+}
+
+function encodePaginationCursor(id: string, createdAt: Date): string {
+  return Buffer.from(JSON.stringify({
+    id,
+    createdAt: createdAt.toISOString(),
+  })).toString('base64url')
+}
+
+function decodePaginationCursor(cursor: string): PaginationCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+      id?: unknown
+      createdAt?: unknown
+    }
+    if (typeof parsed.id !== 'string' || typeof parsed.createdAt !== 'string') return null
+    const createdAt = new Date(parsed.createdAt)
+    if (Number.isNaN(createdAt.getTime())) return null
+    return { id: parsed.id, createdAt }
+  } catch {
+    return null
+  }
+}
+
 export async function adminPhotoRoutes(
   fastify: FastifyInstance,
   opts: { sse: SseManager; storage: StorageService; mediaProcessor: MediaProcessor }
@@ -53,6 +80,10 @@ export async function adminPhotoRoutes(
         storage: opts.storage,
         sse: opts.sse,
         mediaProcessor: opts.mediaProcessor,
+        limits: {
+          maxFileSizeMb: fastify.config.maxFileSizeMb,
+          maxVideoSizeMb: fastify.config.maxVideoSizeMb,
+        },
       })
 
       return reply.code(201).send(response)
@@ -85,6 +116,14 @@ export async function adminPhotoRoutes(
       cursor?: string
       limit?: number
     }
+    const decodedCursor = cursor ? decodePaginationCursor(cursor) : null
+    if (cursor && !decodedCursor) {
+      return reply.code(400).send({
+        type: 'invalid-cursor',
+        title: 'Invalid cursor',
+        status: 400,
+      })
+    }
 
     const db = getClient()
     const gallery = await db.gallery.findUnique({ where: { id } })
@@ -95,9 +134,21 @@ export async function adminPhotoRoutes(
         galleryId: id,
         deletedAt: null,
         ...(status ? { status } : {}),
-        ...(cursor ? { id: { lt: cursor } } : {}),
+        ...(decodedCursor
+          ? {
+            OR: [
+              { createdAt: { lt: decodedCursor.createdAt } },
+              {
+                AND: [
+                  { createdAt: decodedCursor.createdAt },
+                  { id: { lt: decodedCursor.id } },
+                ],
+              },
+            ],
+          }
+          : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     })
 
@@ -117,7 +168,12 @@ export async function adminPhotoRoutes(
         rejectionReason: p.rejectionReason,
         createdAt: p.createdAt.toISOString(),
       })),
-      pagination: { nextCursor: hasMore ? items[items.length - 1].id : null, hasMore },
+      pagination: {
+        nextCursor: hasMore
+          ? encodePaginationCursor(items[items.length - 1].id, items[items.length - 1].createdAt)
+          : null,
+        hasMore,
+      },
     })
   })
 

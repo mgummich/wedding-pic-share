@@ -15,6 +15,33 @@ type PinFailureEntry = {
   resetAt: number
 }
 
+type PaginationCursor = {
+  id: string
+  createdAt: Date
+}
+
+function encodePaginationCursor(id: string, createdAt: Date): string {
+  return Buffer.from(JSON.stringify({
+    id,
+    createdAt: createdAt.toISOString(),
+  })).toString('base64url')
+}
+
+function decodePaginationCursor(cursor: string): PaginationCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+      id?: unknown
+      createdAt?: unknown
+    }
+    if (typeof parsed.id !== 'string' || typeof parsed.createdAt !== 'string') return null
+    const createdAt = new Date(parsed.createdAt)
+    if (Number.isNaN(createdAt.getTime())) return null
+    return { id: parsed.id, createdAt }
+  } catch {
+    return null
+  }
+}
+
 export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void> {
   const pinFailures = new Map<string, PinFailureEntry>()
 
@@ -173,6 +200,14 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
   }, async (req, reply) => {
     const { slug } = req.params as { slug: string }
     const { cursor, limit = 20 } = req.query as { cursor?: string; limit?: number }
+    const decodedCursor = cursor ? decodePaginationCursor(cursor) : null
+    if (cursor && !decodedCursor) {
+      return reply.code(400).send({
+        type: 'invalid-cursor',
+        title: 'Ungueltiger Cursor.',
+        status: 400,
+      })
+    }
     const db = getClient()
 
     const gallery = await db.gallery.findFirst({
@@ -200,15 +235,29 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
         galleryId: gallery.id,
         status: 'APPROVED',
         deletedAt: null,
-        ...(cursor ? { id: { lt: cursor } } : {}),
+        ...(decodedCursor
+          ? {
+            OR: [
+              { createdAt: { lt: decodedCursor.createdAt } },
+              {
+                AND: [
+                  { createdAt: decodedCursor.createdAt },
+                  { id: { lt: decodedCursor.id } },
+                ],
+              },
+            ],
+          }
+          : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     })
 
     const hasMore = photos.length > limit
     const items = photos.slice(0, limit)
-    const nextCursor = hasMore ? items[items.length - 1].id : null
+    const nextCursor = hasMore
+      ? encodePaginationCursor(items[items.length - 1].id, items[items.length - 1].createdAt)
+      : null
 
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
 

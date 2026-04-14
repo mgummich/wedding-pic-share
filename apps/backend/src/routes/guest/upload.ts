@@ -60,6 +60,10 @@ export async function guestUploadRoutes(
         storage: opts.storage,
         sse: opts.sse,
         mediaProcessor: opts.mediaProcessor,
+        limits: {
+          maxFileSizeMb: fastify.config.maxFileSizeMb,
+          maxVideoSizeMb: fastify.config.maxVideoSizeMb,
+        },
       })
 
       void opts.uploadNotifier.notifyGuestUpload({

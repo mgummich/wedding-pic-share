@@ -25,6 +25,10 @@ type IngestUploadInput = {
   storage: StorageService
   sse: SseManager
   mediaProcessor: MediaProcessor
+  limits: {
+    maxFileSizeMb: number
+    maxVideoSizeMb: number
+  }
 }
 
 export class PhotoIngestError extends Error {
@@ -42,6 +46,7 @@ export async function ingestUploadedPhoto({
   storage,
   sse,
   mediaProcessor,
+  limits,
 }: IngestUploadInput): Promise<UploadResponse> {
   if (!upload) {
     throw new PhotoIngestError(400, {
@@ -63,6 +68,18 @@ export async function ingestUploadedPhoto({
     })
   }
 
+  const isVideo = detectedType.mime.startsWith('video/')
+  const maxBytes = Math.floor(
+    (isVideo ? limits.maxVideoSizeMb : limits.maxFileSizeMb) * 1024 * 1024
+  )
+  if (buffer.length > maxBytes) {
+    throw new PhotoIngestError(413, {
+      type: 'file-too-large',
+      title: 'Payload Too Large',
+      status: 413,
+    })
+  }
+
   const db = getClient()
   const fileHash = computeSha256(buffer)
   const existingDup = await db.photo.findUnique({
@@ -77,7 +94,6 @@ export async function ingestUploadedPhoto({
     })
   }
 
-  const isVideo = detectedType.mime.startsWith('video/')
   const photoId = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}`
 
   let thumbPath: string

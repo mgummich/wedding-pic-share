@@ -87,6 +87,83 @@ describe('GET /api/v1/admin/galleries/:id/photos', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.length).toBeGreaterThan(0)
   })
+
+  it('paginates pending photos consistently when ids are not creation-ordered', async () => {
+    const db = getClient()
+    const gallery = await db.gallery.findFirstOrThrow({ where: { slug: gallerySlug } })
+    await db.photo.createMany({
+      data: [
+        {
+          id: 'pending_a_new',
+          galleryId: gallery.id,
+          fileHash: 'pending-cursor-a-new',
+          mediaType: 'IMAGE',
+          originalPath: 'pending_a_new_original.webp',
+          thumbPath: 'pending_a_new_thumb.webp',
+          displayPath: 'pending_a_new_display.webp',
+          mimeType: 'image/webp',
+          status: 'PENDING',
+          blurDataUrl: '',
+          exifStripped: true,
+          createdAt: new Date('2037-01-01T10:02:00.000Z'),
+        },
+        {
+          id: 'pending_z_old',
+          galleryId: gallery.id,
+          fileHash: 'pending-cursor-z-old',
+          mediaType: 'IMAGE',
+          originalPath: 'pending_z_old_original.webp',
+          thumbPath: 'pending_z_old_thumb.webp',
+          displayPath: 'pending_z_old_display.webp',
+          mimeType: 'image/webp',
+          status: 'PENDING',
+          blurDataUrl: '',
+          exifStripped: true,
+          createdAt: new Date('2037-01-01T10:01:00.000Z'),
+        },
+        {
+          id: 'pending_y_old',
+          galleryId: gallery.id,
+          fileHash: 'pending-cursor-y-old',
+          mediaType: 'IMAGE',
+          originalPath: 'pending_y_old_original.webp',
+          thumbPath: 'pending_y_old_thumb.webp',
+          displayPath: 'pending_y_old_display.webp',
+          mimeType: 'image/webp',
+          status: 'PENDING',
+          blurDataUrl: '',
+          exifStripped: true,
+          createdAt: new Date('2037-01-01T10:00:00.000Z'),
+        },
+      ],
+    })
+
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (let i = 0; i < 6; i += 1) {
+      const url = cursor
+        ? `/api/v1/admin/galleries/${gallery.id}/photos?status=PENDING&limit=1&cursor=${encodeURIComponent(cursor)}`
+        : `/api/v1/admin/galleries/${gallery.id}/photos?status=PENDING&limit=1`
+      const res = await app.inject({
+        method: 'GET',
+        url,
+        headers: { cookie: sessionCookie },
+      })
+      expect(res.statusCode).toBe(200)
+      const body = res.json() as {
+        data: Array<{ id: string }>
+        pagination: { nextCursor: string | null; hasMore: boolean }
+      }
+      seen.push(...body.data.map((photo) => photo.id))
+      cursor = body.pagination.nextCursor
+      if (!body.pagination.hasMore) break
+    }
+
+    const unique = new Set(seen)
+    expect(unique.has('pending_a_new')).toBe(true)
+    expect(unique.has('pending_z_old')).toBe(true)
+    expect(unique.has('pending_y_old')).toBe(true)
+  })
 })
 
 describe('PATCH /api/v1/admin/photos/:id', () => {

@@ -143,6 +143,76 @@ describe('GET /api/v1/g/:slug', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/g/does-not-exist' })
     expect(res.statusCode).toBe(404)
   })
+
+  it('paginates consistently with cursor even when ids do not match creation order', async () => {
+    const db = getClient()
+    await db.photo.createMany({
+      data: [
+        {
+          id: 'photo_a_new',
+          galleryId,
+          fileHash: 'cursor-hash-new',
+          mediaType: 'IMAGE',
+          originalPath: 'photo_a_new_original.webp',
+          thumbPath: 'photo_a_new_thumb.webp',
+          displayPath: 'photo_a_new_display.webp',
+          mimeType: 'image/webp',
+          status: 'APPROVED',
+          blurDataUrl: '',
+          exifStripped: true,
+          createdAt: new Date('2036-01-01T10:02:00.000Z'),
+        },
+        {
+          id: 'photo_z_old',
+          galleryId,
+          fileHash: 'cursor-hash-old-z',
+          mediaType: 'IMAGE',
+          originalPath: 'photo_z_old_original.webp',
+          thumbPath: 'photo_z_old_thumb.webp',
+          displayPath: 'photo_z_old_display.webp',
+          mimeType: 'image/webp',
+          status: 'APPROVED',
+          blurDataUrl: '',
+          exifStripped: true,
+          createdAt: new Date('2036-01-01T10:01:00.000Z'),
+        },
+        {
+          id: 'photo_y_old',
+          galleryId,
+          fileHash: 'cursor-hash-old-y',
+          mediaType: 'IMAGE',
+          originalPath: 'photo_y_old_original.webp',
+          thumbPath: 'photo_y_old_thumb.webp',
+          displayPath: 'photo_y_old_display.webp',
+          mimeType: 'image/webp',
+          status: 'APPROVED',
+          blurDataUrl: '',
+          exifStripped: true,
+          createdAt: new Date('2036-01-01T10:00:00.000Z'),
+        },
+      ],
+    })
+
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (let i = 0; i < 5; i += 1) {
+      const url = cursor ? `/api/v1/g/party?limit=1&cursor=${encodeURIComponent(cursor)}` : '/api/v1/g/party?limit=1'
+      const res = await app.inject({ method: 'GET', url })
+      expect(res.statusCode).toBe(200)
+      const body = res.json() as {
+        data: Array<{ id: string }>
+        pagination: { nextCursor: string | null; hasMore: boolean }
+      }
+      seen.push(...body.data.map((photo) => photo.id))
+      cursor = body.pagination.nextCursor
+      if (!body.pagination.hasMore) break
+    }
+
+    const unique = new Set(seen)
+    expect(unique.has('photo_a_new')).toBe(true)
+    expect(unique.has('photo_z_old')).toBe(true)
+    expect(unique.has('photo_y_old')).toBe(true)
+  })
 })
 
 describe('GET /api/v1/g/:slug/qr', () => {
