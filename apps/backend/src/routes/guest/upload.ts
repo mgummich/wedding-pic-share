@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import { getClient } from '@wedding/db'
 import type { StorageService } from '../../services/storage.js'
 import type { SseManager } from '../../services/sse.js'
 import type { UploadNotifier } from '../../services/uploadNotifier.js'
@@ -9,13 +8,24 @@ import { hasGalleryAccess } from '../../services/galleryAccess.js'
 import type { MediaProcessor } from '../../services/mediaProcessor.js'
 import { createUploadDeleteToken, readUploadDeleteToken } from '../../services/uploadDeleteToken.js'
 
+const UPLOAD_SHUTDOWN_TIMEOUT_MS = 30 * 1000
+
 export async function guestUploadRoutes(
   fastify: FastifyInstance,
   opts: { storage: StorageService; sse: SseManager; uploadNotifier: UploadNotifier; mediaProcessor: MediaProcessor }
 ): Promise<void> {
+  const inFlightUploads = new Set<Promise<unknown>>()
+  fastify.addHook('onClose', async () => {
+    if (inFlightUploads.size === 0) return
+    await Promise.race([
+      Promise.allSettled(Array.from(inFlightUploads)).then(() => undefined),
+      new Promise<void>((resolve) => setTimeout(resolve, UPLOAD_SHUTDOWN_TIMEOUT_MS)),
+    ])
+  })
+
   fastify.post('/g/:slug/upload', async (req, reply) => {
     const { slug } = req.params as { slug: string }
-    const db = getClient()
+    const db = fastify.db
 
     const gallery = await db.gallery.findFirst({
       where: { slug },
@@ -49,7 +59,7 @@ export async function guestUploadRoutes(
     }
 
     try {
-      const response = await ingestUploadedPhoto({
+      const uploadTask = ingestUploadedPhoto({
         gallery: {
           id: gallery.id,
           slug: gallery.slug,
@@ -57,9 +67,11 @@ export async function guestUploadRoutes(
           stripExif: gallery.stripExif,
         },
         upload: await req.file(),
+        db,
         storage: opts.storage,
         sse: opts.sse,
         mediaProcessor: opts.mediaProcessor,
+        requestId: req.id,
         limits: {
           maxFileSizeMb: fastify.config.maxFileSizeMb,
           maxVideoSizeMb: fastify.config.maxVideoSizeMb,
@@ -92,6 +104,13 @@ export async function guestUploadRoutes(
           }
         },
       })
+      inFlightUploads.add(uploadTask)
+      let response: Awaited<typeof uploadTask>
+      try {
+        response = await uploadTask
+      } finally {
+        inFlightUploads.delete(uploadTask)
+      }
 
       void opts.uploadNotifier.notifyGuestUpload({
         galleryName: gallery.name,
@@ -151,7 +170,7 @@ export async function guestUploadRoutes(
       })
     }
 
-    const db = getClient()
+    const db = fastify.db
     const photo = await db.photo.findFirst({
       where: { id: photoId, gallery: { slug }, deletedAt: null },
       select: {

@@ -1,6 +1,6 @@
 import type { MultipartFile } from '@fastify/multipart'
 import { fileTypeFromBuffer } from 'file-type'
-import { getClient } from '@wedding/db'
+import type { PrismaClient } from '@wedding/db'
 import { randomBytes } from 'crypto'
 import { computeSha256 } from './media.js'
 import type { StorageService } from './storage.js'
@@ -24,9 +24,11 @@ type IngestGallery = {
 type IngestUploadInput = {
   gallery: IngestGallery
   upload: MultipartFile | undefined
+  db: PrismaClient
   storage: StorageService
   sse: SseManager
   mediaProcessor: MediaProcessor
+  requestId?: string
   limits: {
     maxFileSizeMb: number
     maxVideoSizeMb: number
@@ -46,9 +48,11 @@ export class PhotoIngestError extends Error {
 export async function ingestUploadedPhoto({
   gallery,
   upload,
+  db,
   storage,
   sse,
   mediaProcessor,
+  requestId,
   limits,
   beforePersist,
 }: IngestUploadInput): Promise<UploadResponse> {
@@ -93,7 +97,6 @@ export async function ingestUploadedPhoto({
     })
   }
 
-  const db = getClient()
   const fileHash = computeSha256(buffer)
   const existingDup = await db.photo.findUnique({
     where: { galleryId_fileHash: { galleryId: gallery.id, fileHash } },
@@ -115,7 +118,10 @@ export async function ingestUploadedPhoto({
   let duration: number | null = null
 
   if (!isVideo) {
-    const result = await mediaProcessor.processImage(buffer, detectedType.mime, { stripExif: gallery.stripExif })
+    const result = await mediaProcessor.processImage(buffer, detectedType.mime, {
+      stripExif: gallery.stripExif,
+      requestId,
+    })
     await storage.save(gallery.slug, `${photoId}_thumb.webp`, result.thumb)
     await storage.save(gallery.slug, `${photoId}_display.webp`, result.display)
     await storage.save(gallery.slug, `${photoId}_original.webp`, result.original)
@@ -123,7 +129,7 @@ export async function ingestUploadedPhoto({
     displayPath = `${photoId}_display.webp`
     blurDataUrl = result.blurDataUrl
   } else {
-    const result = await mediaProcessor.processVideo(buffer)
+    const result = await mediaProcessor.processVideo(buffer, { requestId })
     const ext = detectedType.mime === 'video/quicktime' ? 'mov' : 'mp4'
     await storage.save(gallery.slug, `${photoId}_original.${ext}`, buffer)
     await storage.save(gallery.slug, `${photoId}_poster.webp`, result.poster)
@@ -171,7 +177,7 @@ export async function ingestUploadedPhoto({
       guestName: photo.guestName,
       createdAt: photo.createdAt.toISOString(),
     }
-    sse.broadcast(gallery.id, 'new-photo', photoResponse)
+    void sse.broadcast(gallery.id, 'new-photo', photoResponse).catch(() => {})
   }
 
   return {

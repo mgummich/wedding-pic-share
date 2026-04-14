@@ -1,7 +1,5 @@
 import type { FastifyInstance } from 'fastify'
 import archiver from 'archiver'
-import { createReadStream } from 'fs'
-import { getClient } from '@wedding/db'
 import type { StorageService } from '../../services/storage.js'
 import { hasGalleryAccess } from '../../services/galleryAccess.js'
 
@@ -15,7 +13,7 @@ export async function guestDownloadRoutes(
     },
   }, async (req, reply) => {
     const { slug } = req.params as { slug: string }
-    const db = getClient()
+    const db = fastify.db
 
     const gallery = await db.gallery.findFirst({ where: { slug } })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
@@ -45,7 +43,7 @@ export async function guestDownloadRoutes(
 
     for (const photo of photos) {
       const filename = photo.originalPath
-      const stream = createReadStream(opts.storage.filePath(slug, filename))
+      const stream = opts.storage.openReadStream(slug, filename)
       const ext = filename.split('.').pop() ?? 'jpg'
       archive.append(stream, { name: `${photo.id}.${ext}` })
     }

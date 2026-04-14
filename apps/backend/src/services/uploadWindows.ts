@@ -14,6 +14,9 @@ type GalleryWithWindows = Pick<
   | 'isArchived'
   | 'archivedAt'
   | 'archiveSizeBytes'
+  | 'archiveStatus'
+  | 'archiveError'
+  | 'archiveRequestedAt'
   | 'stripExif'
 > & {
   uploadWindows: UploadWindow[]
@@ -52,6 +55,9 @@ export function toGalleryResponse(
     isArchived: gallery.isArchived,
     archivedAt: gallery.archivedAt?.toISOString() ?? null,
     archiveSizeBytes: gallery.archiveSizeBytes,
+    archiveStatus: gallery.archiveStatus,
+    archiveError: gallery.archiveError,
+    archiveRequestedAt: gallery.archiveRequestedAt?.toISOString() ?? null,
     isUploadOpen: gallery.isArchived ? false : isUploadOpenAt(gallery.uploadWindows),
     uploadWindows: gallery.uploadWindows.map(toUploadWindowResponse),
   }

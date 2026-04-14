@@ -30,8 +30,10 @@ import type { SseManager } from './services/sse.js'
 import { createUploadNotifier, type UploadNotifier } from './services/uploadNotifier.js'
 import { loadConfig, type AppConfig } from './config.js'
 import { createMediaProcessor, type MediaProcessor } from './services/mediaProcessor.js'
+import { getClient, closeClient, type PrismaClient } from '@wedding/db'
 
 type BuildAppDeps = {
+  db?: PrismaClient
   storage?: StorageService
   sse?: SseManager
   uploadNotifier?: UploadNotifier
@@ -45,7 +47,12 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
     trustProxy: resolvedConfig.trustProxy,
   })
 
+  const db = deps.db ?? getClient()
   const maxVideoSize = resolvedConfig.maxVideoSizeMb * 1024 * 1024
+
+  fastify.addHook('onRequest', async (req, reply) => {
+    reply.header('x-request-id', req.id)
+  })
 
   await fastify.register(helmet)
 
@@ -81,7 +88,7 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
     provider: resolvedConfig.storageProvider,
     localPath: resolvedConfig.storageLocalPath,
   })
-  const sse = deps.sse ?? createSseManager()
+  const sse = deps.sse ?? createSseManager({ redisUrl: resolvedConfig.redisUrl })
   const uploadNotifier = deps.uploadNotifier ?? createUploadNotifier(resolvedConfig, fastify.log)
   const mediaProcessor = deps.mediaProcessor ?? createMediaProcessor({
     mode: resolvedConfig.mediaProcessingMode,
@@ -91,6 +98,7 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
   })
 
   fastify.decorate('config', resolvedConfig)
+  fastify.decorate('db', db)
   fastify.decorate('storage', storage)
   fastify.decorate('sse', sse)
 
@@ -138,7 +146,11 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
   }, { prefix: '/api/v1' })
 
   fastify.addHook('onClose', async () => {
+    await sse.close()
     await mediaProcessor.close()
+    if (!deps.db) {
+      await closeClient()
+    }
   })
 
   return fastify

@@ -10,19 +10,28 @@ function baseDeps() {
       moderationMode: 'MANUAL' as const,
       stripExif: true,
     },
+    db: {
+      photo: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+      },
+    },
     storage: {
       save: vi.fn(),
       get: vi.fn(),
       delete: vi.fn(),
       publicUrl: vi.fn(),
-      filePath: vi.fn(),
+      openReadStream: vi.fn(),
+      openWriteStream: vi.fn(),
+      stat: vi.fn(),
     },
     sse: {
       add: vi.fn(),
       remove: vi.fn(),
-      broadcast: vi.fn(),
-      sendHeartbeat: vi.fn(),
+      broadcast: vi.fn().mockResolvedValue(undefined),
+      sendHeartbeat: vi.fn().mockResolvedValue(undefined),
       connectionCount: vi.fn(),
+      close: vi.fn(),
     },
     mediaProcessor: {
       processImage: vi.fn(),

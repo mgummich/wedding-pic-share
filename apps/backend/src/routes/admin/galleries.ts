@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import { getClient } from '@wedding/db'
 import type { GalleryResponse, WeddingResponse } from '@wedding/shared'
 import bcrypt from 'bcryptjs'
 import { toGalleryResponse } from '../../services/uploadWindows.js'
@@ -63,7 +62,7 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
   fastify.get('/admin/galleries', {
     preHandler: [fastify.requireAdmin],
   }, async (_req, reply) => {
-    const db = getClient()
+    const db = fastify.db
     const weddings = await db.wedding.findMany({
       include: {
         galleries: {
@@ -132,7 +131,7 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
       ? await bcrypt.hash(parsedSecretKey.value, 12)
       : undefined
 
-    const db = getClient()
+    const db = fastify.db
     const wedding = await db.wedding.upsert({
       where: { slug: body.weddingSlug },
       create: { name: body.weddingName, slug: body.weddingSlug },
@@ -214,7 +213,7 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const body = req.body as GalleryPatchBody
-    const db = getClient()
+    const db = fastify.db
 
     try {
       const {
@@ -344,7 +343,7 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
-    const db = getClient()
+    const db = fastify.db
     await db.photo.deleteMany({ where: { galleryId: id } })
     await db.gallery.delete({ where: { id } }).catch(() => {})
     return reply.send({ ok: true })

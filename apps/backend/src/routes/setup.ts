@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
-import { getClient } from '@wedding/db'
 
 function toSlug(value: string): string {
   return value
@@ -11,7 +10,7 @@ function toSlug(value: string): string {
 
 export async function setupRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/setup/status', async (_req, reply) => {
-    const db = getClient()
+    const db = fastify.db
     const adminCount = await db.adminUser.count()
 
     return reply.send({ setupRequired: adminCount === 0 })
@@ -37,7 +36,7 @@ export async function setupRoutes(fastify: FastifyInstance): Promise<void> {
       weddingName?: string
       galleryName?: string
     }
-    const db = getClient()
+    const db = fastify.db
 
     const existingAdmin = await db.adminUser.count()
     if (existingAdmin > 0) {

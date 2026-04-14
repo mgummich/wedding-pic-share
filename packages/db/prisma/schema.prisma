@@ -34,6 +34,13 @@ enum ModerationMode {
   AUTO
 }
 
+enum ArchiveStatus {
+  IDLE
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
 model Wedding {
   id        String    @id @default(cuid())
   name      String
@@ -59,6 +66,9 @@ model Gallery {
   archivedAt         DateTime?
   archivePath        String?
   archiveSizeBytes   Int?
+  archiveStatus      ArchiveStatus  @default(IDLE)
+  archiveError       String?
+  archiveRequestedAt DateTime?
   stripExif          Boolean        @default(true)
   secretKey          String?
   createdAt          DateTime       @default(now())

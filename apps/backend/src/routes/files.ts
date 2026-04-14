@@ -1,7 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import { createReadStream } from 'fs'
-import { access } from 'fs/promises'
-import { getClient } from '@wedding/db'
 import type { StorageService } from '../services/storage.js'
 import { hasGalleryAccess } from '../services/galleryAccess.js'
 
@@ -30,7 +27,7 @@ export async function fileRoutes(
     const { gallerySlug, photoId } = req.params as { gallerySlug: string; photoId: string }
     const { v = 'display', download } = req.query as { v?: string; download?: string }
 
-    const db = getClient()
+    const db = fastify.db
     const photo = await db.photo.findFirst({
       where: { id: photoId, gallery: { slug: gallerySlug }, deletedAt: null },
       include: { gallery: true },
@@ -83,9 +80,8 @@ export async function fileRoutes(
       if (!isAdmin) return
     }
 
-    const filePath = opts.storage.filePath(gallerySlug, filename)
     try {
-      await access(filePath)
+      await opts.storage.stat(gallerySlug, filename)
     } catch {
       return reply.code(404).send({ type: 'not-found', status: 404 })
     }
@@ -98,9 +94,9 @@ export async function fileRoutes(
       reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`)
     }
 
-    const stream = createReadStream(filePath)
+    const stream = opts.storage.openReadStream(gallerySlug, filename)
     stream.on('error', (error: NodeJS.ErrnoException) => {
-      req.log.warn({ err: error, filePath, photoId }, 'failed to stream file')
+      req.log.warn({ err: error, gallerySlug, filename, photoId }, 'failed to stream file')
       if (reply.sent) return
 
       if (error.code === 'ENOENT') {

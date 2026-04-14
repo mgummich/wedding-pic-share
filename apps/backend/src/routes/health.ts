@@ -1,11 +1,10 @@
 import type { FastifyInstance } from 'fastify'
-import { getClient } from '@wedding/db'
 
 export async function healthRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/health', async (_req, reply) => {
     let dbStatus: 'ok' | 'error' = 'ok'
     try {
-      const db = getClient()
+      const db = fastify.db
       await db.$queryRaw`SELECT 1`
     } catch {
       dbStatus = 'error'

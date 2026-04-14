@@ -12,7 +12,7 @@ let sessionCookie: string
 let gallerySlug: string
 let photoId: string
 let testEnv: BackendTestEnv
-const sseBroadcast = vi.fn<SseManager['broadcast']>()
+const sseBroadcast = vi.fn<SseManager['broadcast']>().mockResolvedValue(undefined)
 
 beforeAll(async () => {
   testEnv = await createBackendTestEnv('moderation')
@@ -22,8 +22,9 @@ beforeAll(async () => {
     add: () => {},
     remove: () => {},
     broadcast: sseBroadcast,
-    sendHeartbeat: () => {},
+    sendHeartbeat: async () => {},
     connectionCount: () => 0,
+    close: async () => {},
   }
   app = await buildApp(config, { sse })
   await app.ready()

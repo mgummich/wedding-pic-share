@@ -13,7 +13,7 @@ let app: FastifyInstance
 let sessionCookie: string
 let galleryId: string
 let gallerySlug: string
-const sseBroadcast = vi.fn<SseManager['broadcast']>()
+const sseBroadcast = vi.fn<SseManager['broadcast']>().mockResolvedValue(undefined)
 let testEnv: BackendTestEnv
 
 beforeAll(async () => {
@@ -24,8 +24,9 @@ beforeAll(async () => {
     add: () => {},
     remove: () => {},
     broadcast: sseBroadcast,
-    sendHeartbeat: () => {},
+    sendHeartbeat: async () => {},
     connectionCount: () => 0,
+    close: async () => {},
   }
   app = await buildApp(config, { sse })
   await app.ready()
@@ -95,23 +96,9 @@ afterAll(async () => {
 
 describe('POST /api/v1/admin/galleries/:id/archive', () => {
   it('closes uploads, persists archive metadata, and emits gallery-closed SSE event', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/v1/admin/galleries/${galleryId}/archive`,
-      headers: { cookie: sessionCookie },
-    })
-
-    expect(res.statusCode).toBe(200)
-
-    const body = res.json() as {
-      isArchived: boolean
-      archivedAt: string | null
-      archiveSizeBytes: number | null
-      isUploadOpen: boolean
-      uploadWindows: Array<unknown>
-    }
-
+    const body = await triggerArchiveAndWait()
     expect(body.isArchived).toBe(true)
+    expect(body.archiveStatus).toBe('COMPLETED')
     expect(typeof body.archivedAt).toBe('string')
     expect(body.archiveSizeBytes).toBeGreaterThan(0)
     expect(body.isUploadOpen).toBe(false)
@@ -123,6 +110,7 @@ describe('POST /api/v1/admin/galleries/:id/archive', () => {
     expect(gallery.archivedAt).toBeTruthy()
     expect(gallery.archivePath).toBeTruthy()
     expect(gallery.archiveSizeBytes).toBeGreaterThan(0)
+    expect(gallery.archiveStatus).toBe('COMPLETED')
 
     expect(sseBroadcast).toHaveBeenCalledWith(
       galleryId,
@@ -142,7 +130,72 @@ describe('POST /api/v1/admin/galleries/:id/archive', () => {
     expect(second.statusCode).toBe(200)
     expect(second.json().archivedAt).toBe(archivedAtFirst)
     expect(second.json().archiveSizeBytes).toBe(sizeFirst)
+    expect(second.json().archiveStatus).toBe('COMPLETED')
     expect(sseBroadcast.mock.calls.length).toBe(callCountAfterFirstArchive)
+  })
+
+  it('returns 202 while archive generation is in progress', async () => {
+    const now = Date.now()
+    const freshCreate = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/galleries',
+      headers: { cookie: sessionCookie },
+      payload: {
+        weddingName: 'Archive Progress Wedding',
+        weddingSlug: `archive-progress-${now}`,
+        galleryName: 'Archive Progress',
+        gallerySlug: `archive-progress-${now}`,
+        moderationMode: 'AUTO',
+      },
+    })
+    expect(freshCreate.statusCode).toBe(201)
+    const freshGalleryId = freshCreate.json().id as string
+    const freshGallerySlug = freshCreate.json().slug as string
+
+    const updateRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${freshGalleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        uploadWindows: [
+          {
+            start: new Date(now - 60_000).toISOString(),
+            end: new Date(now + 60 * 60_000).toISOString(),
+          },
+        ],
+      },
+    })
+    expect(updateRes.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 600, height: 600, channels: 3, background: '#556677' },
+    }).jpeg().toBuffer()
+
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'archive-progress.jpg')
+    const uploadRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${freshGallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(uploadRes.statusCode).toBe(201)
+
+    const firstArchive = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/galleries/${freshGalleryId}/archive`,
+      headers: { cookie: sessionCookie },
+    })
+    expect([200, 202]).toContain(firstArchive.statusCode)
+
+    const secondArchive = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/galleries/${freshGalleryId}/archive`,
+      headers: { cookie: sessionCookie },
+    })
+    expect([200, 202]).toContain(secondArchive.statusCode)
+    if (secondArchive.statusCode === 202) {
+      expect(secondArchive.json().archiveStatus).toBe('IN_PROGRESS')
+    }
   })
 
   it('blocks subsequent guest uploads for archived galleries', async () => {
@@ -184,6 +237,36 @@ describe('POST /api/v1/admin/galleries/:id/archive', () => {
     expect(res.rawPayload.length).toBeGreaterThan(100)
   })
 })
+
+async function triggerArchiveAndWait() {
+  let lastBody: {
+      isArchived: boolean
+      archivedAt: string | null
+      archiveSizeBytes: number | null
+      archiveStatus?: string
+      archiveError?: string | null
+      isUploadOpen: boolean
+      uploadWindows: Array<unknown>
+    } | null = null
+
+  for (let i = 0; i < 30; i += 1) {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/galleries/${galleryId}/archive`,
+      headers: { cookie: sessionCookie },
+    })
+    expect([200, 202]).toContain(res.statusCode)
+
+    lastBody = res.json()
+    if (lastBody.isArchived) {
+      return lastBody
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  throw new Error(`archive did not finish in time: ${JSON.stringify(lastBody)}`)
+}
 
 function buildMultipartPayload(fileBuffer: Buffer, mimeType: string, filename: string) {
   const boundary = '----FormBoundary' + Math.random().toString(36).slice(2)

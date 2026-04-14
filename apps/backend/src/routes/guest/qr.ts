@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify'
 import QRCode from 'qrcode'
-import { getClient } from '@wedding/db'
 import { renderTableCardPdf, type TableCardLocale } from '../../services/tableCardPdf.js'
 
 export async function guestQrRoutes(fastify: FastifyInstance): Promise<void> {
@@ -22,7 +21,7 @@ export async function guestQrRoutes(fastify: FastifyInstance): Promise<void> {
       locale?: TableCardLocale
     }
 
-    const db = getClient()
+    const db = fastify.db
     const gallery = await db.gallery.findFirst({ where: { slug } })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
 

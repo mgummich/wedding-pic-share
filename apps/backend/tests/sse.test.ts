@@ -5,7 +5,7 @@ describe('SseManager', () => {
   let manager: ReturnType<typeof createSseManager>
 
   beforeEach(() => {
-    manager = createSseManager()
+    manager = createSseManager({ redisUrl: null })
   })
 
   it('tracks connection count per gallery', () => {
@@ -35,7 +35,7 @@ describe('SseManager', () => {
     expect(manager.connectionCount('gallery-1')).toBe(1)
   })
 
-  it('broadcasts to all connections in a gallery', () => {
+  it('broadcasts to all connections in a gallery', async () => {
     const received: string[] = []
     const send1 = (data: string) => received.push(`c1:${data}`)
     const send2 = (data: string) => received.push(`c2:${data}`)
@@ -43,7 +43,7 @@ describe('SseManager', () => {
     manager.add('gallery-1', 'conn-1', send1)
     manager.add('gallery-1', 'conn-2', send2)
 
-    manager.broadcast('gallery-1', 'new-photo', { id: 'photo-1' })
+    await manager.broadcast('gallery-1', 'new-photo', { id: 'photo-1' })
 
     expect(received).toHaveLength(2)
     expect(received.some((r) => r.startsWith('c1:'))).toBe(true)
@@ -53,15 +53,14 @@ describe('SseManager', () => {
     expect(received[0]).toContain('data: {"id":"photo-1"}')
   })
 
-  it('broadcast does nothing for unknown gallery', () => {
-    // Should not throw
-    expect(() => manager.broadcast('unknown', 'test', {})).not.toThrow()
+  it('broadcast does nothing for unknown gallery', async () => {
+    await expect(manager.broadcast('unknown', 'test', {})).resolves.toBeUndefined()
   })
 
-  it('sendHeartbeat sends ping event', () => {
+  it('sendHeartbeat sends ping event', async () => {
     const received: string[] = []
     manager.add('gallery-1', 'conn-1', (d) => received.push(d))
-    manager.sendHeartbeat('gallery-1')
+    await manager.sendHeartbeat('gallery-1')
 
     expect(received).toHaveLength(1)
     expect(received[0]).toContain('event: ping')

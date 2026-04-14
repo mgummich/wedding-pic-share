@@ -7,7 +7,17 @@ export async function seedAdmin(config: AppConfig): Promise<void> {
   const existing = await db.adminUser.findUnique({
     where: { username: config.adminUsername },
   })
-  if (existing) return
+  if (existing) {
+    const passwordMatches = await bcrypt.compare(config.adminPassword, existing.passwordHash)
+    if (passwordMatches) return
+
+    const nextPasswordHash = await bcrypt.hash(config.adminPassword, 12)
+    await db.adminUser.update({
+      where: { id: existing.id },
+      data: { passwordHash: nextPasswordHash },
+    })
+    return
+  }
 
   const passwordHash = await bcrypt.hash(config.adminPassword, 12)
   await db.adminUser.create({

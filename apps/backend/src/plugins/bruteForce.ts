@@ -1,70 +1,60 @@
 import fp from 'fastify-plugin'
 import type { FastifyInstance } from 'fastify'
+import { createAttemptStore } from '../services/attemptStore.js'
 
 const IP_BLOCK_THRESHOLD = 15
 const IP_BLOCK_DURATION_MS = 15 * 60 * 1000
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000
-
-interface IpFailureEntry {
-  count: number
-  resetAt: number
-}
+const PIN_BLOCK_THRESHOLD = 10
+const PIN_BLOCK_DURATION_MS = 15 * 60 * 1000
 
 declare module 'fastify' {
   interface FastifyInstance {
-    checkIpBlocked: (ip: string) => boolean
-    recordIpFailure: (ip: string) => void
-    resetIpFailures: (ip: string) => void
+    checkIpBlocked: (ip: string) => Promise<boolean>
+    recordIpFailure: (ip: string) => Promise<void>
+    resetIpFailures: (ip: string) => Promise<void>
+    checkPinBlocked: (ip: string, slug: string) => Promise<boolean>
+    recordPinFailure: (ip: string, slug: string) => Promise<void>
+    resetPinFailures: (ip: string, slug: string) => Promise<void>
   }
 }
 
 export const bruteForcePlugin = fp(async (fastify: FastifyInstance) => {
-  const failures = new Map<string, IpFailureEntry>()
+  const store = createAttemptStore({
+    redisUrl: fastify.config.redisUrl,
+    keyPrefix: 'wps:attempts',
+  })
 
-  function getActiveEntry(ip: string): IpFailureEntry | null {
-    const entry = failures.get(ip)
-    if (!entry) return null
-    if (entry.resetAt <= Date.now()) {
-      failures.delete(ip)
-      return null
-    }
-    return entry
+  function pinKey(ip: string, slug: string): string {
+    return `pin:${ip}:${slug}`
   }
 
-  const cleanup = setInterval(() => {
-    const now = Date.now()
-    for (const [ip, entry] of failures.entries()) {
-      if (entry.resetAt <= now) {
-        failures.delete(ip)
-      }
-    }
-  }, CLEANUP_INTERVAL_MS)
-  cleanup.unref()
-
-  fastify.decorate('checkIpBlocked', (ip: string) => {
-    const entry = getActiveEntry(ip)
-    return entry !== null && entry.count >= IP_BLOCK_THRESHOLD
+  fastify.decorate('checkIpBlocked', async (ip: string) => {
+    const count = await store.getCount(`ip:${ip}`)
+    return count >= IP_BLOCK_THRESHOLD
   })
 
-  fastify.decorate('recordIpFailure', (ip: string) => {
-    const entry = getActiveEntry(ip)
-    if (entry) {
-      entry.count += 1
-      return
-    }
-
-    failures.set(ip, {
-      count: 1,
-      resetAt: Date.now() + IP_BLOCK_DURATION_MS,
-    })
+  fastify.decorate('recordIpFailure', async (ip: string) => {
+    await store.increment(`ip:${ip}`, IP_BLOCK_DURATION_MS)
   })
 
-  fastify.decorate('resetIpFailures', (ip: string) => {
-    failures.delete(ip)
+  fastify.decorate('resetIpFailures', async (ip: string) => {
+    await store.reset(`ip:${ip}`)
+  })
+
+  fastify.decorate('checkPinBlocked', async (ip: string, slug: string) => {
+    const count = await store.getCount(pinKey(ip, slug))
+    return count >= PIN_BLOCK_THRESHOLD
+  })
+
+  fastify.decorate('recordPinFailure', async (ip: string, slug: string) => {
+    await store.increment(pinKey(ip, slug), PIN_BLOCK_DURATION_MS)
+  })
+
+  fastify.decorate('resetPinFailures', async (ip: string, slug: string) => {
+    await store.reset(pinKey(ip, slug))
   })
 
   fastify.addHook('onClose', async () => {
-    clearInterval(cleanup)
-    failures.clear()
+    await store.close()
   })
 })

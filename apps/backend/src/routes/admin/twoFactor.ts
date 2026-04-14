@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
-import { getClient } from '@wedding/db'
 import {
   buildTotpOtpAuthUrl,
   createTotpSetupToken,
@@ -55,7 +54,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
   fastify.get('/admin/2fa/status', {
     preHandler: [fastify.requireAdmin],
   }, async (req, reply) => {
-    const db = getClient()
+    const db = fastify.db
     const admin = await db.adminUser.findUnique({
       where: { id: req.adminUserId },
       select: { totpSecretEncrypted: true },
@@ -88,7 +87,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     }
 
     const { password } = req.body as { password: string }
-    const db = getClient()
+    const db = fastify.db
     const admin = await db.adminUser.findUnique({
       where: { id: req.adminUserId },
       select: { id: true, username: true, passwordHash: true },
@@ -194,7 +193,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
       })
     }
 
-    const db = getClient()
+    const db = fastify.db
     await db.adminUser.update({
       where: { id: req.adminUserId },
       data: {

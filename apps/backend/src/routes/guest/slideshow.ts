@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import { getClient } from '@wedding/db'
 import type { SseManager } from '../../services/sse.js'
 import { randomUUID } from 'crypto'
 import { hasGalleryAccess } from '../../services/galleryAccess.js'
@@ -16,7 +15,7 @@ export async function guestSlideshowRoutes(
     },
   }, async (req, reply) => {
     const { slug } = req.params as { slug: string }
-    const db = getClient()
+    const db = fastify.db
 
     const gallery = await db.gallery.findFirst({ where: { slug } })
     if (!gallery) {
@@ -40,12 +39,17 @@ export async function guestSlideshowRoutes(
     })
 
     const send = (data: string) => reply.raw.write(data)
+    const close = () => {
+      if (!reply.raw.writableEnded) {
+        reply.raw.end()
+      }
+    }
 
-    opts.sse.add(gallery.id, connectionId, send)
+    opts.sse.add(gallery.id, connectionId, send, close)
     fastify.log.debug({ galleryId: gallery.id, connectionId }, 'sse.connect')
 
     const heartbeat = setInterval(() => {
-      opts.sse.sendHeartbeat(gallery.id)
+      void opts.sse.sendHeartbeat(gallery.id)
     }, HEARTBEAT_INTERVAL_MS)
 
     req.raw.on('close', () => {

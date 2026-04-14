@@ -6,14 +6,16 @@ type WorkerRequest =
   | {
       jobId: string
       kind: 'image'
-      inputBase64: string
+      input: Uint8Array
       mimeType: string
       stripExif: boolean
+      requestId?: string
     }
   | {
       jobId: string
       kind: 'video'
-      inputBase64: string
+      input: Uint8Array
+      requestId?: string
     }
 
 type WorkerResponse =
@@ -22,9 +24,9 @@ type WorkerResponse =
       ok: true
       kind: 'image'
       result: {
-        thumbBase64: string
-        displayBase64: string
-        originalBase64: string
+        thumb: Uint8Array
+        display: Uint8Array
+        original: Uint8Array
         blurDataUrl: string
       }
     }
@@ -33,7 +35,7 @@ type WorkerResponse =
       ok: true
       kind: 'video'
       result: {
-        posterBase64: string
+        poster: Uint8Array
         blurDataUrl: string
         durationSeconds: number
       }
@@ -50,37 +52,41 @@ if (!parentPort) {
 
 parentPort.on('message', async (message: WorkerRequest) => {
   try {
-    const input = Buffer.from(message.inputBase64, 'base64')
+    const input = Buffer.from(message.input)
 
     if (message.kind === 'image') {
       const result = await processImage(input, message.mimeType, { stripExif: message.stripExif })
+      const thumb = Uint8Array.from(result.thumb)
+      const display = Uint8Array.from(result.display)
+      const original = Uint8Array.from(result.original)
       const payload: WorkerResponse = {
         jobId: message.jobId,
         ok: true,
         kind: 'image',
         result: {
-          thumbBase64: result.thumb.toString('base64'),
-          displayBase64: result.display.toString('base64'),
-          originalBase64: result.original.toString('base64'),
+          thumb,
+          display,
+          original,
           blurDataUrl: result.blurDataUrl,
         },
       }
-      parentPort?.postMessage(payload)
+      parentPort?.postMessage(payload, [thumb.buffer, display.buffer, original.buffer])
       return
     }
 
     const result = await processVideo(input)
+    const poster = Uint8Array.from(result.poster)
     const payload: WorkerResponse = {
       jobId: message.jobId,
       ok: true,
       kind: 'video',
       result: {
-        posterBase64: result.poster.toString('base64'),
+        poster,
         blurDataUrl: result.blurDataUrl,
         durationSeconds: result.durationSeconds,
       },
     }
-    parentPort?.postMessage(payload)
+    parentPort?.postMessage(payload, [poster.buffer])
   } catch (error) {
     const payload: WorkerResponse = {
       jobId: message.jobId,

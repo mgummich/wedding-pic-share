@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
-import { randomBytes } from 'crypto'
-import { getClient } from '@wedding/db'
 import { decryptTotpSecret, verifyTotpCode } from '../../services/twoFactor.js'
+import { createSessionToken, hashSessionToken } from '../../services/sessionToken.js'
 
 const LOCK_THRESHOLD = 5
 const LOCK_DURATION_MS = 15 * 60 * 1000
@@ -22,8 +21,8 @@ async function recordFailedLoginAttempt(
   ip: string,
   now: number
 ): Promise<void> {
-  const db = getClient()
-  fastify.recordIpFailure(ip)
+  const db = fastify.db
+  await fastify.recordIpFailure(ip)
 
   if (!user) return
 
@@ -40,7 +39,7 @@ async function recordFailedLoginAttempt(
 export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
   const cleanupExpiredSessions = async () => {
     try {
-      const db = getClient()
+      const db = fastify.db
       await db.session.deleteMany({
         where: {
           expiresAt: { lt: new Date() },
@@ -75,11 +74,11 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     },
   }, async (req, reply) => {
     const { username, password, totpCode } = req.body as LoginBody
-    const db = getClient()
+    const db = fastify.db
     const now = Date.now()
     const ip = req.ip
 
-    if (fastify.checkIpBlocked(ip)) {
+    if (await fastify.checkIpBlocked(ip)) {
       return reply.code(429).send({
         type: 'ip-blocked',
         title: 'Zu viele Fehlversuche. Bitte versuche es in 15 Minuten erneut.',
@@ -175,13 +174,14 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       where: { id: user.id },
       data: { failedAttempts: 0, lockedUntil: null },
     })
-    fastify.resetIpFailures(ip)
+    await fastify.resetIpFailures(ip)
 
-    const token = randomBytes(32).toString('hex')
+    const token = createSessionToken()
+    const tokenHash = hashSessionToken(token)
     await db.session.create({
       data: {
         adminUserId: user.id,
-        token,
+        token: tokenHash,
         expiresAt: new Date(now + SESSION_TTL_MS),
       },
     })
@@ -210,7 +210,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.code(401).send({ type: 'unauthorized', status: 401 })
     }
 
-    const db = getClient()
+    const db = fastify.db
     await db.session.deleteMany({
       where: { adminUserId: req.adminUserId },
     })
@@ -222,8 +222,16 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/admin/logout', async (req, reply) => {
     const token = req.cookies['session']
     if (token) {
-      const db = getClient()
-      await db.session.deleteMany({ where: { token } }).catch(() => {})
+      const db = fastify.db
+      const tokenHash = hashSessionToken(token)
+      await db.session.deleteMany({
+        where: {
+          OR: [
+            { token: tokenHash },
+            { token },
+          ],
+        },
+      }).catch(() => {})
     }
     reply.clearCookie('session', { path: '/' })
     return reply.send({ ok: true })

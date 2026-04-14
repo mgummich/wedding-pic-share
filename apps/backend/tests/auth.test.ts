@@ -4,6 +4,7 @@ import { loadConfig } from '../src/config.js'
 import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
+import { hashSessionToken } from '../src/services/sessionToken.js'
 
 let app: FastifyInstance
 let testEnv: BackendTestEnv
@@ -39,6 +40,30 @@ describe('POST /api/v1/admin/login', () => {
     const cookies = res.headers['set-cookie']
     expect(cookies).toBeTruthy()
     expect(String(cookies)).toContain('session=')
+  })
+
+  it('stores only a hashed session token in the database', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/login',
+      payload: { username: 'testadmin', password: 'TestPassword123!' },
+    })
+
+    const cookieHeader = String(res.headers['set-cookie'])
+    const sessionCookie = cookieHeader.split(';')[0] ?? ''
+    const token = sessionCookie.replace(/^session=/, '')
+    expect(token.length).toBeGreaterThan(0)
+
+    const db = getClient()
+    const stored = await db.session.findUnique({
+      where: { token: hashSessionToken(token) },
+    })
+
+    expect(stored).not.toBeNull()
+    const plaintext = await db.session.findUnique({
+      where: { token },
+    })
+    expect(plaintext).toBeNull()
   })
 
   it('returns 401 on wrong password', async () => {
@@ -107,7 +132,7 @@ describe('GET /api/v1/admin/session', () => {
     await db.session.create({
       data: {
         adminUserId: admin.id,
-        token,
+        token: hashSessionToken(token),
         expiresAt: new Date(Date.now() - 60_000),
       },
     })
@@ -120,7 +145,36 @@ describe('GET /api/v1/admin/session', () => {
     expect(res.statusCode).toBe(401)
 
     const stillExists = await db.session.findUnique({ where: { token } })
+    const stillHashed = await db.session.findUnique({ where: { token: hashSessionToken(token) } })
     expect(stillExists).toBeNull()
+    expect(stillHashed).toBeNull()
+  })
+
+  it('accepts legacy plaintext session rows and migrates them to hashed tokens', async () => {
+    const db = getClient()
+    await db.session.deleteMany()
+    const admin = await db.adminUser.findUniqueOrThrow({ where: { username: 'testadmin' } })
+    const token = 'legacy-session-token'
+
+    await db.session.create({
+      data: {
+        adminUserId: admin.id,
+        token,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    })
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/session',
+      headers: { cookie: `session=${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+
+    const migrated = await db.session.findUnique({ where: { token: hashSessionToken(token) } })
+    expect(migrated).not.toBeNull()
+    const legacy = await db.session.findUnique({ where: { token } })
+    expect(legacy).toBeNull()
   })
 })
 

@@ -1,19 +1,10 @@
 import type { FastifyInstance } from 'fastify'
-import { getClient } from '@wedding/db'
 import type { PhotoResponse, PaginatedResponse } from '@wedding/shared'
 import bcrypt from 'bcryptjs'
 import { toGalleryResponse } from '../../services/uploadWindows.js'
 import { hasGalleryAccess, setGalleryAccessCookie } from '../../services/galleryAccess.js'
 
-const PIN_ATTEMPT_LIMIT = 10
-const PIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000
-const PIN_ATTEMPT_CLEANUP_MS = 5 * 60 * 1000
 const DUMMY_PIN_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaOaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-
-type PinFailureEntry = {
-  count: number
-  resetAt: number
-}
 
 type PaginationCursor = {
   id: string
@@ -43,62 +34,8 @@ function decodePaginationCursor(cursor: string): PaginationCursor | null {
 }
 
 export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void> {
-  const pinFailures = new Map<string, PinFailureEntry>()
-
-  function pinFailureKey(ip: string, slug: string): string {
-    return `${ip}::${slug}`
-  }
-
-  function getActivePinFailureEntry(key: string): PinFailureEntry | null {
-    const entry = pinFailures.get(key)
-    if (!entry) return null
-    if (entry.resetAt <= Date.now()) {
-      pinFailures.delete(key)
-      return null
-    }
-    return entry
-  }
-
-  function isPinBlocked(ip: string, slug: string): boolean {
-    const key = pinFailureKey(ip, slug)
-    const entry = getActivePinFailureEntry(key)
-    return entry !== null && entry.count >= PIN_ATTEMPT_LIMIT
-  }
-
-  function recordPinFailure(ip: string, slug: string): void {
-    const key = pinFailureKey(ip, slug)
-    const entry = getActivePinFailureEntry(key)
-    if (entry) {
-      entry.count += 1
-      return
-    }
-    pinFailures.set(key, {
-      count: 1,
-      resetAt: Date.now() + PIN_ATTEMPT_WINDOW_MS,
-    })
-  }
-
-  function resetPinFailures(ip: string, slug: string): void {
-    pinFailures.delete(pinFailureKey(ip, slug))
-  }
-
-  const cleanup = setInterval(() => {
-    const now = Date.now()
-    for (const [key, entry] of pinFailures.entries()) {
-      if (entry.resetAt <= now) {
-        pinFailures.delete(key)
-      }
-    }
-  }, PIN_ATTEMPT_CLEANUP_MS)
-  cleanup.unref()
-
-  fastify.addHook('onClose', async () => {
-    clearInterval(cleanup)
-    pinFailures.clear()
-  })
-
   fastify.get('/g/active', async (_req, reply) => {
-    const db = getClient()
+    const db = fastify.db
     const gallery = await db.gallery.findFirst({
       where: { isActive: true },
       include: { uploadWindows: { orderBy: { start: 'asc' } } },
@@ -139,7 +76,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
     const { secretKey } = req.body as { secretKey: string }
     const ip = req.ip
 
-    if (isPinBlocked(ip, slug)) {
+    if (await fastify.checkPinBlocked(ip, slug)) {
       return reply.code(429).send({
         type: 'pin-attempts-exceeded',
         title: 'Zu viele PIN-Fehlversuche. Bitte versuche es spaeter erneut.',
@@ -147,7 +84,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
       })
     }
 
-    const db = getClient()
+    const db = fastify.db
     const gallery = await db.gallery.findFirst({
       where: { slug },
       select: { slug: true, secretKey: true },
@@ -160,7 +97,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
     const hashToCheck = gallery?.secretKey ?? DUMMY_PIN_HASH
     const valid = await bcrypt.compare(secretKey, hashToCheck)
     if (!valid) {
-      recordPinFailure(ip, slug)
+      await fastify.recordPinFailure(ip, slug)
       return reply.code(401).send({
         type: 'invalid-pin',
         title: 'Falscher Secret Key.',
@@ -169,7 +106,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
     }
 
     if (!gallery) {
-      recordPinFailure(ip, slug)
+      await fastify.recordPinFailure(ip, slug)
       return reply.code(401).send({
         type: 'invalid-pin',
         title: 'Falscher Secret Key.',
@@ -177,7 +114,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
       })
     }
 
-    resetPinFailures(ip, slug)
+    await fastify.resetPinFailures(ip, slug)
     setGalleryAccessCookie(reply, gallery, fastify.config.cookieSecure, fastify.config.sessionSecret)
     return reply.send({ ok: true })
   })
@@ -208,7 +145,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
         status: 400,
       })
     }
-    const db = getClient()
+    const db = fastify.db
 
     const gallery = await db.gallery.findFirst({
       where: { slug },

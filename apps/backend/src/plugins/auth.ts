@@ -1,11 +1,13 @@
 import fp from 'fastify-plugin'
-import { getClient } from '@wedding/db'
+import type { PrismaClient } from '@wedding/db'
 import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify'
 import type { AppConfig } from '../config.js'
+import { hashSessionToken } from '../services/sessionToken.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
     config: AppConfig
+    db: PrismaClient
     requireAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
   interface FastifyRequest {
@@ -24,15 +26,34 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
       })
     }
 
-    const db = getClient()
-    const session = await db.session.findUnique({
-      where: { token },
+    const db = fastify.db
+    const tokenHash = hashSessionToken(token)
+    let session = await db.session.findUnique({
+      where: { token: tokenHash },
       include: { admin: true },
     })
 
+    // Backward compatibility for older plaintext session rows.
+    if (!session) {
+      const legacySession = await db.session.findUnique({
+        where: { token },
+        include: { admin: true },
+      })
+      if (legacySession) {
+        await db.session.update({
+          where: { id: legacySession.id },
+          data: { token: tokenHash },
+        }).catch(() => {})
+        session = {
+          ...legacySession,
+          token: tokenHash,
+        }
+      }
+    }
+
     if (!session || session.expiresAt < new Date()) {
       if (session) {
-        await db.session.delete({ where: { token: session.token } }).catch(() => {})
+        await db.session.delete({ where: { id: session.id } }).catch(() => {})
       }
       return reply.code(401).send({
         type: 'unauthorized',

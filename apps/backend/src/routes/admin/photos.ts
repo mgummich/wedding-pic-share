@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify'
-import { getClient } from '@wedding/db'
 import type { SseManager } from '../../services/sse.js'
 import type { PhotoResponse } from '@wedding/shared'
 import type { StorageService } from '../../services/storage.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 import type { MediaProcessor } from '../../services/mediaProcessor.js'
+
+const ADMIN_UPLOAD_SHUTDOWN_TIMEOUT_MS = 30 * 1000
 
 type PaginationCursor = {
   id: string
@@ -37,6 +38,15 @@ export async function adminPhotoRoutes(
   fastify: FastifyInstance,
   opts: { sse: SseManager; storage: StorageService; mediaProcessor: MediaProcessor }
 ): Promise<void> {
+  const inFlightUploads = new Set<Promise<unknown>>()
+  fastify.addHook('onClose', async () => {
+    if (inFlightUploads.size === 0) return
+    await Promise.race([
+      Promise.allSettled(Array.from(inFlightUploads)).then(() => undefined),
+      new Promise<void>((resolve) => setTimeout(resolve, ADMIN_UPLOAD_SHUTDOWN_TIMEOUT_MS)),
+    ])
+  })
+
   fastify.post('/admin/galleries/:id/upload', {
     preHandler: fastify.requireAdmin,
     schema: {
@@ -51,7 +61,7 @@ export async function adminPhotoRoutes(
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const { mode } = req.query as { mode?: 'default' | 'photographer' }
-    const db = getClient()
+    const db = fastify.db
     const gallery = await db.gallery.findUnique({
       where: { id },
       select: { id: true, slug: true, moderationMode: true, stripExif: true, isArchived: true },
@@ -69,7 +79,7 @@ export async function adminPhotoRoutes(
       : gallery.moderationMode
 
     try {
-      const response = await ingestUploadedPhoto({
+      const uploadTask = ingestUploadedPhoto({
         gallery: {
           id: gallery.id,
           slug: gallery.slug,
@@ -77,14 +87,23 @@ export async function adminPhotoRoutes(
           stripExif: gallery.stripExif,
         },
         upload: await req.file(),
+        db,
         storage: opts.storage,
         sse: opts.sse,
         mediaProcessor: opts.mediaProcessor,
+        requestId: req.id,
         limits: {
           maxFileSizeMb: fastify.config.maxFileSizeMb,
           maxVideoSizeMb: fastify.config.maxVideoSizeMb,
         },
       })
+      inFlightUploads.add(uploadTask)
+      let response: Awaited<typeof uploadTask>
+      try {
+        response = await uploadTask
+      } finally {
+        inFlightUploads.delete(uploadTask)
+      }
 
       return reply.code(201).send(response)
     } catch (error) {
@@ -125,7 +144,7 @@ export async function adminPhotoRoutes(
       })
     }
 
-    const db = getClient()
+    const db = fastify.db
     const gallery = await db.gallery.findUnique({ where: { id } })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
 
@@ -196,7 +215,7 @@ export async function adminPhotoRoutes(
       rejectionReason?: string
     }
 
-    const db = getClient()
+    const db = fastify.db
     const photo = await db.photo.update({
       where: { id },
       data: { status, rejectionReason: rejectionReason ?? null },
@@ -213,7 +232,7 @@ export async function adminPhotoRoutes(
         guestName: photo.guestName,
         createdAt: photo.createdAt.toISOString(),
       }
-      opts.sse.broadcast(photo.galleryId, 'new-photo', photoResponse)
+      await opts.sse.broadcast(photo.galleryId, 'new-photo', photoResponse)
     }
 
     return reply.send({ ...photo, status: photo.status })
@@ -240,7 +259,7 @@ export async function adminPhotoRoutes(
       rejectionReason?: string
     }
 
-    const db = getClient()
+    const db = fastify.db
     const status = action === 'approve' ? 'APPROVED' : 'REJECTED'
 
     const result = await db.photo.updateMany({
@@ -263,7 +282,7 @@ export async function adminPhotoRoutes(
           guestName: photo.guestName,
           createdAt: photo.createdAt.toISOString(),
         }
-        opts.sse.broadcast(photo.galleryId, 'new-photo', photoResponse)
+        await opts.sse.broadcast(photo.galleryId, 'new-photo', photoResponse)
       }
     }
 
@@ -278,7 +297,7 @@ export async function adminPhotoRoutes(
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
-    const db = getClient()
+    const db = fastify.db
     await db.photo.update({ where: { id }, data: { deletedAt: new Date() } })
     return reply.send({ ok: true })
   })

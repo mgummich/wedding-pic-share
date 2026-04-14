@@ -1,7 +1,4 @@
 import archiver from 'archiver'
-import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, stat } from 'node:fs/promises'
-import { dirname } from 'node:path'
 import type { StorageService } from './storage.js'
 
 type ArchivablePhoto = {
@@ -31,11 +28,7 @@ export async function createGalleryArchive(params: {
   }
 
   const archivePath = archiveRelativePathForGallery(params.galleryId)
-  const outputPath = params.storage.filePath(params.gallerySlug, archivePath)
-
-  await mkdir(dirname(outputPath), { recursive: true })
-
-  const output = createWriteStream(outputPath)
+  const output = await params.storage.openWriteStream(params.gallerySlug, archivePath)
   const archive = archiver('zip', { zlib: { level: 6 } })
 
   const finished = new Promise<void>((resolve, reject) => {
@@ -48,14 +41,14 @@ export async function createGalleryArchive(params: {
 
   for (const photo of params.photos) {
     const ext = photo.originalPath.split('.').pop() ?? 'jpg'
-    const stream = createReadStream(params.storage.filePath(params.gallerySlug, photo.originalPath))
+    const stream = params.storage.openReadStream(params.gallerySlug, photo.originalPath)
     archive.append(stream, { name: `${photo.id}.${ext}` })
   }
 
   await archive.finalize()
   await finished
 
-  const fileInfo = await stat(outputPath)
+  const fileInfo = await params.storage.stat(params.gallerySlug, archivePath)
 
   return {
     archivePath,

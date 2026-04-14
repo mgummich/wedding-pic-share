@@ -19,6 +19,9 @@ export interface GalleryResponse {
   isArchived: boolean
   archivedAt: string | null
   archiveSizeBytes: number | null
+  archiveStatus?: 'IDLE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
+  archiveError?: string | null
+  archiveRequestedAt?: string | null
   isUploadOpen: boolean
   uploadWindows: UploadWindowResponse[]
 }

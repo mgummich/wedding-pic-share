@@ -238,12 +238,21 @@ describe('POST /api/v1/admin/galleries/:id/upload', () => {
   })
 
   it('rejects admin uploads when gallery is archived', async () => {
-    const archive = await app.inject({
-      method: 'POST',
-      url: `/api/v1/admin/galleries/${manualGalleryId}/archive`,
-      headers: { cookie: sessionCookie },
-    })
-    expect(archive.statusCode).toBe(200)
+    let archived = false
+    for (let i = 0; i < 30; i += 1) {
+      const archive = await app.inject({
+        method: 'POST',
+        url: `/api/v1/admin/galleries/${manualGalleryId}/archive`,
+        headers: { cookie: sessionCookie },
+      })
+      expect([200, 202]).toContain(archive.statusCode)
+      if (archive.json().isArchived) {
+        archived = true
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(archived).toBe(true)
 
     const jpegBuf = await sharp({
       create: { width: 140, height: 140, channels: 3, background: '#123456' },

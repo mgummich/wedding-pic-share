@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { Worker as NodeWorker } from 'node:worker_threads'
+import { randomBytes } from 'node:crypto'
 import { Queue, QueueEvents, Worker as BullWorker } from 'bullmq'
 import { Redis } from 'ioredis'
 import { processImage, processVideo, type ImageProcessingResult, type VideoProcessingResult } from './media.js'
@@ -18,14 +22,16 @@ type WorkerRequest =
   | {
       jobId: string
       kind: 'image'
-      inputBase64: string
+      input: Uint8Array
       mimeType: string
       stripExif: boolean
+      requestId?: string
     }
   | {
       jobId: string
       kind: 'video'
-      inputBase64: string
+      input: Uint8Array
+      requestId?: string
     }
 
 type WorkerResponse =
@@ -34,9 +40,9 @@ type WorkerResponse =
       ok: true
       kind: 'image'
       result: {
-        thumbBase64: string
-        displayBase64: string
-        originalBase64: string
+        thumb: Uint8Array
+        display: Uint8Array
+        original: Uint8Array
         blurDataUrl: string
       }
     }
@@ -45,7 +51,7 @@ type WorkerResponse =
       ok: true
       kind: 'video'
       result: {
-        posterBase64: string
+        poster: Uint8Array
         blurDataUrl: string
         durationSeconds: number
       }
@@ -65,26 +71,28 @@ type WorkerTask = {
 type BullJobData =
   | {
       kind: 'image'
-      inputBase64: string
+      inputPath: string
       mimeType: string
       stripExif: boolean
+      requestId?: string
     }
   | {
       kind: 'video'
-      inputBase64: string
+      inputPath: string
+      requestId?: string
     }
 
 type BullJobResult =
   | {
       kind: 'image'
-      thumbBase64: string
-      displayBase64: string
-      originalBase64: string
+      thumbPath: string
+      displayPath: string
+      originalPath: string
       blurDataUrl: string
     }
   | {
       kind: 'video'
-      posterBase64: string
+      posterPath: string
       blurDataUrl: string
       durationSeconds: number
     }
@@ -93,9 +101,9 @@ export type MediaProcessor = {
   processImage: (
     inputBuffer: Buffer,
     mimeType: string,
-    options?: { stripExif?: boolean }
+    options?: { stripExif?: boolean; requestId?: string }
   ) => Promise<ImageProcessingResult>
-  processVideo: (inputBuffer: Buffer) => Promise<VideoProcessingResult>
+  processVideo: (inputBuffer: Buffer, options?: { requestId?: string }) => Promise<VideoProcessingResult>
   close: () => Promise<void>
 }
 
@@ -105,12 +113,15 @@ class InlineMediaProcessor implements MediaProcessor {
   async processImage(
     inputBuffer: Buffer,
     mimeType: string,
-    options: { stripExif?: boolean } = {}
+    options: { stripExif?: boolean; requestId?: string } = {}
   ): Promise<ImageProcessingResult> {
     return processImage(inputBuffer, mimeType, options)
   }
 
-  async processVideo(inputBuffer: Buffer): Promise<VideoProcessingResult> {
+  async processVideo(
+    inputBuffer: Buffer,
+    _options: { requestId?: string } = {}
+  ): Promise<VideoProcessingResult> {
     return processVideo(inputBuffer)
   }
 
@@ -132,14 +143,15 @@ class WorkerThreadMediaProcessor implements MediaProcessor {
   async processImage(
     inputBuffer: Buffer,
     mimeType: string,
-    options: { stripExif?: boolean } = {}
+    options: { stripExif?: boolean; requestId?: string } = {}
   ): Promise<ImageProcessingResult> {
     const request: WorkerRequest = {
-      jobId: createJobId(),
+      jobId: createJobId(options.requestId),
       kind: 'image',
-      inputBase64: inputBuffer.toString('base64'),
+      input: Uint8Array.from(inputBuffer),
       mimeType,
       stripExif: options.stripExif ?? true,
+      requestId: options.requestId,
     }
 
     const result = await this.enqueue(request)
@@ -149,11 +161,15 @@ class WorkerThreadMediaProcessor implements MediaProcessor {
     return result
   }
 
-  async processVideo(inputBuffer: Buffer): Promise<VideoProcessingResult> {
+  async processVideo(
+    inputBuffer: Buffer,
+    options: { requestId?: string } = {}
+  ): Promise<VideoProcessingResult> {
     const request: WorkerRequest = {
-      jobId: createJobId(),
+      jobId: createJobId(options.requestId),
       kind: 'video',
-      inputBase64: inputBuffer.toString('base64'),
+      input: Uint8Array.from(inputBuffer),
+      requestId: options.requestId,
     }
 
     const result = await this.enqueue(request)
@@ -200,7 +216,12 @@ class WorkerThreadMediaProcessor implements MediaProcessor {
 
       slot.currentJobId = task.request.jobId
       this.inFlight.set(task.request.jobId, task)
-      slot.worker.postMessage(task.request)
+      const transferableInput = Uint8Array.from(task.request.input)
+      const request: WorkerRequest = {
+        ...task.request,
+        input: transferableInput,
+      }
+      slot.worker.postMessage(request, [transferableInput.buffer])
     }
   }
 
@@ -230,14 +251,14 @@ class WorkerThreadMediaProcessor implements MediaProcessor {
 
       if (message.kind === 'image') {
         task.resolve({
-          thumb: Buffer.from(message.result.thumbBase64, 'base64'),
-          display: Buffer.from(message.result.displayBase64, 'base64'),
-          original: Buffer.from(message.result.originalBase64, 'base64'),
+          thumb: Buffer.from(message.result.thumb),
+          display: Buffer.from(message.result.display),
+          original: Buffer.from(message.result.original),
           blurDataUrl: message.result.blurDataUrl,
         })
       } else {
         task.resolve({
-          poster: Buffer.from(message.result.posterBase64, 'base64'),
+          poster: Buffer.from(message.result.poster),
           blurDataUrl: message.result.blurDataUrl,
           durationSeconds: message.result.durationSeconds,
         })
@@ -307,43 +328,75 @@ class BullMqMediaProcessor implements MediaProcessor {
   async processImage(
     inputBuffer: Buffer,
     mimeType: string,
-    options: { stripExif?: boolean } = {}
+    options: { stripExif?: boolean; requestId?: string } = {}
   ): Promise<ImageProcessingResult> {
+    const inputPath = await writeTempFile('wps-bullmq-input', '.bin', inputBuffer)
+    let completedResult: BullJobResult | null = null
     const job = await this.queue.add('image', {
       kind: 'image',
-      inputBase64: inputBuffer.toString('base64'),
+      inputPath,
       mimeType,
       stripExif: options.stripExif ?? true,
+      requestId: options.requestId,
     }, { removeOnComplete: 500, removeOnFail: 500 })
 
-    const result = await job.waitUntilFinished(this.queueEvents, this.jobTimeoutMs) as BullJobResult
-    if (result.kind !== 'image') {
-      throw new Error('Invalid BullMQ response for image processing')
-    }
+    try {
+      const result = await job.waitUntilFinished(this.queueEvents, this.jobTimeoutMs) as BullJobResult
+      completedResult = result
+      if (result.kind !== 'image') {
+        throw new Error('Invalid BullMQ response for image processing')
+      }
 
-    return {
-      thumb: Buffer.from(result.thumbBase64, 'base64'),
-      display: Buffer.from(result.displayBase64, 'base64'),
-      original: Buffer.from(result.originalBase64, 'base64'),
-      blurDataUrl: result.blurDataUrl,
+      const [thumb, display, original] = await Promise.all([
+        readFile(result.thumbPath),
+        readFile(result.displayPath),
+        readFile(result.originalPath),
+      ])
+
+      return {
+        thumb,
+        display,
+        original,
+        blurDataUrl: result.blurDataUrl,
+      }
+    } finally {
+      await unlink(inputPath).catch(() => {})
+      if (completedResult?.kind === 'image') {
+        await cleanupFiles(completedResult.thumbPath, completedResult.displayPath, completedResult.originalPath)
+      }
     }
   }
 
-  async processVideo(inputBuffer: Buffer): Promise<VideoProcessingResult> {
+  async processVideo(
+    inputBuffer: Buffer,
+    options: { requestId?: string } = {}
+  ): Promise<VideoProcessingResult> {
+    const inputPath = await writeTempFile('wps-bullmq-input', '.bin', inputBuffer)
+    let completedResult: BullJobResult | null = null
     const job = await this.queue.add('video', {
       kind: 'video',
-      inputBase64: inputBuffer.toString('base64'),
+      inputPath,
+      requestId: options.requestId,
     }, { removeOnComplete: 500, removeOnFail: 500 })
 
-    const result = await job.waitUntilFinished(this.queueEvents, this.jobTimeoutMs) as BullJobResult
-    if (result.kind !== 'video') {
-      throw new Error('Invalid BullMQ response for video processing')
-    }
+    try {
+      const result = await job.waitUntilFinished(this.queueEvents, this.jobTimeoutMs) as BullJobResult
+      completedResult = result
+      if (result.kind !== 'video') {
+        throw new Error('Invalid BullMQ response for video processing')
+      }
 
-    return {
-      poster: Buffer.from(result.posterBase64, 'base64'),
-      blurDataUrl: result.blurDataUrl,
-      durationSeconds: result.durationSeconds,
+      const poster = await readFile(result.posterPath)
+      return {
+        poster,
+        blurDataUrl: result.blurDataUrl,
+        durationSeconds: result.durationSeconds,
+      }
+    } finally {
+      await unlink(inputPath).catch(() => {})
+      if (completedResult?.kind === 'video') {
+        await cleanupFiles(completedResult.posterPath)
+      }
     }
   }
 
@@ -381,24 +434,40 @@ export function createMediaProcessor(config: MediaProcessorConfig): MediaProcess
 
 async function runBullJob(data: BullJobData): Promise<BullJobResult> {
   if (data.kind === 'image') {
-    const result = await processImage(Buffer.from(data.inputBase64, 'base64'), data.mimeType, {
-      stripExif: data.stripExif,
-    })
-    return {
-      kind: 'image',
-      thumbBase64: result.thumb.toString('base64'),
-      displayBase64: result.display.toString('base64'),
-      originalBase64: result.original.toString('base64'),
-      blurDataUrl: result.blurDataUrl,
+    const input = await readFile(data.inputPath)
+    try {
+      const result = await processImage(input, data.mimeType, {
+        stripExif: data.stripExif,
+      })
+      const [thumbPath, displayPath, originalPath] = await Promise.all([
+        writeTempFile('wps-bullmq-output', '.webp', result.thumb),
+        writeTempFile('wps-bullmq-output', '.webp', result.display),
+        writeTempFile('wps-bullmq-output', '.webp', result.original),
+      ])
+      return {
+        kind: 'image',
+        thumbPath,
+        displayPath,
+        originalPath,
+        blurDataUrl: result.blurDataUrl,
+      }
+    } finally {
+      await unlink(data.inputPath).catch(() => {})
     }
   }
 
-  const result = await processVideo(Buffer.from(data.inputBase64, 'base64'))
-  return {
-    kind: 'video',
-    posterBase64: result.poster.toString('base64'),
-    blurDataUrl: result.blurDataUrl,
-    durationSeconds: result.durationSeconds,
+  const input = await readFile(data.inputPath)
+  try {
+    const result = await processVideo(input)
+    const posterPath = await writeTempFile('wps-bullmq-output', '.webp', result.poster)
+    return {
+      kind: 'video',
+      posterPath,
+      blurDataUrl: result.blurDataUrl,
+      durationSeconds: result.durationSeconds,
+    }
+  } finally {
+    await unlink(data.inputPath).catch(() => {})
   }
 }
 
@@ -410,6 +479,23 @@ function resolveMediaWorkerUrl(): URL {
   return new URL('../workers/mediaWorker.ts', import.meta.url)
 }
 
-function createJobId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+function createJobId(requestId?: string): string {
+  const suffix = randomBytes(8).toString('hex')
+  if (!requestId) return suffix
+  const normalized = requestId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)
+  return normalized.length > 0 ? `${normalized}-${suffix}` : suffix
+}
+
+async function writeTempFile(prefix: string, ext: string, data: Buffer | Uint8Array): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), `${prefix}-`))
+  const filePath = join(dir, `${createJobId()}${ext}`)
+  await writeFile(filePath, data)
+  return filePath
+}
+
+async function cleanupFiles(...paths: string[]): Promise<void> {
+  await Promise.all(paths.map(async (p) => {
+    await unlink(p).catch(() => {})
+    await rm(dirname(p), { recursive: true, force: true }).catch(() => {})
+  }))
 }
