@@ -80,6 +80,7 @@ function assertGalleryResponse(value: unknown, context: string): asserts value i
     throw new Error(`${context}: invalid archiveRequestedAt`)
   }
   if (typeof value.isUploadOpen !== 'boolean') throw new Error(`${context}: invalid isUploadOpen`)
+  if (typeof value.uploadWindowsVersion !== 'string') throw new Error(`${context}: invalid uploadWindowsVersion`)
   if (!Array.isArray(value.uploadWindows)) throw new Error(`${context}: invalid uploadWindows`)
   for (let i = 0; i < value.uploadWindows.length; i += 1) {
     assertUploadWindowResponse(value.uploadWindows[i], `${context}.uploadWindows[${i}]`)
@@ -419,6 +420,7 @@ export async function updateGallery(
     'name' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'stripExif' | 'isActive'
   >> & {
     secretKey?: string | null
+    uploadWindowsVersion?: string
     uploadWindows?: Array<Pick<UploadWindowResponse, 'start' | 'end'>>
   }
 ): Promise<GalleryResponse> {

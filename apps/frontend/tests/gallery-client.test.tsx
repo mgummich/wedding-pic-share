@@ -47,6 +47,7 @@ const gallery = {
   archivedAt: null,
   archiveSizeBytes: null,
   isUploadOpen: true,
+  uploadWindowsVersion: 'e3b0c44298fc1c149afbf4c8996fb924',
   uploadWindows: [],
 }
 

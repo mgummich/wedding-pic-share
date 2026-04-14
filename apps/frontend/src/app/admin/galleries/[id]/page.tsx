@@ -72,6 +72,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [secretKeyInput, setSecretKeyInput] = useState('')
   const [clearSecretKey, setClearSecretKey] = useState(false)
   const [isActive, setIsActive] = useState(false)
+  const [uploadWindowsVersion, setUploadWindowsVersion] = useState('')
   const [uploadWindows, setUploadWindows] = useState<UploadWindowDraft[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -103,6 +104,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
         setAllowGuestDownload(found.allowGuestDownload)
         setStripExif(found.stripExif)
         setIsActive(found.isActive)
+        setUploadWindowsVersion(found.uploadWindowsVersion)
         setUploadWindows(found.uploadWindows.map((window) => ({
           id: window.id,
           start: toDateTimeLocal(window.start),
@@ -151,11 +153,13 @@ export default function GallerySettingsPage({ params }: PageProps) {
         stripExif,
         secretKey: clearSecretKey ? null : (normalizedSecretKey.length > 0 ? normalizedSecretKey : undefined),
         isActive,
+        uploadWindowsVersion,
         uploadWindows: normalizedUploadWindows,
       })
       setGallery((prev) => prev ? { ...prev, ...updated } : prev)
       setStripExif(updated.stripExif)
       setIsActive(updated.isActive)
+      setUploadWindowsVersion(updated.uploadWindowsVersion)
       setUploadWindows(updated.uploadWindows.map((window) => ({
         id: window.id,
         start: toDateTimeLocal(window.start),
@@ -211,6 +215,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
     try {
       const initial = await archiveGallery(id)
       setGallery((prev) => prev ? { ...prev, ...initial } : prev)
+      setUploadWindowsVersion(initial.uploadWindowsVersion)
 
       let latest = initial
       const deadline = Date.now() + ARCHIVE_POLL_TIMEOUT_MS
@@ -221,6 +226,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
         if (!next) break
         latest = next
         setGallery((prev) => prev ? { ...prev, ...next } : prev)
+        setUploadWindowsVersion(next.uploadWindowsVersion)
       }
 
       if (!latest.isArchived) {
@@ -229,6 +235,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       }
 
       setUploadWindows([])
+      setUploadWindowsVersion(latest.uploadWindowsVersion)
       setSaved(false)
     } catch {
       setSaveError(t('gallerySettings.saveError.archiveFailed'))

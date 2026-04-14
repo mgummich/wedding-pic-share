@@ -35,6 +35,7 @@ describe('api client', () => {
       archivedAt: null,
       archiveSizeBytes: null,
       isUploadOpen: true,
+      uploadWindowsVersion: 'e3b0c44298fc1c149afbf4c8996fb924',
       uploadWindows: [],
       data: [],
       pagination: { nextCursor: null, hasMore: false },
@@ -70,6 +71,7 @@ describe('api client', () => {
         archivedAt: null,
         archiveSizeBytes: null,
         isUploadOpen: true,
+        uploadWindowsVersion: 'e3b0c44298fc1c149afbf4c8996fb924',
         uploadWindows: [],
         data: [],
         pagination: { nextCursor: null, hasMore: false },
@@ -114,6 +116,7 @@ describe('api client', () => {
         archivedAt: null,
         archiveSizeBytes: null,
         isUploadOpen: true,
+        uploadWindowsVersion: 'e3b0c44298fc1c149afbf4c8996fb924',
         uploadWindows: [],
       }),
     } as Response)
@@ -278,6 +281,7 @@ describe('api client', () => {
         archivedAt: '2026-04-14T18:00:00.000Z',
         archiveSizeBytes: 1024,
         isUploadOpen: false,
+        uploadWindowsVersion: 'e3b0c44298fc1c149afbf4c8996fb924',
         uploadWindows: [],
       }),
     } as Response)
