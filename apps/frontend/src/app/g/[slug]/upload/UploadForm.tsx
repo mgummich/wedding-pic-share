@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Camera } from 'lucide-react'
-import { uploadFile, ApiError } from '@/lib/api'
+import { uploadFile, deletePendingUpload, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
 import { validateUploadFile, getUploadErrorMessage } from '@/lib/uploadValidation'
 import { isTransientUploadError, runWithRetry } from '@/lib/uploadRetry'
@@ -13,7 +13,12 @@ interface UploadFormProps {
   guestNameMode: 'OPTIONAL' | 'REQUIRED' | 'HIDDEN'
 }
 
-type FileStatus = { file: File; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; result?: UploadResponse }
+type FileStatus = {
+  file: File
+  status: 'pending' | 'uploading' | 'done' | 'deleting' | 'error'
+  error?: string
+  result?: UploadResponse
+}
 const MAX_UPLOAD_ATTEMPTS = 3
 const UPLOAD_RETRY_BACKOFF_MS = [500, 1500]
 
@@ -34,6 +39,12 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       return getUploadErrorMessage(error.status, locale) ?? t('guest.uploadForm.error.generic')
     }
     return t('guest.uploadForm.error.network')
+  }
+
+  function canDeletePendingUpload(item: FileStatus): boolean {
+    return item.status === 'done'
+      && item.result?.status === 'PENDING'
+      && typeof item.result.deleteToken === 'string'
   }
 
   async function uploadSingleFile(file: File, submitOnAllDone = false): Promise<boolean> {
@@ -94,6 +105,29 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
     await uploadSingleFile(file, true)
   }
 
+  async function handleDeletePendingUpload(file: File) {
+    const target = files.find((item) => item.file === file)
+    if (!target || !canDeletePendingUpload(target) || !target.result?.deleteToken) return
+
+    updateFiles((prev) => prev.map((item) => (
+      item.file === file ? { ...item, status: 'deleting', error: undefined } : item
+    )))
+
+    try {
+      await deletePendingUpload(gallerySlug, target.result.id, target.result.deleteToken)
+      updateFiles((prev) => prev.filter((item) => item.file !== file))
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? (getUploadErrorMessage(error.status, locale) ?? t('guest.uploadForm.error.deleteFailed'))
+        : t('guest.uploadForm.error.deleteFailed')
+      updateFiles((prev) => prev.map((item) => (
+        item.file === file
+          ? { ...item, status: 'done', error: message }
+          : item
+      )))
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (files.length === 0) {
@@ -122,7 +156,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
     }
   }
 
-  if (submitted && files.every((f) => f.status === 'done')) {
+  if (submitted && files.length > 0 && files.every((f) => f.status === 'done')) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center px-6">
         <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
@@ -138,6 +172,27 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         >
           {t('guest.uploadForm.success.uploadMore')}
         </button>
+        {files.some((item) => canDeletePendingUpload(item)) && (
+          <ul className="mt-6 w-full max-w-lg space-y-2 text-left">
+            {files.filter((item) => canDeletePendingUpload(item)).map((item, i) => (
+              <li key={`${item.file.name}-${i}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-border">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-text-primary truncate">{item.file.name}</p>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    {t('guest.uploadForm.status.pending')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDeletePendingUpload(item.file)}
+                  className="text-xs font-medium text-error hover:opacity-80"
+                >
+                  {t('guest.uploadForm.deletePending')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     )
   }
@@ -185,15 +240,26 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
                 <button
                   type="button"
                   onClick={() => handleRetry(item.file)}
-                  disabled={files.some((f) => f.status === 'uploading')}
+                  disabled={files.some((f) => f.status === 'uploading' || f.status === 'deleting')}
                   className="text-xs font-medium text-accent hover:text-accent-hover disabled:opacity-50"
                 >
                   {t('guest.uploadForm.retry')}
                 </button>
+              ) : canDeletePendingUpload(item) ? (
+                <button
+                  type="button"
+                  onClick={() => void handleDeletePendingUpload(item.file)}
+                  disabled={files.some((f) => f.status === 'uploading')}
+                  className="text-xs font-medium text-error hover:opacity-80 disabled:opacity-50"
+                >
+                  {t('guest.uploadForm.deletePending')}
+                </button>
               ) : (
                 <span className="text-xs text-text-muted flex-shrink-0">
                   {item.status === 'uploading' && t('guest.uploadForm.status.uploading')}
-                  {item.status === 'done' && '✓'}
+                  {item.status === 'deleting' && t('guest.uploadForm.status.deleting')}
+                  {item.status === 'done' && item.result?.status === 'PENDING' && t('guest.uploadForm.status.pending')}
+                  {item.status === 'done' && item.result?.status !== 'PENDING' && '✓'}
                 </span>
               )}
             </li>
@@ -225,7 +291,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
 
       <button
         type="submit"
-        disabled={files.some((f) => f.status === 'uploading')}
+        disabled={files.some((f) => f.status === 'uploading' || f.status === 'deleting')}
         className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white
                    font-medium transition-colors disabled:opacity-50"
       >

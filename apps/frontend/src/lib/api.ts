@@ -122,6 +122,17 @@ export async function uploadFile(
   return uploadMultipart(`/api/v1/g/${slug}/upload`, file, guestName)
 }
 
+export async function deletePendingUpload(
+  slug: string,
+  photoId: string,
+  deleteToken: string
+): Promise<void> {
+  await apiFetch(`/api/v1/g/${slug}/uploads/${photoId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ deleteToken }),
+  })
+}
+
 export async function verifyGalleryAccess(
   slug: string,
   secretKey: string

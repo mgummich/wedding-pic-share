@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { UploadForm } from '../src/app/g/[slug]/upload/UploadForm.js'
-import { uploadFile, ApiError } from '../src/lib/api.js'
+import { uploadFile, deletePendingUpload, ApiError } from '../src/lib/api.js'
 
 vi.mock('../src/lib/api.js', () => ({
   ApiError: class ApiError extends Error {
@@ -20,7 +20,9 @@ vi.mock('../src/lib/api.js', () => ({
     mediaType: 'IMAGE',
     thumbUrl: '/thumb.webp',
     duration: null,
+    deleteToken: 'delete-token-1',
   }),
+  deletePendingUpload: vi.fn().mockResolvedValue(undefined),
   getGallery: vi.fn().mockResolvedValue({
     id: 'g1',
     name: 'Test Gallery',
@@ -46,12 +48,15 @@ describe('UploadForm', () => {
       mediaType: 'IMAGE' as const,
       thumbUrl: '/thumb.webp',
       duration: null,
+      deleteToken: 'delete-token-1',
     }
   }
 
   beforeEach(() => {
     vi.mocked(uploadFile).mockReset()
+    vi.mocked(deletePendingUpload).mockReset()
     vi.mocked(uploadFile).mockResolvedValue(createUploadResponse('photo-1'))
+    vi.mocked(deletePendingUpload).mockResolvedValue(undefined)
   })
 
   it('renders file input and submit button', () => {
@@ -132,5 +137,24 @@ describe('UploadForm', () => {
     expect(uploadFile).toHaveBeenCalledTimes(3)
     expect(vi.mocked(uploadFile).mock.calls[2]?.[1]).toBe(badFile)
     expect(await screen.findByRole('heading', { name: /danke/i })).toBeInTheDocument()
+  })
+
+  it('allows deleting a pending uploaded file', async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(createUploadResponse('photo-pending'))
+
+    const user = userEvent.setup()
+    render(<UploadForm {...defaultProps} />)
+
+    const input = screen.getByLabelText(/fotos/i)
+    const file = new File(['x'], 'pending.png', { type: 'image/png' })
+    await user.upload(input, file)
+    await user.click(screen.getByRole('button', { name: /hochladen/i }))
+
+    const deleteButton = await screen.findByRole('button', { name: /upload löschen/i })
+    await user.click(deleteButton)
+
+    expect(deletePendingUpload).toHaveBeenCalledTimes(1)
+    expect(deletePendingUpload).toHaveBeenCalledWith('test', 'photo-pending', 'delete-token-1')
+    expect(screen.queryByText('pending.png')).not.toBeInTheDocument()
   })
 })

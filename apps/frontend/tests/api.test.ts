@@ -4,6 +4,7 @@ import {
   adminLogin,
   adminUploadFile,
   archiveGallery,
+  deletePendingUpload,
   getAdminTwoFactorStatus,
   getGallery,
   setupAdminTwoFactor,
@@ -135,6 +136,24 @@ describe('api client', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ secretKey: '2468' }),
+        credentials: 'include',
+      })
+    )
+  })
+
+  it('deletePendingUpload sends signed token to guest delete endpoint', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response)
+
+    await deletePendingUpload('party', 'photo-1', 'delete-token-1')
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/g/party/uploads/photo-1'),
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ deleteToken: 'delete-token-1' }),
         credentials: 'include',
       })
     )
