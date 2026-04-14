@@ -19,11 +19,18 @@ export default function ModerationPage({ params }: PageProps) {
   const { t } = useAdminI18n()
   const [photos, setPhotos] = useState<AdminPhotoResponse[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(false)
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   useEffect(() => {
     getAdminPhotos(id, { status: 'PENDING' })
-      .then((r) => setPhotos(r.data))
+      .then((r) => {
+        setPhotos(r.data)
+        setNextCursor(r.pagination.nextCursor)
+        setHasMore(r.pagination.hasMore)
+      })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) router.replace('/admin/login')
       })
@@ -44,6 +51,23 @@ export default function ModerationPage({ params }: PageProps) {
     setOpenIndex(null)
   }
 
+  async function handleLoadMore() {
+    if (!hasMore || !nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const result = await getAdminPhotos(id, { status: 'PENDING', cursor: nextCursor })
+      setPhotos((prev) => {
+        const existingIds = new Set(prev.map((photo) => photo.id))
+        const next = result.data.filter((photo) => !existingIds.has(photo.id))
+        return [...prev, ...next]
+      })
+      setNextCursor(result.pagination.nextCursor)
+      setHasMore(result.pagination.hasMore)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-surface-base px-4 py-6">
@@ -56,7 +80,7 @@ export default function ModerationPage({ params }: PageProps) {
     )
   }
 
-  if (photos.length === 0) {
+  if (photos.length === 0 && !hasMore) {
     return (
       <main className="min-h-screen bg-surface-base flex flex-col items-center justify-center px-4">
         <p className="font-display text-2xl text-text-primary mb-2">{t('moderation.doneTitle')}</p>
@@ -120,6 +144,19 @@ export default function ModerationPage({ params }: PageProps) {
           </div>
         ))}
       </div>
+
+      {hasMore && (
+        <div className="flex justify-center px-4 pb-6">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="text-sm px-4 py-2 rounded-full border border-border text-text-muted hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? t('moderation.loadingMore') : t('moderation.loadMore')}
+          </button>
+        </div>
+      )}
 
       {openIndex !== null && (
         <Lightbox
