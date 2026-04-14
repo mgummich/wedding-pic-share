@@ -18,7 +18,7 @@ type RetryOptions<T> = {
   operation: () => Promise<T> | T
   shouldRetry: (error: unknown) => boolean
   maxAttempts: number
-  backoffMs: number
+  backoffMs: number[]
 }
 
 function sleep(ms: number): Promise<void> {
@@ -29,7 +29,7 @@ function isTransientUploadError(error: unknown): boolean {
   if (error instanceof ApiError) {
     return error.status >= 500
   }
-  return true
+  return error instanceof TypeError
 }
 
 async function runWithRetry<T>({
@@ -51,7 +51,8 @@ async function runWithRetry<T>({
         return { ok: false, error, attempts }
       }
 
-      await sleep(backoffMs)
+      const delay = backoffMs[Math.min(attempts - 1, backoffMs.length - 1)] ?? 0
+      await sleep(delay)
     }
   }
 

@@ -15,8 +15,12 @@ describe('isTransientUploadError', () => {
     expect(isTransientUploadError(new ApiError(400, {}, 'bad request'))).toBe(false)
   })
 
-  it('returns true for non-ApiError errors', () => {
-    expect(isTransientUploadError(new Error('network issue'))).toBe(true)
+  it('returns true for network TypeError failures', () => {
+    expect(isTransientUploadError(new TypeError('fetch failed'))).toBe(true)
+  })
+
+  it('returns false for generic non-ApiError errors', () => {
+    expect(isTransientUploadError(new Error('application failure'))).toBe(false)
   })
 })
 
@@ -29,13 +33,13 @@ describe('runWithRetry', () => {
       operation: async () => {
         attempts += 1
         if (attempts < 3) {
-          throw new Error('temporary failure')
+          throw new TypeError('temporary failure')
         }
         return 'ok'
       },
       shouldRetry: isTransientUploadError,
       maxAttempts: 3,
-      backoffMs: 10,
+      backoffMs: [10, 20],
     })
 
     await vi.runAllTimersAsync()
@@ -56,13 +60,13 @@ describe('runWithRetry', () => {
       operation: async () => {
         attempts += 1
         if (attempts < 2) {
-          throw new Error('temporary failure')
+          throw new TypeError('temporary failure')
         }
         return 'ok'
       },
       shouldRetry: isTransientUploadError,
       maxAttempts: 2,
-      backoffMs: 50,
+      backoffMs: [50],
     })
 
     await vi.advanceTimersByTimeAsync(49)
@@ -84,11 +88,11 @@ describe('runWithRetry', () => {
     const resultPromise = runWithRetry({
       operation: async () => {
         attempts += 1
-        throw new Error('temporary failure')
+        throw new TypeError('temporary failure')
       },
       shouldRetry: isTransientUploadError,
       maxAttempts: 3,
-      backoffMs: 10,
+      backoffMs: [10, 20],
     })
 
     await vi.runAllTimersAsync()
@@ -107,7 +111,7 @@ describe('runWithRetry', () => {
       },
       shouldRetry: isTransientUploadError,
       maxAttempts: 3,
-      backoffMs: 10,
+      backoffMs: [10],
     })
 
     expect(result.ok).toBe(false)
@@ -115,5 +119,40 @@ describe('runWithRetry', () => {
       expect(result.attempts).toBe(1)
       expect(result.error).toBeInstanceOf(ApiError)
     }
+  })
+
+  it('uses the last backoff value when retries exceed the array length', async () => {
+    vi.useFakeTimers()
+
+    let attempts = 0
+    const resultPromise = runWithRetry({
+      operation: async () => {
+        attempts += 1
+        if (attempts < 3) {
+          throw new TypeError('temporary failure')
+        }
+        return 'ok'
+      },
+      shouldRetry: isTransientUploadError,
+      maxAttempts: 3,
+      backoffMs: [25],
+    })
+
+    await vi.advanceTimersByTimeAsync(24)
+    expect(attempts).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(attempts).toBe(2)
+
+    await vi.advanceTimersByTimeAsync(24)
+    expect(attempts).toBe(2)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(resultPromise).resolves.toEqual({
+      ok: true,
+      value: 'ok',
+      attempts: 3,
+    })
+    expect(attempts).toBe(3)
   })
 })
