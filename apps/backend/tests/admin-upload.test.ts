@@ -186,6 +186,26 @@ describe('POST /api/v1/admin/galleries/:id/upload', () => {
     expect(res.json().status).toBe('APPROVED')
   })
 
+  it('auto-approves uploads in photographer mode even when gallery moderation is MANUAL', async () => {
+    const jpegBuf = await sharp({
+      create: { width: 200, height: 120, channels: 3, background: '#446688' },
+    }).jpeg().toBuffer()
+
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'photographer.jpg')
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/galleries/${manualGalleryId}/upload?mode=photographer`,
+      headers: {
+        cookie: sessionCookie,
+        'content-type': multipart.contentType,
+      },
+      payload: multipart.body,
+    })
+
+    expect(res.statusCode).toBe(201)
+    expect(res.json().status).toBe('APPROVED')
+  })
+
   it('ignores guest upload windows for admin uploads', async () => {
     const jpegBuf = await sharp({
       create: { width: 140, height: 140, channels: 3, background: '#778899' },

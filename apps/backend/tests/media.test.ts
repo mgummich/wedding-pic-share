@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { processImage, generateBlurDataUrl, computeSha256 } from '../src/services/media.js'
+import { createMediaProcessor } from '../src/services/mediaProcessor.js'
 import sharp from 'sharp'
 
 describe('processImage', () => {
@@ -75,5 +76,38 @@ describe('computeSha256', () => {
     expect(hash).toMatch(/^[a-f0-9]{64}$/)
     // Check determinism: calling twice gives same result
     expect(computeSha256(buf)).toBe(hash)
+  })
+})
+
+describe('media processor modes', () => {
+  it('processes images via worker-thread mode', async () => {
+    const processor = createMediaProcessor({
+      mode: 'worker-thread',
+      concurrency: 1,
+      jobTimeoutMs: 30_000,
+      redisUrl: null,
+    })
+
+    try {
+      const input = await sharp({
+        create: { width: 1200, height: 800, channels: 3, background: '#123456' },
+      }).jpeg().toBuffer()
+
+      const result = await processor.processImage(input, 'image/jpeg', { stripExif: true })
+      const meta = await sharp(result.thumb).metadata()
+      expect(meta.width).toBe(400)
+      expect(result.blurDataUrl).toMatch(/^data:image\/webp;base64,/)
+    } finally {
+      await processor.close()
+    }
+  })
+
+  it('rejects bullmq mode without REDIS_URL', () => {
+    expect(() => createMediaProcessor({
+      mode: 'bullmq',
+      concurrency: 1,
+      jobTimeoutMs: 30_000,
+      redisUrl: null,
+    })).toThrow('REDIS_URL is required')
   })
 })

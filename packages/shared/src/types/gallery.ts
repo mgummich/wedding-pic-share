@@ -16,6 +16,9 @@ export interface GalleryResponse {
   stripExif: boolean
   photoCount: number
   isActive: boolean
+  isArchived: boolean
+  archivedAt: string | null
+  archiveSizeBytes: number | null
   isUploadOpen: boolean
   uploadWindows: UploadWindowResponse[]
 }

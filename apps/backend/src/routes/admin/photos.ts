@@ -4,18 +4,26 @@ import type { SseManager } from '../../services/sse.js'
 import type { PhotoResponse } from '@wedding/shared'
 import type { StorageService } from '../../services/storage.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
+import type { MediaProcessor } from '../../services/mediaProcessor.js'
 
 export async function adminPhotoRoutes(
   fastify: FastifyInstance,
-  opts: { sse: SseManager; storage: StorageService }
+  opts: { sse: SseManager; storage: StorageService; mediaProcessor: MediaProcessor }
 ): Promise<void> {
   fastify.post('/admin/galleries/:id/upload', {
     preHandler: fastify.requireAdmin,
     schema: {
       params: { type: 'object', properties: { id: { type: 'string' } } },
+      querystring: {
+        type: 'object',
+        properties: {
+          mode: { type: 'string', enum: ['default', 'photographer'] },
+        },
+      },
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
+    const { mode } = req.query as { mode?: 'default' | 'photographer' }
     const db = getClient()
     const gallery = await db.gallery.findUnique({
       where: { id },
@@ -26,17 +34,22 @@ export async function adminPhotoRoutes(
       return reply.code(404).send({ type: 'gallery-not-found', title: 'Gallery Not Found', status: 404 })
     }
 
+    const effectiveModerationMode = mode === 'photographer'
+      ? 'AUTO'
+      : gallery.moderationMode
+
     try {
       const response = await ingestUploadedPhoto({
         gallery: {
           id: gallery.id,
           slug: gallery.slug,
-          moderationMode: gallery.moderationMode as 'MANUAL' | 'AUTO',
+          moderationMode: effectiveModerationMode as 'MANUAL' | 'AUTO',
           stripExif: gallery.stripExif,
         },
         upload: await req.file(),
         storage: opts.storage,
         sse: opts.sse,
+        mediaProcessor: opts.mediaProcessor,
       })
 
       return reply.code(201).send(response)

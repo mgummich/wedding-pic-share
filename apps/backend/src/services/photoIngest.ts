@@ -1,10 +1,11 @@
 import type { MultipartFile } from '@fastify/multipart'
 import { fileTypeFromBuffer } from 'file-type'
 import { getClient } from '@wedding/db'
-import { processImage, processVideo, computeSha256 } from './media.js'
+import { computeSha256 } from './media.js'
 import type { StorageService } from './storage.js'
 import type { SseManager } from './sse.js'
 import type { PhotoResponse, UploadResponse } from '@wedding/shared'
+import type { MediaProcessor } from './mediaProcessor.js'
 
 const ALLOWED_MIMES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/heic',
@@ -23,6 +24,7 @@ type IngestUploadInput = {
   upload: MultipartFile | undefined
   storage: StorageService
   sse: SseManager
+  mediaProcessor: MediaProcessor
 }
 
 export class PhotoIngestError extends Error {
@@ -39,6 +41,7 @@ export async function ingestUploadedPhoto({
   upload,
   storage,
   sse,
+  mediaProcessor,
 }: IngestUploadInput): Promise<UploadResponse> {
   if (!upload) {
     throw new PhotoIngestError(400, {
@@ -83,7 +86,7 @@ export async function ingestUploadedPhoto({
   let duration: number | null = null
 
   if (!isVideo) {
-    const result = await processImage(buffer, detectedType.mime, { stripExif: gallery.stripExif })
+    const result = await mediaProcessor.processImage(buffer, detectedType.mime, { stripExif: gallery.stripExif })
     await storage.save(gallery.slug, `${photoId}_thumb.webp`, result.thumb)
     await storage.save(gallery.slug, `${photoId}_display.webp`, result.display)
     await storage.save(gallery.slug, `${photoId}_original.webp`, result.original)
@@ -91,7 +94,7 @@ export async function ingestUploadedPhoto({
     displayPath = `${photoId}_display.webp`
     blurDataUrl = result.blurDataUrl
   } else {
-    const result = await processVideo(buffer)
+    const result = await mediaProcessor.processVideo(buffer)
     const ext = detectedType.mime === 'video/quicktime' ? 'mov' : 'mp4'
     await storage.save(gallery.slug, `${photoId}_original.${ext}`, buffer)
     await storage.save(gallery.slug, `${photoId}_poster.webp`, result.poster)

@@ -145,6 +145,30 @@ describe('GET /api/v1/g/:slug', () => {
   })
 })
 
+describe('GET /api/v1/g/:slug/qr', () => {
+  it('returns a printable table card PDF for format=pdf', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/g/party/qr?format=pdf',
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toContain('application/pdf')
+    expect(String(res.headers['content-disposition'])).toContain('party-table-card.pdf')
+    expect(res.rawPayload.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('returns 404 for qr export with unknown slug', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/g/does-not-exist/qr?format=pdf',
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().type).toBe('gallery-not-found')
+  })
+})
+
 describe('PATCH /api/v1/admin/galleries/:id', () => {
   it('updates gallery settings', async () => {
     const res = await app.inject({

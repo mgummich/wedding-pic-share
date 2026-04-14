@@ -2,11 +2,39 @@ import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { getClient } from '@wedding/db'
+import { decryptTotpSecret, verifyTotpCode } from '../../services/twoFactor.js'
 
 const LOCK_THRESHOLD = 5
 const LOCK_DURATION_MS = 15 * 60 * 1000
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
+
+type LoginBody = {
+  username: string
+  password: string
+  totpCode?: string
+}
+
+async function recordFailedLoginAttempt(
+  fastify: FastifyInstance,
+  user: { id: string; failedAttempts: number } | null,
+  ip: string,
+  now: number
+): Promise<void> {
+  const db = getClient()
+  fastify.recordIpFailure(ip)
+
+  if (!user) return
+
+  const newAttempts = user.failedAttempts + 1
+  const lockedUntil = newAttempts >= LOCK_THRESHOLD
+    ? new Date(now + LOCK_DURATION_MS)
+    : null
+  await db.adminUser.update({
+    where: { id: user.id },
+    data: { failedAttempts: newAttempts, lockedUntil },
+  })
+}
 
 export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/admin/login', {
@@ -17,11 +45,12 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
         properties: {
           username: { type: 'string', minLength: 1, maxLength: 64 },
           password: { type: 'string', minLength: 1, maxLength: 128 },
+          totpCode: { type: 'string', minLength: 6, maxLength: 16 },
         },
       },
     },
   }, async (req, reply) => {
-    const { username, password } = req.body as { username: string; password: string }
+    const { username, password, totpCode } = req.body as LoginBody
     const db = getClient()
     const now = Date.now()
     const ip = req.ip
@@ -51,23 +80,62 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     const valid = await bcrypt.compare(password, hashToCheck)
 
     if (!user || !valid) {
-      fastify.recordIpFailure(ip)
-
-      if (user) {
-        const newAttempts = user.failedAttempts + 1
-        const lockedUntil = newAttempts >= LOCK_THRESHOLD
-          ? new Date(now + LOCK_DURATION_MS)
-          : null
-        await db.adminUser.update({
-          where: { id: user.id },
-          data: { failedAttempts: newAttempts, lockedUntil },
-        })
-      }
+      await recordFailedLoginAttempt(
+        fastify,
+        user ? { id: user.id, failedAttempts: user.failedAttempts } : null,
+        ip,
+        now
+      )
       return reply.code(401).send({
         type: 'invalid-credentials',
         title: 'Ungültige Anmeldedaten.',
         status: 401,
       })
+    }
+
+    const requiresTotp = fastify.config.totpEnabled && Boolean(user.totpSecretEncrypted)
+    if (requiresTotp) {
+      if (!totpCode) {
+        return reply.code(401).send({
+          type: 'totp-required',
+          title: '2FA-Code erforderlich.',
+          status: 401,
+        })
+      }
+
+      if (!fastify.config.totpEncryptionKey) {
+        return reply.code(500).send({
+          type: 'server-error',
+          title: '2FA ist nicht korrekt konfiguriert.',
+          status: 500,
+        })
+      }
+
+      let totpSecret: string
+      try {
+        totpSecret = decryptTotpSecret(user.totpSecretEncrypted as string, fastify.config.totpEncryptionKey)
+      } catch (error) {
+        fastify.log.error({ err: error }, 'failed to decrypt totp secret')
+        return reply.code(500).send({
+          type: 'server-error',
+          title: '2FA ist nicht korrekt konfiguriert.',
+          status: 500,
+        })
+      }
+
+      if (!verifyTotpCode(totpSecret, totpCode)) {
+        await recordFailedLoginAttempt(
+          fastify,
+          { id: user.id, failedAttempts: user.failedAttempts },
+          ip,
+          now
+        )
+        return reply.code(401).send({
+          type: 'invalid-totp',
+          title: 'Ungültiger 2FA-Code.',
+          status: 401,
+        })
+      }
     }
 
     await db.adminUser.update({

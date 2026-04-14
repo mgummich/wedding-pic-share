@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import QRCode from 'qrcode'
 import { getClient } from '@wedding/db'
+import { renderTableCardPdf, type TableCardLocale } from '../../services/tableCardPdf.js'
 
 export async function guestQrRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/g/:slug/qr', {
@@ -9,13 +10,17 @@ export async function guestQrRoutes(fastify: FastifyInstance): Promise<void> {
       querystring: {
         type: 'object',
         properties: {
-          format: { type: 'string', enum: ['png', 'svg'], default: 'png' },
+          format: { type: 'string', enum: ['png', 'svg', 'pdf'], default: 'png' },
+          locale: { type: 'string', enum: ['de', 'en'], default: 'de' },
         },
       },
     },
   }, async (req, reply) => {
     const { slug } = req.params as { slug: string }
-    const { format = 'png' } = req.query as { format?: 'png' | 'svg' }
+    const { format = 'png', locale = 'de' } = req.query as {
+      format?: 'png' | 'svg' | 'pdf'
+      locale?: TableCardLocale
+    }
 
     const db = getClient()
     const gallery = await db.gallery.findFirst({ where: { slug } })
@@ -35,7 +40,20 @@ export async function guestQrRoutes(fastify: FastifyInstance): Promise<void> {
       reply.header('Content-Type', 'image/svg+xml')
       reply.header('Content-Disposition', `attachment; filename="${slug}-qr.svg"`)
       return reply.send(svg)
-    } else {
+    }
+
+    if (format === 'pdf') {
+      const pdf = await renderTableCardPdf({
+        galleryName: gallery.name,
+        uploadUrl: url,
+        locale,
+      })
+      reply.header('Content-Type', 'application/pdf')
+      reply.header('Content-Disposition', `attachment; filename="${slug}-table-card.pdf"`)
+      return reply.send(pdf)
+    }
+
+    {
       const png = await QRCode.toBuffer(url, { ...qrOptions, scale: 10 })
       reply.header('Content-Type', 'image/png')
       reply.header('Content-Disposition', `attachment; filename="${slug}-qr.png"`)

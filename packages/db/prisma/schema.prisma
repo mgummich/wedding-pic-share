@@ -55,6 +55,10 @@ model Gallery {
   guestNameMode      GuestNameMode  @default(OPTIONAL)
   moderationMode     ModerationMode @default(MANUAL)
   isActive           Boolean        @default(false)
+  isArchived         Boolean        @default(false)
+  archivedAt         DateTime?
+  archivePath        String?
+  archiveSizeBytes   Int?
   stripExif          Boolean        @default(true)
   secretKey          String?
   createdAt          DateTime       @default(now())

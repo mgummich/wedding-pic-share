@@ -3,7 +3,18 @@ import type { UploadWindowResponse, GalleryResponse } from '@wedding/shared'
 
 type GalleryWithWindows = Pick<
   Gallery,
-  'id' | 'name' | 'slug' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'isActive' | 'stripExif'
+  | 'id'
+  | 'name'
+  | 'slug'
+  | 'description'
+  | 'layout'
+  | 'allowGuestDownload'
+  | 'guestNameMode'
+  | 'isActive'
+  | 'isArchived'
+  | 'archivedAt'
+  | 'archiveSizeBytes'
+  | 'stripExif'
 > & {
   uploadWindows: UploadWindow[]
 }
@@ -38,7 +49,10 @@ export function toGalleryResponse(
     stripExif: gallery.stripExif,
     photoCount,
     isActive: gallery.isActive,
-    isUploadOpen: isUploadOpenAt(gallery.uploadWindows),
+    isArchived: gallery.isArchived,
+    archivedAt: gallery.archivedAt?.toISOString() ?? null,
+    archiveSizeBytes: gallery.archiveSizeBytes,
+    isUploadOpen: gallery.isArchived ? false : isUploadOpenAt(gallery.uploadWindows),
     uploadWindows: gallery.uploadWindows.map(toUploadWindowResponse),
   }
 }
