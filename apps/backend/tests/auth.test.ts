@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
-import { closeClient } from '@wedding/db'
+import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
@@ -87,5 +87,46 @@ describe('POST /api/v1/admin/logout', () => {
     })
     expect(logout.statusCode).toBe(200)
     expect(logout.json().ok).toBe(true)
+  })
+})
+
+describe('GET /api/v1/admin/session', () => {
+  it('returns 200 with a valid session cookie', async () => {
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/login',
+      payload: { username: 'testadmin', password: 'TestPassword123!' },
+    })
+    const cookie = login.headers['set-cookie'] as string
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/session',
+      headers: { cookie },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().ok).toBe(true)
+  })
+})
+
+describe('2FA downgrade protection', () => {
+  it('fails closed when a user has a configured TOTP secret but server-side TOTP is disabled', async () => {
+    const db = getClient()
+    await db.adminUser.update({
+      where: { username: 'testadmin' },
+      data: {
+        totpSecretEncrypted: 'deadbeef',
+      },
+    })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/login',
+      payload: { username: 'testadmin', password: 'TestPassword123!' },
+    })
+
+    expect(res.statusCode).toBe(503)
+    expect(res.json().type).toBe('totp-misconfigured')
   })
 })

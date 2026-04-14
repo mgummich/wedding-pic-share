@@ -4,9 +4,9 @@ import { useState, useRef } from 'react'
 import { Upload, Camera } from 'lucide-react'
 import { uploadFile, deletePendingUpload, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
-import { validateUploadFile, getUploadErrorMessage } from '@/lib/uploadValidation'
+import { validateUploadFile, getUploadErrorMessage, validateGuestName } from '@/lib/uploadValidation'
 import { isTransientUploadError, runWithRetry } from '@/lib/uploadRetry'
-import { useAdminI18n } from '@/components/AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 
 interface UploadFormProps {
   gallerySlug: string
@@ -23,7 +23,7 @@ const MAX_UPLOAD_ATTEMPTS = 3
 const UPLOAD_RETRY_BACKOFF_MS = [500, 1500]
 
 export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
-  const { locale, t } = useAdminI18n()
+  const { locale, t } = useGuestI18n()
   const [files, setFiles] = useState<FileStatus[]>([])
   const [guestName, setGuestName] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
@@ -47,13 +47,19 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       && typeof item.result.deleteToken === 'string'
   }
 
-  async function uploadSingleFile(file: File, submitOnAllDone = false): Promise<boolean> {
+  async function uploadSingleFile(
+    file: File,
+    options: { submitOnAllDone?: boolean; guestNameValue?: string } = {}
+  ): Promise<boolean> {
+    const { submitOnAllDone = false, guestNameValue } = options
+    const effectiveGuestName = guestNameValue ?? (guestName.trim() || undefined)
+
     updateFiles((prev) => prev.map((item) =>
       item.file === file ? { ...item, status: 'uploading', error: undefined } : item
     ))
 
     const result = await runWithRetry({
-      operation: () => uploadFile(gallerySlug, file, guestName.trim() || undefined),
+      operation: () => uploadFile(gallerySlug, file, effectiveGuestName),
       shouldRetry: isTransientUploadError,
       maxAttempts: MAX_UPLOAD_ATTEMPTS,
       backoffMs: UPLOAD_RETRY_BACKOFF_MS,
@@ -102,7 +108,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
   async function handleRetry(file: File) {
     setFormError(null)
     setSubmitted(false)
-    await uploadSingleFile(file, true)
+    await uploadSingleFile(file, { submitOnAllDone: true })
   }
 
   async function handleDeletePendingUpload(file: File) {
@@ -138,18 +144,23 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       setFormError(t('guest.uploadForm.error.nameRequired'))
       return
     }
+    const normalizedGuestName = guestName.trim()
+    const guestNameValidationError = validateGuestName(normalizedGuestName, locale)
+    if (guestNameValidationError) {
+      setFormError(guestNameValidationError)
+      return
+    }
 
     const pending = files.filter((f) => f.status === 'pending')
     const nonPendingBeforeSubmit = files.filter((f) => f.status !== 'pending')
     setSubmitted(false)
 
-    let allSucceeded = true
-    for (const item of pending) {
-      const ok = await uploadSingleFile(item.file)
-      if (!ok) {
-        allSucceeded = false
-      }
-    }
+    const results = await Promise.all(
+      pending.map((item) => uploadSingleFile(item.file, {
+        guestNameValue: normalizedGuestName || undefined,
+      }))
+    )
+    const allSucceeded = results.every(Boolean)
 
     if (allSucceeded && pending.length > 0 && nonPendingBeforeSubmit.every((item) => item.status === 'done')) {
       setSubmitted(true)
@@ -174,8 +185,8 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         </button>
         {files.some((item) => canDeletePendingUpload(item)) && (
           <ul className="mt-6 w-full max-w-lg space-y-2 text-left">
-            {files.filter((item) => canDeletePendingUpload(item)).map((item, i) => (
-              <li key={`${item.file.name}-${i}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-border">
+            {files.filter((item) => canDeletePendingUpload(item)).map((item) => (
+              <li key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-border">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-text-primary truncate">{item.file.name}</p>
                   <p className="text-xs text-text-muted mt-0.5">
@@ -230,8 +241,8 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       {/* File list */}
       {files.length > 0 && (
         <ul className="space-y-2">
-          {files.map((item, i) => (
-            <li key={i} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-border">
+          {files.map((item) => (
+            <li key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-border">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-text-primary truncate">{item.file.name}</p>
                 {item.error && <p className="text-xs text-error mt-0.5">{item.error}</p>}

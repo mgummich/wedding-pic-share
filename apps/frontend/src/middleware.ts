@@ -9,8 +9,28 @@ export async function middleware(req: NextRequest) {
   const isSingleGalleryRoute = ['/', '/upload', '/slideshow'].includes(req.nextUrl.pathname)
   const hasSession = req.cookies.has('session')
 
-  if (isAdmin && !isLogin && !hasSession) {
-    return NextResponse.redirect(new URL('/admin/login', req.url))
+  if (isAdmin && !isLogin) {
+    if (!hasSession) {
+      return NextResponse.redirect(new URL('/admin/login', req.url))
+    }
+
+    try {
+      const sessionCheck = await fetch(`${backendUrl}/api/v1/admin/session`, {
+        headers: {
+          Accept: 'application/json',
+          cookie: req.headers.get('cookie') ?? '',
+        },
+        cache: 'no-store',
+      })
+
+      if (sessionCheck.status === 401) {
+        const redirect = NextResponse.redirect(new URL('/admin/login', req.url))
+        redirect.cookies.delete('session')
+        return redirect
+      }
+    } catch {
+      // Fail open to avoid redirect loops during transient backend failures.
+    }
   }
 
   if (process.env.SINGLE_GALLERY_MODE === 'true' && isSingleGalleryRoute) {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
 import { closeClient, getClient } from '@wedding/db'
@@ -251,6 +251,64 @@ describe('PATCH /api/v1/admin/galleries/:id', () => {
     expect(res.json().allowGuestDownload).toBe(true)
     expect(res.json().layout).toBe('GRID')
     expect(res.json().stripExif).toBe(false)
+  })
+
+  it('ignores non-allowlisted fields to prevent mass assignment', async () => {
+    const db = getClient()
+    await db.gallery.update({
+      where: { id: galleryId },
+      data: {
+        isArchived: false,
+        archivePath: null,
+      },
+    })
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        name: 'Party Renamed',
+        isArchived: true,
+        archivePath: '/etc/passwd',
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().name).toBe('Party Renamed')
+
+    const after = await db.gallery.findUniqueOrThrow({ where: { id: galleryId } })
+    expect(after.isArchived).toBe(false)
+    expect(after.archivePath).toBeNull()
+  })
+
+  it('returns 404 when the gallery does not exist', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/admin/galleries/does-not-exist',
+      headers: { cookie: sessionCookie },
+      payload: { name: 'Missing Gallery' },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().type).toBe('gallery-not-found')
+  })
+
+  it('returns 500 instead of masking unexpected failures as not-found', async () => {
+    const hashSpy = vi.spyOn(bcrypt, 'hash').mockRejectedValueOnce(new Error('hash-fail'))
+    try {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/admin/galleries/${galleryId}`,
+        headers: { cookie: sessionCookie },
+        payload: { secretKey: '2580' },
+      })
+
+      expect(res.statusCode).toBe(500)
+      expect(res.json().type).toBe('internal-server-error')
+    } finally {
+      hashSpy.mockRestore()
+    }
   })
 
   it('stores secretKey as bcrypt hash and never exposes it in responses', async () => {

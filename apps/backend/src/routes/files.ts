@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { createReadStream } from 'fs'
+import { access } from 'fs/promises'
 import { getClient } from '@wedding/db'
 import type { StorageService } from '../services/storage.js'
 import { hasGalleryAccess } from '../services/galleryAccess.js'
@@ -14,7 +15,7 @@ export async function fileRoutes(
         type: 'object',
         properties: {
           gallerySlug: { type: 'string', pattern: '^[a-z0-9-]+$' },
-          photoId: { type: 'string' },
+          photoId: { type: 'string', pattern: '^[A-Za-z0-9_-]{3,128}$' },
         },
       },
       querystring: {
@@ -28,11 +29,6 @@ export async function fileRoutes(
   }, async (req, reply) => {
     const { gallerySlug, photoId } = req.params as { gallerySlug: string; photoId: string }
     const { v = 'display', download } = req.query as { v?: string; download?: string }
-
-    // Validate photoId contains no path traversal
-    if (photoId.includes('/') || photoId.includes('..') || photoId.includes('\0')) {
-      return reply.code(400).send({ type: 'bad-request', status: 400 })
-    }
 
     const db = getClient()
     const photo = await db.photo.findFirst({
@@ -88,14 +84,33 @@ export async function fileRoutes(
     }
 
     const filePath = opts.storage.filePath(gallerySlug, filename)
+    try {
+      await access(filePath)
+    } catch {
+      return reply.code(404).send({ type: 'not-found', status: 404 })
+    }
 
     reply.header('Content-Type', contentType)
     reply.header('Cache-Control', 'public, max-age=31536000, immutable')
     if (download) {
-      reply.header('Content-Disposition', `attachment; filename="${photoId}.webp"`)
+      const ext = filename.split('.').pop() ?? 'bin'
+      const encodedFileName = encodeURIComponent(`${photoId}.${ext}`)
+      reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`)
     }
 
     const stream = createReadStream(filePath)
+    stream.on('error', (error: NodeJS.ErrnoException) => {
+      req.log.warn({ err: error, filePath, photoId }, 'failed to stream file')
+      if (reply.sent) return
+
+      if (error.code === 'ENOENT') {
+        reply.code(404).send({ type: 'not-found', status: 404 })
+        return
+      }
+
+      reply.code(500).send({ type: 'internal-server-error', status: 500 })
+    })
+
     return reply.send(stream)
   })
 }

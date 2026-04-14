@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
-import { closeClient } from '@wedding/db'
+import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
 import { execSync } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
+import { unlink } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { UploadNotifier } from '../src/services/uploadNotifier.js'
 
@@ -146,6 +147,29 @@ describe('POST /api/v1/g/:slug/upload', () => {
       payload: body,
     })
     expect(res.statusCode).toBe(415)
+  })
+
+  it('rejects guest names that exceed the maximum length', async () => {
+    const jpegBuf = await sharp({
+      create: { width: 120, height: 120, channels: 3, background: '#aa66cc' },
+    }).jpeg().toBuffer()
+
+    const { body, contentType } = buildMultipartPayload(
+      jpegBuf,
+      'image/jpeg',
+      'too-long-name.jpg',
+      { guestName: 'x'.repeat(81) }
+    )
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': contentType },
+      payload: body,
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().type).toBe('guest-name-too-long')
+    expect(notifyGuestUpload).not.toHaveBeenCalled()
   })
 
   it('rejects uploads outside configured windows', async () => {
@@ -352,11 +376,68 @@ describe('POST /api/v1/g/:slug/upload', () => {
     })
     expect(fileAfterDelete.statusCode).toBe(404)
   })
+
+  it('returns 404 when file exists in db but is missing on disk', async () => {
+    const reset = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        secretKey: null,
+        uploadWindows: [],
+      },
+    })
+    expect(reset.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 120, height: 120, channels: 3, background: '#999999' },
+    }).jpeg().toBuffer()
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'missing-file.jpg')
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(upload.statusCode).toBe(201)
+    const photoId = upload.json().id as string
+
+    const db = getClient()
+    const photo = await db.photo.findUniqueOrThrow({ where: { id: photoId } })
+    await unlink(path.join('/tmp/wps-upload-test-storage', gallerySlug, photo.displayPath))
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/files/${gallerySlug}/${photoId}?v=display`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().type).toBe('not-found')
+  })
+
+  it('rejects invalid photo ids in files route params', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/files/${gallerySlug}/photo_%22bad%22?v=display`,
+      headers: { cookie: sessionCookie },
+    })
+
+    expect(res.statusCode).toBe(400)
+  })
 })
 
-function buildMultipartPayload(fileBuffer: Buffer, mimeType: string, filename: string) {
+function buildMultipartPayload(
+  fileBuffer: Buffer,
+  mimeType: string,
+  filename: string,
+  fields: Record<string, string> = {}
+) {
   const boundary = '----FormBoundary' + Math.random().toString(36).slice(2)
+  const fieldParts = Object.entries(fields).map(([key, value]) => Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
+  ))
   const body = Buffer.concat([
+    ...fieldParts,
     Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`),
     fileBuffer,
     Buffer.from(`\r\n--${boundary}--\r\n`),

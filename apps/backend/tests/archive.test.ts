@@ -152,6 +152,20 @@ describe('POST /api/v1/admin/galleries/:id/archive', () => {
       'gallery-closed',
       expect.objectContaining({ reason: 'archived' })
     )
+
+    const callCountAfterFirstArchive = sseBroadcast.mock.calls.length
+    const archivedAtFirst = body.archivedAt
+    const sizeFirst = body.archiveSizeBytes
+
+    const second = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/galleries/${galleryId}/archive`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(second.statusCode).toBe(200)
+    expect(second.json().archivedAt).toBe(archivedAtFirst)
+    expect(second.json().archiveSizeBytes).toBe(sizeFirst)
+    expect(sseBroadcast.mock.calls.length).toBe(callCountAfterFirstArchive)
   })
 
   it('blocks subsequent guest uploads for archived galleries', async () => {

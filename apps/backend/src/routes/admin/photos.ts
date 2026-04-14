@@ -154,14 +154,12 @@ export async function adminPhotoRoutes(
 
     const hasMore = photos.length > limit
     const items = photos.slice(0, limit)
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
-
     return reply.send({
       data: items.map((p) => ({
         id: p.id,
         mediaType: p.mediaType,
-        thumbUrl: `${apiBase}/api/v1/files/${gallery.slug}/${p.id}?v=thumb`,
-        displayUrl: `${apiBase}/api/v1/files/${gallery.slug}/${p.id}?v=display`,
+        thumbUrl: `/api/v1/files/${gallery.slug}/${p.id}?v=thumb`,
+        displayUrl: `/api/v1/files/${gallery.slug}/${p.id}?v=display`,
         duration: p.duration,
         guestName: p.guestName,
         status: p.status,
@@ -206,12 +204,11 @@ export async function adminPhotoRoutes(
     })
 
     if (status === 'APPROVED') {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
       const photoResponse: PhotoResponse = {
         id: photo.id,
         mediaType: photo.mediaType as 'IMAGE' | 'VIDEO',
-        thumbUrl: `${apiBase}/api/v1/files/${photo.gallery.slug}/${photo.id}?v=thumb`,
-        displayUrl: `${apiBase}/api/v1/files/${photo.gallery.slug}/${photo.id}?v=display`,
+        thumbUrl: `/api/v1/files/${photo.gallery.slug}/${photo.id}?v=thumb`,
+        displayUrl: `/api/v1/files/${photo.gallery.slug}/${photo.id}?v=display`,
         duration: photo.duration,
         guestName: photo.guestName,
         createdAt: photo.createdAt.toISOString(),
@@ -256,13 +253,12 @@ export async function adminPhotoRoutes(
         where: { id: { in: photoIds } },
         include: { gallery: true },
       })
-      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
       for (const photo of photos) {
         const photoResponse: PhotoResponse = {
           id: photo.id,
           mediaType: photo.mediaType as 'IMAGE' | 'VIDEO',
-          thumbUrl: `${apiBase}/api/v1/files/${photo.gallery.slug}/${photo.id}?v=thumb`,
-          displayUrl: `${apiBase}/api/v1/files/${photo.gallery.slug}/${photo.id}?v=display`,
+          thumbUrl: `/api/v1/files/${photo.gallery.slug}/${photo.id}?v=thumb`,
+          displayUrl: `/api/v1/files/${photo.gallery.slug}/${photo.id}?v=display`,
           duration: photo.duration,
           guestName: photo.guestName,
           createdAt: photo.createdAt.toISOString(),

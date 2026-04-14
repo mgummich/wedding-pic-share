@@ -1,6 +1,7 @@
 export interface AppConfig {
   port: number
   databaseUrl: string
+  trustProxy: boolean | string
   frontendUrl: string
   sessionSecret: string
   cookieSecure: boolean
@@ -46,6 +47,29 @@ export function loadConfig(): AppConfig {
   if (storageProvider !== 'local' && storageProvider !== 's3') {
     throw new Error(`Invalid STORAGE_PROVIDER: "${storageProvider}". Must be "local" or "s3"`)
   }
+  if (storageProvider === 's3') {
+    throw new Error('STORAGE_PROVIDER=s3 is not implemented yet. Use STORAGE_PROVIDER=local.')
+  }
+
+  const databaseUrl = process.env.DATABASE_URL ?? 'file:./data/db.sqlite'
+  const isFileDatabase = databaseUrl.startsWith('file:')
+  if (process.env.NODE_ENV === 'production' && isFileDatabase && process.env.ALLOW_SQLITE_IN_PRODUCTION !== 'true') {
+    throw new Error(
+      'SQLite is not recommended for production multi-instance deployments. ' +
+      'Set DATABASE_URL to a network database or ALLOW_SQLITE_IN_PRODUCTION=true to acknowledge the risk.'
+    )
+  }
+
+  const trustProxyEnv = process.env.TRUST_PROXY?.trim()
+  const trustProxy = trustProxyEnv
+    ? trustProxyEnv === 'true'
+      ? true
+      : trustProxyEnv === 'false'
+        ? false
+        : trustProxyEnv
+    : process.env.NODE_ENV === 'production'
+      ? true
+      : 'loopback, linklocal, uniquelocal'
 
   const defaultMediaMode = process.env.NODE_ENV === 'test' ? 'inline' : 'worker-thread'
   const mediaProcessingMode = process.env.MEDIA_PROCESSING_MODE ?? defaultMediaMode
@@ -92,7 +116,8 @@ export function loadConfig(): AppConfig {
 
   return {
     port: Number(process.env.PORT ?? 4000),
-    databaseUrl: process.env.DATABASE_URL ?? 'file:./data/db.sqlite',
+    databaseUrl,
+    trustProxy,
     frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
     sessionSecret,
     cookieSecure: process.env.COOKIE_SECURE !== undefined

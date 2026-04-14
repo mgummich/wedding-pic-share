@@ -1,6 +1,7 @@
 import type { MultipartFile } from '@fastify/multipart'
 import { fileTypeFromBuffer } from 'file-type'
 import { getClient } from '@wedding/db'
+import { randomBytes } from 'crypto'
 import { computeSha256 } from './media.js'
 import type { StorageService } from './storage.js'
 import type { SseManager } from './sse.js'
@@ -11,6 +12,7 @@ const ALLOWED_MIMES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/heic',
   'video/mp4', 'video/quicktime',
 ])
+const MAX_GUEST_NAME_LENGTH = 80
 
 type IngestGallery = {
   id: string
@@ -29,6 +31,7 @@ type IngestUploadInput = {
     maxFileSizeMb: number
     maxVideoSizeMb: number
   }
+  beforePersist?: () => Promise<void>
 }
 
 export class PhotoIngestError extends Error {
@@ -47,11 +50,21 @@ export async function ingestUploadedPhoto({
   sse,
   mediaProcessor,
   limits,
+  beforePersist,
 }: IngestUploadInput): Promise<UploadResponse> {
   if (!upload) {
     throw new PhotoIngestError(400, {
       type: 'bad-request',
       title: 'No file provided',
+      status: 400,
+    })
+  }
+
+  const guestName = getMultipartFieldValue(upload, 'guestName')
+  if (guestName && guestName.length > MAX_GUEST_NAME_LENGTH) {
+    throw new PhotoIngestError(400, {
+      type: 'guest-name-too-long',
+      title: 'Guest name exceeds maximum length',
       status: 400,
     })
   }
@@ -94,7 +107,7 @@ export async function ingestUploadedPhoto({
     })
   }
 
-  const photoId = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}`
+  const photoId = `photo_${Date.now()}_${randomBytes(8).toString('hex')}`
 
   let thumbPath: string
   let displayPath: string
@@ -120,8 +133,10 @@ export async function ingestUploadedPhoto({
     duration = result.durationSeconds
   }
 
-  const guestName = getMultipartFieldValue(upload, 'guestName')
   const autoApprove = gallery.moderationMode === 'AUTO'
+  if (beforePersist) {
+    await beforePersist()
+  }
 
   const photo = await db.photo.create({
     data: {
@@ -177,5 +192,10 @@ function getMultipartFieldValue(upload: MultipartFile, key: string): string | nu
   }
 
   const value = (field as { value?: unknown }).value
-  return typeof value === 'string' && value.length > 0 ? value : null
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : null
 }

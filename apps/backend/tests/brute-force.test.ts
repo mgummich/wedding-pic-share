@@ -116,4 +116,32 @@ describe('admin login brute-force protection', () => {
     expect(blocked.statusCode).toBe(429)
     expect(blocked.json().type).toBe('ip-blocked')
   })
+
+  it('applies ip counters consistently under concurrent failed attempts', async () => {
+    const ip = '10.0.0.66'
+    const attempts = await Promise.all(
+      Array.from({ length: 20 }, () => app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/login',
+        remoteAddress: ip,
+        payload: {
+          username: 'unknown-user',
+          password: 'WrongPassword123!',
+        },
+      }))
+    )
+    expect(attempts.every((res) => res.statusCode === 401 || res.statusCode === 429)).toBe(true)
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/login',
+      remoteAddress: ip,
+      payload: {
+        username: 'unknown-user',
+        password: 'WrongPassword123!',
+      },
+    })
+    expect(blocked.statusCode).toBe(429)
+    expect(blocked.json().type).toBe('ip-blocked')
+  })
 })

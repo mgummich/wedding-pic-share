@@ -18,7 +18,18 @@ export async function createGalleryArchive(params: {
   gallerySlug: string
   photos: ArchivablePhoto[]
   storage: StorageService
+  existingArchive?: {
+    archivePath: string | null
+    archiveSizeBytes: number | null
+  }
 }): Promise<{ archivePath: string; archiveSizeBytes: number }> {
+  if (params.existingArchive?.archivePath && params.existingArchive.archiveSizeBytes !== null) {
+    return {
+      archivePath: params.existingArchive.archivePath,
+      archiveSizeBytes: params.existingArchive.archiveSizeBytes,
+    }
+  }
+
   const archivePath = archiveRelativePathForGallery(params.galleryId)
   const outputPath = params.storage.filePath(params.gallerySlug, archivePath)
 

@@ -9,6 +9,19 @@ type UploadWindowInput = {
   end: string
 }
 
+type GalleryPatchBody = {
+  name?: string
+  description?: string
+  layout?: 'MASONRY' | 'GRID'
+  allowGuestDownload?: boolean
+  guestNameMode?: 'OPTIONAL' | 'REQUIRED' | 'HIDDEN'
+  moderationMode?: 'MANUAL' | 'AUTO'
+  stripExif?: boolean
+  secretKey?: string | null
+  isActive?: boolean
+  uploadWindows?: UploadWindowInput[]
+}
+
 const SECRET_KEY_MIN_LENGTH = 4
 const SECRET_KEY_MAX_LENGTH = 32
 
@@ -168,6 +181,7 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
       },
       body: {
         type: 'object',
+        additionalProperties: false,
         properties: {
           name: { type: 'string' },
           description: { type: 'string' },
@@ -199,15 +213,21 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
-    const body = req.body as Record<string, unknown>
+    const body = req.body as GalleryPatchBody
     const db = getClient()
 
     try {
       const {
+        name,
+        description,
+        layout,
+        allowGuestDownload,
+        guestNameMode,
+        moderationMode,
+        stripExif,
         uploadWindows: rawUploadWindows,
         isActive,
         secretKey: rawSecretKey,
-        ...rest
       } = body
 
       const parsedUploadWindows = rawUploadWindows === undefined
@@ -249,7 +269,28 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
           await tx.uploadWindow.deleteMany({ where: { galleryId: id } })
         }
 
-        const updateData: Record<string, unknown> = { ...rest }
+        const updateData: Record<string, unknown> = {}
+        if (name !== undefined) {
+          updateData.name = name
+        }
+        if (description !== undefined) {
+          updateData.description = description
+        }
+        if (layout !== undefined) {
+          updateData.layout = layout
+        }
+        if (allowGuestDownload !== undefined) {
+          updateData.allowGuestDownload = allowGuestDownload
+        }
+        if (guestNameMode !== undefined) {
+          updateData.guestNameMode = guestNameMode
+        }
+        if (moderationMode !== undefined) {
+          updateData.moderationMode = moderationMode
+        }
+        if (stripExif !== undefined) {
+          updateData.stripExif = stripExif
+        }
         if (typeof isActive === 'boolean') {
           updateData.isActive = isActive
         }
@@ -287,7 +328,8 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
       if (error instanceof Error && error.message === 'gallery-not-found') {
         return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
       }
-      return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
+      req.log.error({ err: error, galleryId: id }, 'Failed to update gallery settings')
+      return reply.code(500).send({ type: 'internal-server-error', status: 500 })
     }
   })
 

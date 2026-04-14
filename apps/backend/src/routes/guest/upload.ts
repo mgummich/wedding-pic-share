@@ -64,6 +64,33 @@ export async function guestUploadRoutes(
           maxFileSizeMb: fastify.config.maxFileSizeMb,
           maxVideoSizeMb: fastify.config.maxVideoSizeMb,
         },
+        beforePersist: async () => {
+          const latestGallery = await db.gallery.findUnique({
+            where: { id: gallery.id },
+            include: { uploadWindows: true },
+          })
+          if (!latestGallery) {
+            throw new PhotoIngestError(404, {
+              type: 'gallery-not-found',
+              title: 'Gallery Not Found',
+              status: 404,
+            })
+          }
+          if (latestGallery.isArchived) {
+            throw new PhotoIngestError(403, {
+              type: 'gallery-archived',
+              title: 'Galerie ist abgeschlossen',
+              status: 403,
+            })
+          }
+          if (!isUploadOpenAt(latestGallery.uploadWindows)) {
+            throw new PhotoIngestError(403, {
+              type: 'upload-window-closed',
+              title: 'Upload-Zeitfenster abgelaufen',
+              status: 403,
+            })
+          }
+        },
       })
 
       void opts.uploadNotifier.notifyGuestUpload({

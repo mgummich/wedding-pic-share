@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { UploadForm } from '../src/app/g/[slug]/upload/UploadForm.js'
 import { uploadFile, deletePendingUpload, ApiError } from '../src/lib/api.js'
@@ -79,6 +79,42 @@ describe('UploadForm', () => {
     render(<UploadForm {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /hochladen/i }))
     expect(await screen.findByText(/bitte.*datei/i)).toBeInTheDocument()
+  })
+
+  it('uploads multiple files in parallel', async () => {
+    const resolvers: Array<(value: ReturnType<typeof createUploadResponse>) => void> = []
+    vi.mocked(uploadFile).mockImplementation(() => new Promise((resolve) => {
+      resolvers.push(resolve as (value: ReturnType<typeof createUploadResponse>) => void)
+    }))
+
+    const user = userEvent.setup()
+    render(<UploadForm {...defaultProps} />)
+
+    const input = screen.getByLabelText(/fotos/i)
+    const first = new File(['one'], 'one.png', { type: 'image/png' })
+    const second = new File(['two'], 'two.png', { type: 'image/png' })
+    await user.upload(input, [first, second])
+    await user.click(screen.getByRole('button', { name: /hochladen/i }))
+
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledTimes(2))
+    resolvers[0](createUploadResponse('photo-1'))
+    resolvers[1](createUploadResponse('photo-2'))
+
+    expect(await screen.findByRole('heading', { name: /danke/i })).toBeInTheDocument()
+  })
+
+  it('validates guest name length before upload starts', async () => {
+    const user = userEvent.setup()
+    render(<UploadForm {...defaultProps} />)
+
+    const input = screen.getByLabelText(/fotos/i)
+    const file = new File(['x'], 'guestname.png', { type: 'image/png' })
+    await user.upload(input, file)
+    fireEvent.change(screen.getByLabelText(/dein name/i), { target: { value: 'x'.repeat(81) } })
+    await user.click(screen.getByRole('button', { name: /hochladen/i }))
+
+    expect(await screen.findByText(/maximal 80 zeichen/i)).toBeInTheDocument()
+    expect(uploadFile).not.toHaveBeenCalled()
   })
 
   it('auto-retries transient errors and succeeds', async () => {

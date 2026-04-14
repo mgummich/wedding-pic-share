@@ -8,6 +8,7 @@ const LOCK_THRESHOLD = 5
 const LOCK_DURATION_MS = 15 * 60 * 1000
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
+const SESSION_CLEANUP_INTERVAL_MS = 15 * 60 * 1000
 
 type LoginBody = {
   username: string
@@ -37,6 +38,29 @@ async function recordFailedLoginAttempt(
 }
 
 export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
+  const cleanupExpiredSessions = async () => {
+    try {
+      const db = getClient()
+      await db.session.deleteMany({
+        where: {
+          expiresAt: { lt: new Date() },
+        },
+      })
+    } catch (error) {
+      fastify.log.warn({ err: error }, 'failed to cleanup expired sessions')
+    }
+  }
+
+  const cleanupTimer = setInterval(() => {
+    void cleanupExpiredSessions()
+  }, SESSION_CLEANUP_INTERVAL_MS)
+  cleanupTimer.unref()
+  fastify.addHook('onClose', async () => {
+    clearInterval(cleanupTimer)
+  })
+
+  void cleanupExpiredSessions()
+
   fastify.post('/admin/login', {
     schema: {
       body: {
@@ -93,7 +117,16 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       })
     }
 
-    const requiresTotp = fastify.config.totpEnabled && Boolean(user.totpSecretEncrypted)
+    const hasTotpConfigured = Boolean(user.totpSecretEncrypted)
+    if (hasTotpConfigured && !fastify.config.totpEnabled) {
+      return reply.code(503).send({
+        type: 'totp-misconfigured',
+        title: '2FA ist konfiguriert, aber serverseitig deaktiviert.',
+        status: 503,
+      })
+    }
+
+    const requiresTotp = hasTotpConfigured
     if (requiresTotp) {
       if (!totpCode) {
         return reply.code(401).send({
@@ -161,6 +194,12 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       path: '/',
     })
 
+    return reply.send({ ok: true })
+  })
+
+  fastify.get('/admin/session', {
+    preHandler: [fastify.requireAdmin],
+  }, async (_req, reply) => {
     return reply.send({ ok: true })
   })
 

@@ -34,6 +34,9 @@ jobs:
           pnpm --filter @wedding/shared build
           pnpm --filter @wedding/db build
 
+      - name: Lint all packages
+        run: pnpm lint
+
       - name: Typecheck all packages
         run: pnpm typecheck
 

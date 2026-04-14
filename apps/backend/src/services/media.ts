@@ -1,5 +1,5 @@
 import sharp from 'sharp'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { promisify } from 'util'
 import { exec } from 'child_process'
 import { writeFile, readFile, unlink } from 'fs/promises'
@@ -59,8 +59,9 @@ export async function generateBlurDataUrl(thumbBuffer: Buffer): Promise<string> 
 }
 
 export async function processVideo(inputBuffer: Buffer): Promise<VideoProcessingResult> {
-  const tmpIn = join(tmpdir(), `wps-video-${Date.now()}.mp4`)
-  const tmpPoster = join(tmpdir(), `wps-poster-${Date.now()}.jpg`)
+  const suffix = randomBytes(12).toString('hex')
+  const tmpIn = join(tmpdir(), `wps-video-${suffix}.mp4`)
+  const tmpPoster = join(tmpdir(), `wps-poster-${suffix}.jpg`)
 
   try {
     await writeFile(tmpIn, inputBuffer)

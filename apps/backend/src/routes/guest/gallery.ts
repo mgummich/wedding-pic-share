@@ -259,8 +259,6 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
       ? encodePaginationCursor(items[items.length - 1].id, items[items.length - 1].createdAt)
       : null
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
-
     const photoCount = await db.photo.count({
       where: { galleryId: gallery.id, status: 'APPROVED', deletedAt: null },
     })
@@ -270,8 +268,8 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
       data: items.map((p): PhotoResponse => ({
         id: p.id,
         mediaType: p.mediaType as 'IMAGE' | 'VIDEO',
-        thumbUrl: `${apiBase}/api/v1/files/${gallery.slug}/${p.id}?v=thumb`,
-        displayUrl: `${apiBase}/api/v1/files/${gallery.slug}/${p.id}?v=display`,
+        thumbUrl: `/api/v1/files/${gallery.slug}/${p.id}?v=thumb`,
+        displayUrl: `/api/v1/files/${gallery.slug}/${p.id}?v=display`,
         duration: p.duration,
         guestName: p.guestName,
         createdAt: p.createdAt.toISOString(),

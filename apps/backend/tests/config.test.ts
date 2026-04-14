@@ -21,6 +21,7 @@ describe('loadConfig', () => {
     expect(config.maxVideoSizeMb).toBe(200)
     expect(config.storageProvider).toBe('local')
     expect(config.slideshowIntervalSeconds).toBe(8)
+    expect(config.trustProxy).toBe('loopback, linklocal, uniquelocal')
   })
 
   it('throws when SESSION_SECRET is missing', () => {
@@ -50,12 +51,14 @@ describe('loadConfig', () => {
 
   it('cookieSecure defaults to true when NODE_ENV is production', () => {
     process.env.NODE_ENV = 'production'
+    process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
     delete process.env.COOKIE_SECURE
     expect(loadConfig().cookieSecure).toBe(true)
   })
 
   it('COOKIE_SECURE=false overrides production NODE_ENV', () => {
     process.env.NODE_ENV = 'production'
+    process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
     process.env.COOKIE_SECURE = 'false'
     expect(loadConfig().cookieSecure).toBe(false)
   })
@@ -68,5 +71,29 @@ describe('loadConfig', () => {
   it('accepts https WEBHOOK_URL', () => {
     process.env.WEBHOOK_URL = 'https://hooks.example.com/wps'
     expect(loadConfig().webhookUrl).toBe('https://hooks.example.com/wps')
+  })
+
+  it('throws when STORAGE_PROVIDER=s3 because s3 backend is not implemented yet', () => {
+    process.env.STORAGE_PROVIDER = 's3'
+    expect(() => loadConfig()).toThrow('STORAGE_PROVIDER=s3 is not implemented yet')
+  })
+
+  it('throws for SQLite in production unless explicitly acknowledged', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'file:/tmp/prod.db'
+    delete process.env.ALLOW_SQLITE_IN_PRODUCTION
+    expect(() => loadConfig()).toThrow('SQLite is not recommended for production multi-instance deployments')
+  })
+
+  it('allows SQLite in production when ALLOW_SQLITE_IN_PRODUCTION=true', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'file:/tmp/prod.db'
+    process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
+    expect(loadConfig().databaseUrl).toBe('file:/tmp/prod.db')
+  })
+
+  it('supports TRUST_PROXY override', () => {
+    process.env.TRUST_PROXY = '10.0.0.0/8,192.168.0.0/16'
+    expect(loadConfig().trustProxy).toBe('10.0.0.0/8,192.168.0.0/16')
   })
 })

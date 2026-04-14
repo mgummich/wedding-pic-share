@@ -24,6 +24,13 @@ export async function adminArchiveRoutes(
     })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
 
+    if (gallery.isArchived && gallery.archivePath && gallery.archiveSizeBytes !== null) {
+      const photoCount = await db.photo.count({
+        where: { galleryId: gallery.id, status: 'APPROVED', deletedAt: null },
+      })
+      return reply.send(toGalleryResponse(gallery, photoCount))
+    }
+
     const photos = await db.photo.findMany({
       where: { galleryId: id, status: 'APPROVED', deletedAt: null },
       orderBy: { createdAt: 'asc' },
@@ -35,6 +42,10 @@ export async function adminArchiveRoutes(
       gallerySlug: gallery.slug,
       photos,
       storage: opts.storage,
+      existingArchive: {
+        archivePath: gallery.archivePath,
+        archiveSizeBytes: gallery.archiveSizeBytes,
+      },
     })
 
     const archivedAt = new Date()

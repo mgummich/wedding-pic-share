@@ -42,7 +42,7 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
   const resolvedConfig = config ?? loadConfig()
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
-    trustProxy: 'loopback, linklocal, uniquelocal',
+    trustProxy: resolvedConfig.trustProxy,
   })
 
   const maxVideoSize = resolvedConfig.maxVideoSizeMb * 1024 * 1024
@@ -117,15 +117,7 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
         return
       }
 
-      let passed = false
-      instance.csrfProtection(req, reply, () => {
-        passed = true
-      })
-      if (!passed) {
-        done()
-        return
-      }
-      done()
+      instance.csrfProtection(req, reply, done)
     })
 
     await instance.register(setupRoutes)

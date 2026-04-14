@@ -2,6 +2,7 @@ import type { AdminLocale } from './adminI18n'
 
 export const MAX_IMAGE_FILE_SIZE_MB = 50
 export const MAX_VIDEO_FILE_SIZE_MB = 200
+export const MAX_GUEST_NAME_LENGTH = 80
 export const ALLOWED_UPLOAD_TYPES = [
   'image/jpeg',
   'image/png',
@@ -36,6 +37,13 @@ const uploadErrorMessages = {
     tooLarge: 'Ce fichier est trop volumineux. Maximum autorisé: {maxMb} MB.',
     missingGallery: 'Cette galerie n’existe pas ou a été désactivée.',
   },
+} as const
+
+const guestNameTooLongMessages = {
+  de: 'Dein Name darf maximal 80 Zeichen haben.',
+  en: 'Your name must be 80 characters or fewer.',
+  es: 'Tu nombre debe tener 80 caracteres como máximo.',
+  fr: 'Votre nom doit contenir 80 caractères maximum.',
 } as const
 
 function withMaxMb(template: string, maxMb: number): string {
@@ -73,6 +81,14 @@ export function validateUploadFile(file: File, locale: AdminLocale): string | nu
 
   if (file.size > limitMb * 1024 * 1024) {
     return getUploadErrorMessage(413, locale, { maxMb: limitMb }) ?? null
+  }
+
+  return null
+}
+
+export function validateGuestName(name: string, locale: AdminLocale): string | null {
+  if (name.trim().length > MAX_GUEST_NAME_LENGTH) {
+    return guestNameTooLongMessages[locale]
   }
 
   return null
