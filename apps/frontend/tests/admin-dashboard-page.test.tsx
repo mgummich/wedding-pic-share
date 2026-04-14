@@ -40,7 +40,7 @@ describe('AdminDashboardPage', () => {
   })
 
   it('shows a load error message on non-401 failures', async () => {
-    vi.mocked(getAdminGalleries).mockRejectedValueOnce(new ApiError(500, {}, '500'))
+    vi.mocked(getAdminGalleries).mockRejectedValue(new ApiError(500, {}, '500'))
 
     render(<AdminDashboardPage />)
 
@@ -49,7 +49,7 @@ describe('AdminDashboardPage', () => {
   })
 
   it('redirects to login on 401 failures', async () => {
-    vi.mocked(getAdminGalleries).mockRejectedValueOnce(new ApiError(401, {}, '401'))
+    vi.mocked(getAdminGalleries).mockRejectedValue(new ApiError(401, {}, '401'))
 
     render(<AdminDashboardPage />)
 
