@@ -10,6 +10,10 @@ export default function AdminDashboardPage() {
   const router = useRouter()
   const [galleries, setGalleries] = useState<Awaited<ReturnType<typeof getAdminGalleries>>>([])
   const [loading, setLoading] = useState(true)
+  const sortedGalleries = [...galleries].sort((a, b) => {
+    if (a.isActive === b.isActive) return a.name.localeCompare(b.name)
+    return a.isActive ? -1 : 1
+  })
 
   useEffect(() => {
     getAdminGalleries()
@@ -23,7 +27,12 @@ export default function AdminDashboardPage() {
   return (
     <main className="min-h-screen bg-surface-base">
       <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-border">
-        <h1 className="font-display text-2xl text-text-primary">Galerien</h1>
+        <div>
+          <h1 className="font-display text-2xl text-text-primary">Galerien</h1>
+          <p className="text-xs text-text-muted mt-1">
+            Im Single-Gallery-Mode zeigen <span className="font-mono">/</span>, <span className="font-mono">/upload</span> und <span className="font-mono">/slideshow</span> auf die aktive Galerie.
+          </p>
+        </div>
       </header>
 
       <div className="px-4 py-4 space-y-3">
@@ -47,15 +56,23 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {galleries.map((gallery) => (
+        {sortedGalleries.map((gallery) => (
           <div
             key={gallery.id}
             className="bg-surface-card border border-border rounded-card p-4"
           >
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="font-medium text-text-primary">{gallery.name}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-medium text-text-primary">{gallery.name}</h2>
+                  {gallery.isActive && (
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
+                      Root aktiv
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-text-muted mt-0.5">{gallery.photoCount} Fotos</p>
+                <p className="text-xs text-text-muted mt-0.5 font-mono">/g/{gallery.slug}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Link

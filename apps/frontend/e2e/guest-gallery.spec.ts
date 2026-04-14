@@ -69,6 +69,41 @@ test.describe('Guest Gallery', () => {
     const photo = page.locator('img, video').first()
     await expect(emptyState.or(photo)).toBeVisible()
   })
+
+  test('approved videos render with inline native controls in gallery grid', async ({ page, request }) => {
+    const loginRes = await request.post(`${API_URL}/api/v1/admin/login`, {
+      data: {
+        username: process.env.ADMIN_USERNAME ?? 'admin',
+        password: process.env.ADMIN_PASSWORD ?? 'admin-local-dev',
+      },
+    })
+    expect(loginRes.ok()).toBeTruthy()
+
+    const cookie = loginRes.headers()['set-cookie']
+    expect(cookie).toBeTruthy()
+
+    const uploadRes = await request.post(`${API_URL}/api/v1/g/${TEST_GALLERY_SLUG}/upload`, {
+      multipart: {
+        file: {
+          name: 'inline-video-test.mp4',
+          mimeType: 'video/mp4',
+          buffer: tinyMp4(),
+        },
+      },
+    })
+    expect(uploadRes.ok()).toBeTruthy()
+    const uploaded = await uploadRes.json()
+
+    await request.post(`${API_URL}/api/v1/admin/photos/batch`, {
+      headers: { cookie: cookie! },
+      data: { action: 'approve', photoIds: [uploaded.id] },
+    })
+
+    const gallery = new GalleryPage(page)
+    await gallery.goto(TEST_GALLERY_SLUG)
+    const inlineVideo = page.locator('main video[controls]').first()
+    await expect(inlineVideo).toBeVisible()
+  })
 })
 
 test.describe('Guest Upload', () => {
@@ -237,9 +272,9 @@ test.describe('Guest Gallery Lightbox', () => {
 
     await page.goto(`/g/${TEST_GALLERY_SLUG}`)
     const lightbox = new LightboxPage(page)
-    const firstPhoto = page.getByRole('button', { name: /gallery photo|photo by/i }).first()
-    await expect(firstPhoto).toBeVisible()
-    await firstPhoto.click()
+    const expandVideo = page.getByRole('button', { name: /video vergrößern/i }).first()
+    await expect(expandVideo).toBeVisible()
+    await expandVideo.click()
 
     await expect(lightbox.overlay).toBeVisible()
     await expect(lightbox.video).toBeVisible()

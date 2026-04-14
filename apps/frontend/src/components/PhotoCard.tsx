@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Play } from 'lucide-react'
+import { Expand } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
 
 interface PhotoCardProps {
@@ -11,40 +11,65 @@ interface PhotoCardProps {
 }
 
 export function PhotoCard({ photo, onClick, priority = false }: PhotoCardProps) {
+  const isVideo = photo.mediaType === 'VIDEO'
+
   return (
     <div
-      className="relative overflow-hidden rounded-thumb shadow-sm cursor-pointer group
-                 transition-transform duration-[--transition-fast] hover:scale-[1.02]"
-      onClick={() => onClick?.(photo)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onClick?.(photo)}
-      aria-label={photo.guestName ? `Photo by ${photo.guestName}` : 'Gallery photo'}
+      className={[
+        'relative overflow-hidden rounded-thumb shadow-sm group',
+        isVideo ? '' : 'cursor-pointer transition-transform duration-[--transition-fast] hover:scale-[1.02]',
+      ].join(' ')}
+      onClick={isVideo ? undefined : () => onClick?.(photo)}
+      role={isVideo ? undefined : 'button'}
+      tabIndex={isVideo ? undefined : 0}
+      onKeyDown={isVideo ? undefined : (e) => e.key === 'Enter' && onClick?.(photo)}
+      aria-label={isVideo ? undefined : (photo.guestName ? `Photo by ${photo.guestName}` : 'Gallery photo')}
     >
-      <Image
-        src={photo.thumbUrl}
-        alt={photo.guestName ? `Photo by ${photo.guestName}` : 'Wedding photo'}
-        width={400}
-        height={300}
-        className="w-full h-auto object-cover"
-        placeholder={photo.blurDataUrl ? 'blur' : 'empty'}
-        blurDataURL={photo.blurDataUrl ?? undefined}
-        priority={priority}
-        unoptimized // served directly from backend
-      />
+      {!isVideo && (
+        <Image
+          src={photo.thumbUrl}
+          alt={photo.guestName ? `Photo by ${photo.guestName}` : 'Wedding photo'}
+          width={400}
+          height={300}
+          className="w-full h-auto object-cover"
+          placeholder={photo.blurDataUrl ? 'blur' : 'empty'}
+          blurDataURL={photo.blurDataUrl ?? undefined}
+          priority={priority}
+          unoptimized // served directly from backend
+        />
+      )}
 
-      {photo.mediaType === 'VIDEO' && (
-        <div className="absolute inset-0 flex items-center justify-center
-                        bg-black/30 group-hover:bg-black/10 transition-colors">
-          <div className="w-12 h-12 rounded-full bg-white/80 flex items-center justify-center">
-            <Play className="w-6 h-6 text-text-primary fill-current ml-0.5" />
-          </div>
+      {isVideo && (
+        <>
+          <video
+            src={photo.displayUrl}
+            poster={photo.thumbUrl}
+            controls
+            playsInline
+            preload="metadata"
+            className="w-full h-auto object-cover bg-black"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+          {onClick && (
+            <button
+              type="button"
+              aria-label="Video vergrößern"
+              onClick={(e) => {
+                e.stopPropagation()
+                onClick(photo)
+              }}
+              className="absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white transition-colors hover:bg-black/75"
+            >
+              <Expand className="h-4 w-4" />
+            </button>
+          )}
           {photo.duration && (
-            <span className="absolute bottom-2 right-2 text-xs text-white bg-black/60 px-1.5 py-0.5 rounded">
+            <span className="pointer-events-none absolute bottom-2 right-2 text-xs text-white bg-black/60 px-1.5 py-0.5 rounded">
               {formatDuration(photo.duration)}
             </span>
           )}
-        </div>
+        </>
       )}
     </div>
   )

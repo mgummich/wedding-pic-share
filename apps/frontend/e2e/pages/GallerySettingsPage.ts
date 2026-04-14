@@ -14,6 +14,8 @@ export class GallerySettingsPage {
   readonly adminUploadInput: Locator
   readonly adminUploadStartButton: Locator
   readonly adminUploadQueue: Locator
+  readonly singleGalleryModeCheckbox: Locator
+  readonly singleGalleryModeHint: Locator
 
   constructor(private page: Page) {
     this.nameInput = page.getByLabel('Name', { exact: true })
@@ -29,6 +31,8 @@ export class GallerySettingsPage {
     this.adminUploadInput = page.getByLabel('Dateien auswählen')
     this.adminUploadStartButton = page.getByRole('button', { name: /uploads starten/i })
     this.adminUploadQueue = page.getByRole('list', { name: /upload-warteschlange/i })
+    this.singleGalleryModeCheckbox = page.getByRole('checkbox', { name: /als aktive root-galerie markieren/i })
+    this.singleGalleryModeHint = page.getByText(/\/ → \/g\/.+ · \/upload → \/g\/.+\/upload · \/slideshow → \/g\/.+\/slideshow/i)
   }
 
   async goto(id: string) {

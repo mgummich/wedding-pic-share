@@ -275,18 +275,34 @@ export default function GallerySettingsPage({ params }: PageProps) {
           <span className="text-sm text-text-primary">Gäste dürfen Fotos herunterladen</span>
         </label>
 
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isActive}
-            onChange={(e) => {
-              setIsActive(e.target.checked)
-              setSaved(false)
-            }}
-            className="w-4 h-4 accent-accent"
-          />
-          <span className="text-sm text-text-primary">Haupt-Galerie für Root-URLs verwenden</span>
-        </label>
+        <section className="space-y-3 rounded-card border border-border p-4">
+          <div>
+            <h2 className="text-sm font-medium text-text-primary">Single-Gallery-Mode</h2>
+            <p className="text-xs text-text-muted mt-1">
+              Wenn diese Galerie aktiv ist, werden Root-URLs auf diese Galerie aufgelöst.
+            </p>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => {
+                setIsActive(e.target.checked)
+                setSaved(false)
+              }}
+              className="w-4 h-4 accent-accent"
+            />
+            <span className="text-sm text-text-primary">Als aktive Root-Galerie markieren</span>
+          </label>
+          <p className="text-xs text-text-muted font-mono">
+            / → /g/{gallery.slug} · /upload → /g/{gallery.slug}/upload · /slideshow → /g/{gallery.slug}/slideshow
+          </p>
+          {isActive && (
+            <p className="text-xs text-accent">
+              Diese Galerie ist aktuell als Root-Ziel aktiv.
+            </p>
+          )}
+        </section>
 
         <section className="space-y-3 rounded-card border border-border p-4">
           <div>

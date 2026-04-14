@@ -85,7 +85,14 @@ export function AdminSidebar() {
                     : 'border-transparent text-text-muted hover:bg-surface-base hover:text-text-primary',
                 ].join(' ')}
               >
-                <span className="truncate text-sm font-medium">{gallery.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium">{gallery.name}</span>
+                  {gallery.isActive && (
+                    <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                      Root
+                    </span>
+                  )}
+                </div>
                 <span className="truncate text-xs opacity-60">{gallery.weddingName}</span>
               </Link>
             )

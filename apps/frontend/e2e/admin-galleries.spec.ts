@@ -5,9 +5,22 @@ import { LightboxPage } from './pages/LightboxPage'
 import { TEST_GALLERY_NAME, TEST_GALLERY_SLUG, TEST_WEDDING_SLUG, TINY_PNG } from './global-setup'
 import { GallerySettingsPage } from './pages/GallerySettingsPage'
 import { NewGalleryPage } from './pages/NewGalleryPage'
+import type { APIRequestContext } from '@playwright/test'
 
 function uniquePng() {
   return Buffer.concat([TINY_PNG, randomBytes(8)])
+}
+
+async function findGalleryBySlug(request: APIRequestContext, slug: string) {
+  const listRes = await request.get(`${process.env.E2E_API_URL ?? 'http://localhost:4000'}/api/v1/admin/galleries`)
+  expect(listRes.ok()).toBeTruthy()
+  const weddings = await listRes.json() as Array<{
+    galleries: Array<{ id: string; slug: string }>
+  }>
+
+  return weddings
+    .flatMap((wedding) => wedding.galleries)
+    .find((entry) => entry.slug === slug)
 }
 
 test.describe('Admin Dashboard', () => {
@@ -49,7 +62,7 @@ test.describe('Admin Dashboard', () => {
   test('"Neu" link navigates to new gallery form', async ({ adminPage }) => {
     const dashboard = new AdminDashboardPage(adminPage)
     await dashboard.goto()
-    await dashboard.newGalleryLink.click()
+    await dashboard.clickNewGalleryLink()
     await expect(adminPage).toHaveURL(/\/admin\/galleries\/new/)
   })
 
@@ -95,7 +108,7 @@ test.describe('Admin Dashboard', () => {
   test('clicking gallery in sidebar navigates to settings', async ({ adminPage }) => {
     const dashboard = new AdminDashboardPage(adminPage)
     await dashboard.goto()
-    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await dashboard.clickSidebarGallery(TEST_GALLERY_NAME)
     await expect(adminPage).toHaveURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
   })
 
@@ -148,9 +161,13 @@ test.describe('New Gallery', () => {
     const galleryName = `E2E Neu ${suffix}`
     const newPage = new NewGalleryPage(adminPage)
     await newPage.goto()
+    await expect(newPage.weddingNameInput).toBeVisible()
+    await expect(newPage.galleryNameInput).toBeVisible()
 
     await newPage.weddingNameInput.fill(`E2E Wedding ${suffix}`)
     await newPage.galleryNameInput.fill(galleryName)
+    await expect(newPage.weddingNameInput).toHaveValue(`E2E Wedding ${suffix}`)
+    await expect(newPage.galleryNameInput).toHaveValue(galleryName)
     await newPage.submitButton.click()
 
     await expect(adminPage).toHaveURL(/\/admin$/)
@@ -162,11 +179,15 @@ test.describe('New Gallery', () => {
     // and gallery slug created during global setup to trigger the expected 409.
     const newPage = new NewGalleryPage(adminPage)
     await newPage.goto()
+    await expect(newPage.weddingNameInput).toBeVisible()
+    await expect(newPage.galleryNameInput).toBeVisible()
 
     await newPage.weddingNameInput.fill('Duplicate Wedding')
     await newPage.weddingSlugInput.fill(TEST_WEDDING_SLUG)
     await newPage.galleryNameInput.fill('Duplicate Gallery')
     await newPage.gallerySlugInput.fill(TEST_GALLERY_SLUG)
+    await expect(newPage.weddingNameInput).toHaveValue('Duplicate Wedding')
+    await expect(newPage.galleryNameInput).toHaveValue('Duplicate Gallery')
     await newPage.submitButton.click()
 
     await expect(newPage.errorMessage).toBeVisible()
@@ -178,7 +199,7 @@ test.describe('Gallery Settings Actions', () => {
   test('QR-Code PNG and SVG download links are visible', async ({ adminPage }) => {
     const dashboard = new AdminDashboardPage(adminPage)
     await dashboard.goto()
-    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await dashboard.clickSidebarGallery(TEST_GALLERY_NAME)
     await adminPage.waitForURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
 
     const settings = new GallerySettingsPage(adminPage)
@@ -189,7 +210,7 @@ test.describe('Gallery Settings Actions', () => {
   test('ZIP export button is visible', async ({ adminPage }) => {
     const dashboard = new AdminDashboardPage(adminPage)
     await dashboard.goto()
-    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await dashboard.clickSidebarGallery(TEST_GALLERY_NAME)
     await adminPage.waitForURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
 
     const settings = new GallerySettingsPage(adminPage)
@@ -199,7 +220,7 @@ test.describe('Gallery Settings Actions', () => {
   test('QR-Code PNG link has correct href', async ({ adminPage }) => {
     const dashboard = new AdminDashboardPage(adminPage)
     await dashboard.goto()
-    await dashboard.sidebarGallery(TEST_GALLERY_NAME).click()
+    await dashboard.clickSidebarGallery(TEST_GALLERY_NAME)
     await adminPage.waitForURL(/\/admin\/galleries\/.+(?<!\/moderate)$/)
 
     const settings = new GallerySettingsPage(adminPage)
@@ -207,13 +228,7 @@ test.describe('Gallery Settings Actions', () => {
   })
 
   test('admin bulk upload on MANUAL gallery sends files to moderation', async ({ adminPage }) => {
-    const listRes = await adminPage.request.get(`${process.env.E2E_API_URL ?? 'http://localhost:4000'}/api/v1/admin/galleries`)
-    expect(listRes.ok()).toBeTruthy()
-    const weddings = await listRes.json() as Array<{
-      galleries: Array<{ id: string; slug: string }>
-    }>
-    const gallery = weddings.flatMap((wedding) => wedding.galleries)
-      .find((entry) => entry.slug === TEST_GALLERY_SLUG)
+    const gallery = await findGalleryBySlug(adminPage.request, TEST_GALLERY_SLUG)
     expect(gallery).toBeTruthy()
 
     const settings = new GallerySettingsPage(adminPage)
@@ -268,5 +283,25 @@ test.describe('Gallery Settings Actions', () => {
     await expect(adminPage.getByText(/upload abgeschlossen: 1 freigegeben/i)).toBeVisible({ timeout: 20_000 })
     await expect(settings.adminUploadQueue.getByText('Freigegeben')).toBeVisible()
     await expect(adminPage.getByRole('heading', { name: /Freigegebene Fotos \(\d+\)/ })).toBeVisible()
+  })
+
+  test('single-gallery-mode ui: active gallery shows root badge on dashboard', async ({ adminPage }) => {
+    const gallery = await findGalleryBySlug(adminPage.request, TEST_GALLERY_SLUG)
+    expect(gallery).toBeTruthy()
+
+    const settings = new GallerySettingsPage(adminPage)
+    await settings.goto(gallery!.id)
+    await expect(settings.nameInput).toBeVisible()
+    await expect(settings.singleGalleryModeHint).toBeVisible()
+
+    if (!(await settings.singleGalleryModeCheckbox.isChecked())) {
+      await settings.singleGalleryModeCheckbox.check()
+    }
+    await settings.saveButton.click()
+    await expect(settings.savedMessage).toBeVisible()
+
+    const dashboard = new AdminDashboardPage(adminPage)
+    await dashboard.goto()
+    await expect(dashboard.rootActiveBadge(TEST_GALLERY_NAME)).toBeVisible()
   })
 })
