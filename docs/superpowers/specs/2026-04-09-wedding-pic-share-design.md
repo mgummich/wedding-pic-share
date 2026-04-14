@@ -1521,16 +1521,19 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 ### Phase 3
 
 1. Konfigurierbare EXIF-Policy (aktuell immer entfernt; per-Galerie-Toggle)
-2. 2FA (TOTP) mit AES-256-GCM verschlüsseltem Secret
-3. Galerie-PIN-Schutz (Secret Key)
-4. Weitere i18n-Sprachen (Community)
-5. Druckbares Tischkärtchen (PDF-Export)
-6. Webhook + NTFY-Integration
-7. Worker Threads / BullMQ für Sharp-Processing
-8. Galerie-Abschluss und Archivierungs-Flow
-9. Fotograf-Modus (direkter Bulk-Upload mit Auto-Approval)
+2. Galerie-PIN-Schutz (Secret Key)
+3. Weitere i18n-Sprachen (Community)
+4. Druckbares Tischkärtchen (PDF-Export)
+5. Worker Threads / BullMQ für Sharp-Processing
+6. Galerie-Abschluss und Archivierungs-Flow
+7. Fotograf-Modus (direkter Bulk-Upload mit Auto-Approval)
 
 ### Phase 4
+
+1. 2FA (TOTP) mit AES-256-GCM verschlüsseltem Secret
+2. Webhook + NTFY-Integration
+
+### Phase 5
 
 1. S3-Speicher-Backend
 
@@ -1569,7 +1572,7 @@ Drei Ebenen: Unit → Integration → E2E. Kein Over-Testing von Implementierung
 | Szenario | Risiko | Test-Ebene |
 |---|---|---|
 | Sharp wirft bei korruptem Bild | Unkontrollierter 500er, Upload blockiert | Unit: graceful error, HTTP 422 |
-| S3-Upload schlägt fehl nach DB-Eintrag (Phase 4) | Foto in DB, nicht im Storage — Inkonsistenz | Integration: Transaktion-Rollback |
+| S3-Upload schlägt fehl nach DB-Eintrag (Phase 5) | Foto in DB, nicht im Storage — Inkonsistenz | Integration: Transaktion-Rollback |
 | Gleichzeitige Uploads (Race Condition) | Doppelter SHA-256 übersteht DB-Unique-Check | Integration: concurrent requests, DB-Constraint als letzter Schutz |
 | SSE-Connection nie geschlossen | Memory Leak in In-Memory-Map | Integration: disconnect → Map-Größe = 0 |
 | Galerie-Slug mit Sonderzeichen | URL-Routing bricht | Unit: slug validation regex |
