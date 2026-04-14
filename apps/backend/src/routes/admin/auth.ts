@@ -203,6 +203,22 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     return reply.send({ ok: true })
   })
 
+  fastify.post('/admin/sessions/revoke-all', {
+    preHandler: [fastify.requireAdmin],
+  }, async (req, reply) => {
+    if (!req.adminUserId) {
+      return reply.code(401).send({ type: 'unauthorized', status: 401 })
+    }
+
+    const db = getClient()
+    await db.session.deleteMany({
+      where: { adminUserId: req.adminUserId },
+    })
+
+    reply.clearCookie('session', { path: '/' })
+    return reply.send({ ok: true })
+  })
+
   fastify.post('/admin/logout', async (req, reply) => {
     const token = req.cookies['session']
     if (token) {

@@ -67,9 +67,7 @@ export function loadConfig(): AppConfig {
       : trustProxyEnv === 'false'
         ? false
         : trustProxyEnv
-    : process.env.NODE_ENV === 'production'
-      ? true
-      : 'loopback, linklocal, uniquelocal'
+    : 'loopback, linklocal, uniquelocal'
 
   const defaultMediaMode = process.env.NODE_ENV === 'test' ? 'inline' : 'worker-thread'
   const mediaProcessingMode = process.env.MEDIA_PROCESSING_MODE ?? defaultMediaMode

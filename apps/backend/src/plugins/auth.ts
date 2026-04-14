@@ -31,6 +31,9 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
     })
 
     if (!session || session.expiresAt < new Date()) {
+      if (session) {
+        await db.session.delete({ where: { token: session.token } }).catch(() => {})
+      }
       return reply.code(401).send({
         type: 'unauthorized',
         title: 'Session expired',
