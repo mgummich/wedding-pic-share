@@ -85,7 +85,7 @@ export async function buildApp(config?: AppConfig) {
     await instance.register(guestSlideshowRoutes, { sse })
     await instance.register(guestQrRoutes)
     await instance.register(guestDownloadRoutes, { storage })
-    await instance.register(adminPhotoRoutes, { sse })
+    await instance.register(adminPhotoRoutes, { sse, storage })
     await instance.register(adminExportRoutes, { storage })
     await instance.register(fileRoutes, { storage })
   }, { prefix: '/api/v1' })

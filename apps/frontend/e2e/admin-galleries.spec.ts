@@ -205,4 +205,68 @@ test.describe('Gallery Settings Actions', () => {
     const settings = new GallerySettingsPage(adminPage)
     await expect(settings.qrDownloadPng).toHaveAttribute('href', new RegExp(`/g/${TEST_GALLERY_SLUG}/qr`))
   })
+
+  test('admin bulk upload on MANUAL gallery sends files to moderation', async ({ adminPage }) => {
+    const listRes = await adminPage.request.get(`${process.env.E2E_API_URL ?? 'http://localhost:4000'}/api/v1/admin/galleries`)
+    expect(listRes.ok()).toBeTruthy()
+    const weddings = await listRes.json() as Array<{
+      galleries: Array<{ id: string; slug: string }>
+    }>
+    const gallery = weddings.flatMap((wedding) => wedding.galleries)
+      .find((entry) => entry.slug === TEST_GALLERY_SLUG)
+    expect(gallery).toBeTruthy()
+
+    const settings = new GallerySettingsPage(adminPage)
+    await settings.goto(gallery!.id)
+    await expect(settings.nameInput).toBeVisible()
+    await settings.adminUploadInput.setInputFiles([
+      {
+        name: `manual-1-${Date.now()}.png`,
+        mimeType: 'image/png',
+        buffer: uniquePng(),
+      },
+      {
+        name: `manual-2-${Date.now()}.png`,
+        mimeType: 'image/png',
+        buffer: uniquePng(),
+      },
+    ])
+
+    await settings.adminUploadStartButton.click()
+    await expect(adminPage.getByText(/upload abgeschlossen: .*in moderation/i)).toBeVisible({ timeout: 20_000 })
+    await expect(settings.adminUploadQueue.getByText('In Moderation')).toHaveCount(2)
+  })
+
+  test('admin bulk upload on AUTO gallery marks files approved and updates approved section', async ({ adminPage }) => {
+    const suffix = Date.now().toString(36)
+    const createRes = await adminPage.request.post(`${process.env.E2E_API_URL ?? 'http://localhost:4000'}/api/v1/admin/galleries`, {
+      data: {
+        weddingName: `E2E Auto Wedding ${suffix}`,
+        weddingSlug: `e2e-auto-wedding-${suffix}`,
+        galleryName: `E2E Auto ${suffix}`,
+        gallerySlug: `e2e-auto-${suffix}`,
+        moderationMode: 'AUTO',
+        guestNameMode: 'OPTIONAL',
+      },
+    })
+    expect(createRes.ok()).toBeTruthy()
+    const created = await createRes.json()
+
+    const settings = new GallerySettingsPage(adminPage)
+    await settings.goto(created.id as string)
+    await expect(settings.nameInput).toBeVisible()
+
+    await settings.adminUploadInput.setInputFiles([
+      {
+        name: `auto-${suffix}.png`,
+        mimeType: 'image/png',
+        buffer: uniquePng(),
+      },
+    ])
+
+    await settings.adminUploadStartButton.click()
+    await expect(adminPage.getByText(/upload abgeschlossen: 1 freigegeben/i)).toBeVisible({ timeout: 20_000 })
+    await expect(settings.adminUploadQueue.getByText('Freigegeben')).toBeVisible()
+    await expect(adminPage.getByRole('heading', { name: /Freigegebene Fotos \(\d+\)/ })).toBeVisible()
+  })
 })

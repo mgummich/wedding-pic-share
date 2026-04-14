@@ -2,11 +2,51 @@ import type { FastifyInstance } from 'fastify'
 import { getClient } from '@wedding/db'
 import type { SseManager } from '../../services/sse.js'
 import type { PhotoResponse } from '@wedding/shared'
+import type { StorageService } from '../../services/storage.js'
+import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 
 export async function adminPhotoRoutes(
   fastify: FastifyInstance,
-  opts: { sse: SseManager }
+  opts: { sse: SseManager; storage: StorageService }
 ): Promise<void> {
+  fastify.post('/admin/galleries/:id/upload', {
+    preHandler: fastify.requireAdmin,
+    schema: {
+      params: { type: 'object', properties: { id: { type: 'string' } } },
+    },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const db = getClient()
+    const gallery = await db.gallery.findUnique({
+      where: { id },
+      select: { id: true, slug: true, moderationMode: true },
+    })
+
+    if (!gallery) {
+      return reply.code(404).send({ type: 'gallery-not-found', title: 'Gallery Not Found', status: 404 })
+    }
+
+    try {
+      const response = await ingestUploadedPhoto({
+        gallery: {
+          id: gallery.id,
+          slug: gallery.slug,
+          moderationMode: gallery.moderationMode as 'MANUAL' | 'AUTO',
+        },
+        upload: await req.file(),
+        storage: opts.storage,
+        sse: opts.sse,
+      })
+
+      return reply.code(201).send(response)
+    } catch (error) {
+      if (error instanceof PhotoIngestError) {
+        return reply.code(error.statusCode).send(error.body)
+      }
+      throw error
+    }
+  })
+
   // GET photos by gallery and status
   fastify.get('/admin/galleries/:id/photos', {
     preHandler: fastify.requireAdmin,

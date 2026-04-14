@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { ArrowLeft, Trash2, QrCode, Download } from 'lucide-react'
 import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
+import { AdminUploadPanel } from '@/components/AdminUploadPanel'
 import type { AdminPhotoResponse } from '@/lib/api'
 import type { UploadWindowResponse } from '@wedding/shared'
 
@@ -51,6 +52,15 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  async function refreshApprovedPhotos() {
+    try {
+      const response = await getAdminPhotos(id, { status: 'APPROVED' })
+      setPhotos(response.data)
+    } catch {
+      // Ignore background refresh failures; the settings page can still function.
+    }
+  }
+
   useEffect(() => {
     getAdminGalleries()
       .then((galleries) => {
@@ -74,9 +84,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
         else setLoadError(true)
       })
 
-    getAdminPhotos(id, { status: 'APPROVED' })
-      .then((response) => setPhotos(response.data))
-      .catch(() => {})
+    void refreshApprovedPhotos()
   }, [id, router])
 
   async function handleSave(e: FormEvent) {
@@ -411,6 +419,12 @@ export default function GallerySettingsPage({ params }: PageProps) {
           </div>
         </section>
       )}
+
+      <AdminUploadPanel
+        galleryId={id}
+        guestNameMode={guestNameMode}
+        onApprovedUploads={refreshApprovedPhotos}
+      />
 
       {photos.length > 0 && (
         <section className="max-w-lg px-4 pb-8">
