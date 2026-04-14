@@ -27,7 +27,7 @@ describe('AdminUploadPanel', () => {
     vi.clearAllMocks()
   })
 
-  it('uploads queued files sequentially and refreshes approved photos once', async () => {
+  it('uploads queued files in parallel and refreshes approved photos once', async () => {
     const user = userEvent.setup()
     const first = deferred<{
       id: string
@@ -64,8 +64,9 @@ describe('AdminUploadPanel', () => {
     await user.click(screen.getByRole('button', { name: /uploads starten/i }))
 
     await waitFor(() => {
-      expect(adminUploadFile).toHaveBeenCalledTimes(1)
+      expect(adminUploadFile).toHaveBeenCalledTimes(2)
       expect(adminUploadFile).toHaveBeenNthCalledWith(1, 'gallery-1', fileA, undefined)
+      expect(adminUploadFile).toHaveBeenNthCalledWith(2, 'gallery-1', fileB, undefined)
     })
 
     first.resolve({
@@ -74,11 +75,6 @@ describe('AdminUploadPanel', () => {
       mediaType: 'IMAGE',
       thumbUrl: '/thumb-1.webp',
       duration: null,
-    })
-
-    await waitFor(() => {
-      expect(adminUploadFile).toHaveBeenCalledTimes(2)
-      expect(adminUploadFile).toHaveBeenNthCalledWith(2, 'gallery-1', fileB, undefined)
     })
 
     second.resolve({
@@ -128,7 +124,7 @@ describe('AdminUploadPanel', () => {
     await user.click(screen.getByRole('button', { name: /uploads starten/i }))
 
     await waitFor(() => {
-      expect(adminUploadFile).toHaveBeenCalledTimes(1)
+      expect(adminUploadFile).toHaveBeenCalledTimes(2)
     })
 
     first.resolve({
@@ -137,10 +133,6 @@ describe('AdminUploadPanel', () => {
       mediaType: 'IMAGE',
       thumbUrl: '/thumb-1.webp',
       duration: null,
-    })
-
-    await waitFor(() => {
-      expect(adminUploadFile).toHaveBeenCalledTimes(2)
     })
 
     second.reject(new Error('network'))
@@ -165,6 +157,30 @@ describe('AdminUploadPanel', () => {
 
     await screen.findByText(/1 in moderation/i)
     expect(adminUploadFile).toHaveBeenNthCalledWith(3, 'gallery-1', retryFile, undefined)
+  })
+
+  it('auto-retries transient network failures for admin uploads', async () => {
+    const user = userEvent.setup()
+    const file = new File(['retry'], 'retry.jpg', { type: 'image/jpeg' })
+
+    vi.mocked(adminUploadFile)
+      .mockRejectedValueOnce(new TypeError('network'))
+      .mockResolvedValueOnce({
+        id: 'photo-1',
+        status: 'APPROVED',
+        mediaType: 'IMAGE',
+        thumbUrl: '/thumb-1.webp',
+        duration: null,
+      })
+
+    render(<AdminUploadPanel galleryId="gallery-1" guestNameMode="HIDDEN" />)
+    await user.upload(screen.getByLabelText(/dateien auswählen/i), [file])
+    await user.click(screen.getByRole('button', { name: /uploads starten/i }))
+
+    await waitFor(() => {
+      expect(adminUploadFile).toHaveBeenCalledTimes(2)
+    }, { timeout: 3000 })
+    expect(await screen.findByText(/1 freigegeben/i)).toBeInTheDocument()
   })
 
   it('passes photographer mode flag when auto-approval toggle is enabled', async () => {

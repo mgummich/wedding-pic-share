@@ -3,7 +3,9 @@
 import { useRef, useState } from 'react'
 import { Camera, RefreshCw, Upload } from 'lucide-react'
 import { adminUploadFile, ApiError } from '@/lib/api'
-import { getUploadErrorMessage, validateUploadFile } from '@/lib/uploadValidation'
+import { getUploadErrorMessage, validateGuestName, validateUploadFile } from '@/lib/uploadValidation'
+import { isTransientUploadError, runWithRetry } from '@/lib/uploadRetry'
+import { runWithConcurrency } from '@/lib/asyncPool'
 import { useAdminI18n } from './AdminLocaleContext'
 import type { UploadResponse } from '@wedding/shared'
 
@@ -14,6 +16,10 @@ type UploadQueueItem = {
   error?: string
   result?: UploadResponse
 }
+
+const MAX_UPLOAD_ATTEMPTS = 3
+const UPLOAD_RETRY_BACKOFF_MS = [500, 1500]
+const ADMIN_UPLOAD_CONCURRENCY = 3
 
 type AdminUploadPanelProps = {
   galleryId: string
@@ -34,6 +40,13 @@ export function AdminUploadPanel({
   const [summary, setSummary] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [autoApproveMode, setAutoApproveMode] = useState(false)
+
+  function toUploadErrorMessage(error: unknown): string {
+    if (error instanceof ApiError) {
+      return getUploadErrorMessage(error.status, locale) ?? t('adminUpload.error.uploadFailed')
+    }
+    return t('adminUpload.error.network')
+  }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files ?? [])
@@ -59,14 +72,21 @@ export function AdminUploadPanel({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     const queuedItems = queue.filter((item) => item.status === 'queued')
+    const normalizedGuestName = guestName.trim()
 
     if (queuedItems.length === 0) {
       setFormError(t('adminUpload.error.noFiles'))
       return
     }
 
-    if (guestNameMode === 'REQUIRED' && !guestName.trim()) {
+    if (guestNameMode === 'REQUIRED' && !normalizedGuestName) {
       setFormError(t('adminUpload.error.nameRequired'))
+      return
+    }
+
+    const guestNameValidationError = validateGuestName(normalizedGuestName, locale)
+    if (guestNameValidationError) {
+      setFormError(guestNameValidationError)
       return
     }
 
@@ -78,42 +98,48 @@ export function AdminUploadPanel({
     let pendingCount = 0
     let failedCount = 0
 
-    for (const item of queuedItems) {
+    const uploadItem = async (item: UploadQueueItem): Promise<void> => {
       setQueue((prev) => prev.map((entry) => (
         entry.id === item.id ? { ...entry, status: 'uploading', error: undefined } : entry
       )))
 
-      try {
-        const result = autoApproveMode
-          ? await adminUploadFile(
+      const result = await runWithRetry({
+        operation: () => (autoApproveMode
+          ? adminUploadFile(
             galleryId,
             item.file,
-            guestName.trim() || undefined,
+            normalizedGuestName || undefined,
             { autoApprove: true }
           )
-          : await adminUploadFile(
+          : adminUploadFile(
             galleryId,
             item.file,
-            guestName.trim() || undefined
-          )
-        const nextStatus = result.status === 'APPROVED' ? 'approved' : 'pending'
+            normalizedGuestName || undefined
+          )),
+        shouldRetry: isTransientUploadError,
+        maxAttempts: MAX_UPLOAD_ATTEMPTS,
+        backoffMs: UPLOAD_RETRY_BACKOFF_MS,
+      })
+
+      if (result.ok) {
+        const nextStatus = result.value.status === 'APPROVED' ? 'approved' : 'pending'
         if (nextStatus === 'approved') approvedCount += 1
         if (nextStatus === 'pending') pendingCount += 1
 
         setQueue((prev) => prev.map((entry) => (
-          entry.id === item.id ? { ...entry, status: nextStatus, result } : entry
+          entry.id === item.id ? { ...entry, status: nextStatus, result: result.value } : entry
         )))
-      } catch (error) {
+      } else {
         failedCount += 1
-        const message = error instanceof ApiError
-          ? (getUploadErrorMessage(error.status, locale) ?? t('adminUpload.error.uploadFailed'))
-          : t('adminUpload.error.network')
+        const message = toUploadErrorMessage(result.error)
 
         setQueue((prev) => prev.map((entry) => (
           entry.id === item.id ? { ...entry, status: 'error', error: message } : entry
         )))
       }
     }
+
+    await runWithConcurrency(queuedItems, ADMIN_UPLOAD_CONCURRENCY, uploadItem)
 
     setIsUploading(false)
 

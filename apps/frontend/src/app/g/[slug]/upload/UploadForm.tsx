@@ -7,6 +7,7 @@ import type { UploadResponse } from '@wedding/shared'
 import { validateUploadFile, getUploadErrorMessage, validateGuestName } from '@/lib/uploadValidation'
 import { isTransientUploadError, runWithRetry } from '@/lib/uploadRetry'
 import { useGuestI18n } from '@/lib/guestI18n'
+import { runWithConcurrency } from '@/lib/asyncPool'
 
 interface UploadFormProps {
   gallerySlug: string
@@ -21,6 +22,7 @@ type FileStatus = {
 }
 const MAX_UPLOAD_ATTEMPTS = 3
 const UPLOAD_RETRY_BACKOFF_MS = [500, 1500]
+const UPLOAD_CONCURRENCY = 3
 
 export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
   const { locale, t } = useGuestI18n()
@@ -155,11 +157,9 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
     const nonPendingBeforeSubmit = files.filter((f) => f.status !== 'pending')
     setSubmitted(false)
 
-    const results = await Promise.all(
-      pending.map((item) => uploadSingleFile(item.file, {
-        guestNameValue: normalizedGuestName || undefined,
-      }))
-    )
+    const results = await runWithConcurrency(pending, UPLOAD_CONCURRENCY, (item) => uploadSingleFile(item.file, {
+      guestNameValue: normalizedGuestName || undefined,
+    }))
     const allSucceeded = results.every(Boolean)
 
     if (allSucceeded && pending.length > 0 && nonPendingBeforeSubmit.every((item) => item.status === 'done')) {
