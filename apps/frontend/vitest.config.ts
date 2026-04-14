@@ -10,6 +10,17 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['e2e/**', 'node_modules/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      thresholds: {
+        lines: 35,
+        branches: 25,
+        functions: 35,
+        statements: 35,
+      },
+    },
   },
   resolve: {
     alias: { '@': resolve(__dirname, './src') },

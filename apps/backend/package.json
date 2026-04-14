@@ -9,6 +9,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'lint ok'"
   },
@@ -42,6 +43,7 @@
     "@types/node": "^20.0.0",
     "@types/nodemailer": "^8.0.0",
     "@types/qrcode": "^1.5.5",
+    "@vitest/coverage-v8": "^2.1.8",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
     "vitest": "^2.0.0"

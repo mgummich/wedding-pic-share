@@ -45,10 +45,111 @@ jobs:
         env:
           DATABASE_URL: file::memory:?cache=shared
 
+  coverage:
+    name: Coverage Gates
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @wedding/db run db:generate
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @wedding/shared build
+          pnpm --filter @wedding/db build
+
+      - name: Run backend coverage with thresholds
+        run: pnpm --filter @wedding/backend test:coverage
+
+      - name: Run frontend coverage with thresholds
+        run: pnpm --filter @wedding/frontend test:coverage
+
+  e2e-smoke:
+    name: E2E Smoke
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @wedding/db run db:generate
+
+      - name: Build apps and shared packages
+        run: |
+          pnpm --filter @wedding/shared build
+          pnpm --filter @wedding/db build
+          pnpm --filter @wedding/backend build
+          pnpm --filter @wedding/frontend build
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @wedding/frontend exec playwright install --with-deps chromium
+
+      - name: Apply database migrations
+        run: env DATABASE_URL=file:/tmp/wps-e2e.db pnpm db:migrate
+
+      - name: Start backend
+        run: |
+          env PORT=4000 DATABASE_URL=file:/tmp/wps-e2e.db FRONTEND_URL=http://localhost:3000 STORAGE_LOCAL_PATH=/tmp/wps-e2e-uploads SESSION_SECRET=local-dev-session-secret-1234567890 ADMIN_PASSWORD=admin-local-dev COOKIE_SECURE=false pnpm --filter @wedding/backend run start > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+          for i in {1..60}; do
+            if curl -sf http://localhost:4000/health > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Start frontend
+        run: |
+          env PORT=3000 BACKEND_URL=http://localhost:4000 NEXT_PUBLIC_API_URL=http://localhost:4000 pnpm --filter @wedding/frontend run start > /tmp/frontend.log 2>&1 &
+          echo $! > /tmp/frontend.pid
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000 > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run smoke e2e
+        run: env E2E_BASE_URL=http://localhost:3000 E2E_API_URL=http://localhost:4000 ADMIN_PASSWORD=admin-local-dev pnpm --filter @wedding/frontend exec playwright test e2e/happy-path.spec.ts --project=chromium
+
+      - name: Stop servers
+        if: always()
+        run: |
+          if [ -f /tmp/frontend.pid ]; then kill "$(cat /tmp/frontend.pid)" || true; fi
+          if [ -f /tmp/backend.pid ]; then kill "$(cat /tmp/backend.pid)" || true; fi
+
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, coverage, e2e-smoke]
 
     steps:
       - uses: actions/checkout@v4
