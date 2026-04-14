@@ -7,6 +7,7 @@ export interface AppConfig {
   cookieSecure: boolean
   adminUsername: string
   adminPassword: string
+  seedAdminOnBoot: boolean
   storageProvider: 'local' | 's3'
   storageLocalPath: string
   s3Endpoint: string | null
@@ -112,6 +113,10 @@ export function loadConfig(): AppConfig {
     throw new Error('TOTP_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)')
   }
 
+  const seedAdminOnBoot = process.env.SEED_ADMIN_ON_BOOT !== undefined
+    ? process.env.SEED_ADMIN_ON_BOOT === 'true'
+    : process.env.NODE_ENV !== 'production'
+
   return {
     port: Number(process.env.PORT ?? 4000),
     databaseUrl,
@@ -123,6 +128,7 @@ export function loadConfig(): AppConfig {
       : process.env.NODE_ENV === 'production',
     adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
     adminPassword,
+    seedAdminOnBoot,
     storageProvider: storageProvider as 'local' | 's3',
     storageLocalPath: process.env.STORAGE_LOCAL_PATH ?? './data/uploads',
     s3Endpoint: process.env.S3_ENDPOINT ?? null,

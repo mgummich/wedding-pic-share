@@ -54,16 +54,27 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
     reply.header('x-request-id', req.id)
   })
 
-  fastify.addHook('onSend', async (_req, reply, payload) => {
+  fastify.addHook('onSend', async (req, reply, payload) => {
+    const isJsonObjectPayload = Boolean(payload) && typeof payload === 'object' && !Buffer.isBuffer(payload)
+
     if (reply.statusCode < 400) {
-      return payload
+      const method = req.method.toUpperCase()
+      const isMutatingMethod = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)
+      if (!isMutatingMethod || !isJsonObjectPayload || Array.isArray(payload)) {
+        return payload
+      }
+      const body = payload as Record<string, unknown>
+      if (typeof body.ok === 'boolean') {
+        return payload
+      }
+      return { ok: true, ...body }
     }
 
     if (reply.statusCode === 429 && !reply.hasHeader('Retry-After')) {
       reply.header('Retry-After', '60')
     }
 
-    if (!payload || typeof payload !== 'object' || Buffer.isBuffer(payload)) {
+    if (!isJsonObjectPayload) {
       return payload
     }
 

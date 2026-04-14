@@ -23,6 +23,7 @@ export interface GalleryResponse {
   archiveError?: string | null
   archiveRequestedAt?: string | null
   isUploadOpen: boolean
+  uploadWindowsVersion: string
   uploadWindows: UploadWindowResponse[]
 }
 

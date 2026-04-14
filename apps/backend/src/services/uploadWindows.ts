@@ -1,5 +1,6 @@
 import type { UploadWindow, Gallery } from '@wedding/db'
 import type { UploadWindowResponse, GalleryResponse } from '@wedding/shared'
+import { createHash } from 'node:crypto'
 
 type GalleryWithWindows = Pick<
   Gallery,
@@ -20,6 +21,17 @@ type GalleryWithWindows = Pick<
   | 'stripExif'
 > & {
   uploadWindows: UploadWindow[]
+}
+
+export function computeUploadWindowsVersion(
+  windows: Array<Pick<UploadWindow, 'id' | 'start' | 'end' | 'createdAt'>>
+): string {
+  const canonical = windows
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((window) => `${window.id}:${window.start.toISOString()}:${window.end.toISOString()}:${window.createdAt.toISOString()}`)
+    .join('|')
+  return createHash('sha256').update(canonical).digest('base64url')
 }
 
 export function isUploadOpenAt(windows: Array<Pick<UploadWindow, 'start' | 'end'>>, now = new Date()): boolean {
@@ -59,6 +71,7 @@ export function toGalleryResponse(
     archiveError: gallery.archiveError,
     archiveRequestedAt: gallery.archiveRequestedAt?.toISOString() ?? null,
     isUploadOpen: gallery.isArchived ? false : isUploadOpenAt(gallery.uploadWindows),
+    uploadWindowsVersion: computeUploadWindowsVersion(gallery.uploadWindows),
     uploadWindows: gallery.uploadWindows.map(toUploadWindowResponse),
   }
 }

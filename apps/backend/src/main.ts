@@ -5,7 +5,9 @@ import { seedAdmin } from './seed.js'
 const config = loadConfig()
 const app = await buildApp(config)
 
-await seedAdmin(config)
+if (config.seedAdminOnBoot) {
+  await seedAdmin(config)
+}
 
 try {
   await app.listen({ port: config.port, host: '0.0.0.0' })

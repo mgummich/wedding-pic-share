@@ -42,7 +42,7 @@ export async function setupRoutes(fastify: FastifyInstance): Promise<void> {
     if (existingAdmin > 0) {
       return reply.code(409).send({
         type: 'setup-complete',
-        title: 'Setup bereits abgeschlossen.',
+        title: 'Setup already completed.',
         status: 409,
       })
     }
@@ -79,6 +79,6 @@ export async function setupRoutes(fastify: FastifyInstance): Promise<void> {
       })
     })
 
-    return reply.code(201).send({ message: 'Setup abgeschlossen.' })
+    return reply.code(201).send({ ok: true })
   })
 }

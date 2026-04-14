@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { GalleryResponse, WeddingResponse } from '@wedding/shared'
 import bcrypt from 'bcryptjs'
-import { toGalleryResponse } from '../../services/uploadWindows.js'
+import { computeUploadWindowsVersion, toGalleryResponse } from '../../services/uploadWindows.js'
 import type { StorageService } from '../../services/storage.js'
 
 type UploadWindowInput = {
@@ -19,6 +19,7 @@ type GalleryPatchBody = {
   stripExif?: boolean
   secretKey?: string | null
   isActive?: boolean
+  uploadWindowsVersion?: string
   uploadWindows?: UploadWindowInput[]
 }
 
@@ -127,7 +128,7 @@ export async function adminGalleryRoutes(
     if (!parsedSecretKey.ok) {
       return reply.code(400).send({
         type: 'validation-error',
-        title: 'Ungueltige Galerie-PIN.',
+        title: 'Invalid gallery PIN.',
         status: 400,
       })
     }
@@ -200,6 +201,7 @@ export async function adminGalleryRoutes(
             ],
           },
           isActive: { type: 'boolean' },
+          uploadWindowsVersion: { type: 'string', minLength: 16, maxLength: 128 },
           uploadWindows: {
             type: 'array',
             items: {
@@ -230,6 +232,7 @@ export async function adminGalleryRoutes(
         stripExif,
         uploadWindows: rawUploadWindows,
         isActive,
+        uploadWindowsVersion,
         secretKey: rawSecretKey,
       } = body
 
@@ -240,7 +243,7 @@ export async function adminGalleryRoutes(
       if (rawUploadWindows !== undefined && parsedUploadWindows === null) {
         return reply.code(400).send({
           type: 'validation-error',
-          title: 'Ungueltiges Upload-Zeitfenster.',
+          title: 'Invalid upload window.',
           status: 400,
         })
       }
@@ -248,7 +251,7 @@ export async function adminGalleryRoutes(
       if (!parsedSecretKey.ok) {
         return reply.code(400).send({
           type: 'validation-error',
-          title: 'Ungueltige Galerie-PIN.',
+          title: 'Invalid gallery PIN.',
           status: 400,
         })
       }
@@ -256,9 +259,21 @@ export async function adminGalleryRoutes(
       const uploadWindows = parsedUploadWindows ?? undefined
 
       const gallery = await db.$transaction(async (tx) => {
-        const existing = await tx.gallery.findUnique({ where: { id } })
+        const existing = await tx.gallery.findUnique({
+          where: { id },
+          include: {
+            uploadWindows: { orderBy: { start: 'asc' } },
+          },
+        })
         if (!existing) {
           throw new Error('gallery-not-found')
+        }
+
+        if (uploadWindows !== undefined) {
+          const currentVersion = computeUploadWindowsVersion(existing.uploadWindows)
+          if (typeof uploadWindowsVersion === 'string' && uploadWindowsVersion !== currentVersion) {
+            throw new Error('upload-windows-conflict')
+          }
         }
 
         if (isActive === true) {
@@ -330,6 +345,13 @@ export async function adminGalleryRoutes(
     } catch (error) {
       if (error instanceof Error && error.message === 'gallery-not-found') {
         return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
+      }
+      if (error instanceof Error && error.message === 'upload-windows-conflict') {
+        return reply.code(409).send({
+          type: 'upload-windows-conflict',
+          title: 'Upload windows were changed by another user. Reload and try again.',
+          status: 409,
+        })
       }
       req.log.error({ err: error, galleryId: id }, 'Failed to update gallery settings')
       return reply.code(500).send({ type: 'internal-server-error', status: 500 })

@@ -373,6 +373,55 @@ describe('PATCH /api/v1/admin/galleries/:id', () => {
     expect(galleries.find((g) => g.id === galleryId)?.isActive).toBe(false)
     expect(galleries.find((g) => g.id === secondId)?.isActive).toBe(true)
   })
+
+  it('rejects stale uploadWindowsVersion values to prevent blind overwrite races', async () => {
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/galleries',
+      headers: { cookie: sessionCookie },
+    })
+    expect(list.statusCode).toBe(200)
+
+    const weddings = list.json() as Array<{
+      galleries: Array<{ id: string; uploadWindowsVersion: string }>
+    }>
+    const current = weddings.flatMap((w) => w.galleries).find((g) => g.id === galleryId)
+    expect(current).toBeTruthy()
+    const staleVersion = current?.uploadWindowsVersion as string
+
+    const firstUpdate = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        uploadWindowsVersion: staleVersion,
+        uploadWindows: [
+          {
+            start: '2036-06-01T10:00:00.000Z',
+            end: '2036-06-01T12:00:00.000Z',
+          },
+        ],
+      },
+    })
+    expect(firstUpdate.statusCode).toBe(200)
+
+    const secondUpdate = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        uploadWindowsVersion: staleVersion,
+        uploadWindows: [
+          {
+            start: '2036-06-01T13:00:00.000Z',
+            end: '2036-06-01T14:00:00.000Z',
+          },
+        ],
+      },
+    })
+    expect(secondUpdate.statusCode).toBe(409)
+    expect(secondUpdate.json().type).toBe('upload-windows-conflict')
+  })
 })
 
 describe('Gallery PIN access', () => {

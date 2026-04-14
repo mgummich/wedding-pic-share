@@ -22,6 +22,7 @@ describe('loadConfig', () => {
     expect(config.storageProvider).toBe('local')
     expect(config.slideshowIntervalSeconds).toBe(8)
     expect(config.trustProxy).toBe('loopback, linklocal, uniquelocal')
+    expect(config.seedAdminOnBoot).toBe(true)
   })
 
   it('throws when SESSION_SECRET is missing', () => {
@@ -95,5 +96,19 @@ describe('loadConfig', () => {
   it('supports TRUST_PROXY override', () => {
     process.env.TRUST_PROXY = '10.0.0.0/8,192.168.0.0/16'
     expect(loadConfig().trustProxy).toBe('10.0.0.0/8,192.168.0.0/16')
+  })
+
+  it('disables admin seeding by default in production', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
+    expect(loadConfig().seedAdminOnBoot).toBe(false)
+  })
+
+  it('supports SEED_ADMIN_ON_BOOT override', () => {
+    process.env.SEED_ADMIN_ON_BOOT = 'false'
+    expect(loadConfig().seedAdminOnBoot).toBe(false)
+
+    process.env.SEED_ADMIN_ON_BOOT = 'true'
+    expect(loadConfig().seedAdminOnBoot).toBe(true)
   })
 })
