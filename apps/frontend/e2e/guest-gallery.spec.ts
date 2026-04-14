@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { randomBytes } from 'crypto'
+import { execFileSync } from 'child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 import { GalleryPage } from './pages/GalleryPage'
 import { LightboxPage } from './pages/LightboxPage'
 import { UploadPage } from './pages/UploadPage'
@@ -8,6 +12,28 @@ import { TEST_GALLERY_NAME, TEST_GALLERY_SLUG, TINY_PNG } from './global-setup'
 /** Returns a unique PNG buffer so backend duplicate-detection never blocks. */
 function uniquePng() {
   return Buffer.concat([TINY_PNG, randomBytes(8)])
+}
+
+function tinyMp4() {
+  const dir = mkdtempSync(join(tmpdir(), 'wps-e2e-video-'))
+  const file = join(dir, 'tiny.mp4')
+
+  try {
+    execFileSync('ffmpeg', [
+      '-f', 'lavfi',
+      '-i', 'color=c=black:s=16x16:d=1',
+      '-an',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y',
+      file,
+    ], { stdio: 'ignore' })
+
+    return readFileSync(file)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:4000'
@@ -177,6 +203,46 @@ test.describe('Guest Gallery Lightbox', () => {
     await expect(lightbox.overlay).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(lightbox.overlay).not.toBeVisible()
+  })
+
+  test('video items open in the lightbox with native controls', async ({ page, request }) => {
+    const loginRes = await request.post(`${API_URL}/api/v1/admin/login`, {
+      data: {
+        username: process.env.ADMIN_USERNAME ?? 'admin',
+        password: process.env.ADMIN_PASSWORD ?? 'admin-local-dev',
+      },
+    })
+    expect(loginRes.ok()).toBeTruthy()
+
+    const cookie = loginRes.headers()['set-cookie']
+    expect(cookie).toBeTruthy()
+
+    const uploadRes = await request.post(`${API_URL}/api/v1/g/${TEST_GALLERY_SLUG}/upload`, {
+      multipart: {
+        file: {
+          name: 'lightbox-test.mp4',
+          mimeType: 'video/mp4',
+          buffer: tinyMp4(),
+        },
+      },
+    })
+
+    expect(uploadRes.ok()).toBeTruthy()
+    const uploaded = await uploadRes.json()
+    await request.post(`${API_URL}/api/v1/admin/photos/batch`, {
+      headers: { cookie: cookie! },
+      data: { action: 'approve', photoIds: [uploaded.id] },
+    })
+
+    await page.goto(`/g/${TEST_GALLERY_SLUG}`)
+    const lightbox = new LightboxPage(page)
+    const firstPhoto = page.getByRole('button', { name: /gallery photo|photo by/i }).first()
+    await expect(firstPhoto).toBeVisible()
+    await firstPhoto.click()
+
+    await expect(lightbox.overlay).toBeVisible()
+    await expect(lightbox.video).toBeVisible()
+    await expect(lightbox.video).toHaveAttribute('controls', '')
   })
 })
 

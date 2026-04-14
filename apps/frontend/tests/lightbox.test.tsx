@@ -17,6 +17,19 @@ function makePhoto(id: string): PhotoResponse {
   } as PhotoResponse
 }
 
+function makeVideo(id: string): PhotoResponse {
+  return {
+    id,
+    mediaType: 'VIDEO',
+    thumbUrl: `/thumb/${id}.jpg`,
+    displayUrl: `/display/${id}.mp4`,
+    blurDataUrl: undefined,
+    guestName: null,
+    duration: 12,
+    createdAt: new Date().toISOString(),
+  } as PhotoResponse
+}
+
 const photos = [makePhoto('p1'), makePhoto('p2'), makePhoto('p3')]
 
 describe('Lightbox', () => {
@@ -99,5 +112,22 @@ describe('Lightbox', () => {
   it('does not show download link when allowDownload is false', () => {
     render(<Lightbox photos={photos} index={1} onClose={onClose} onNext={onNext} onPrev={onPrev} />)
     expect(screen.queryByRole('link', { name: /herunterladen/i })).toBeNull()
+  })
+
+  it('renders video media with native controls', () => {
+    render(
+      <Lightbox
+        photos={[makeVideo('v1')]}
+        index={0}
+        onClose={onClose}
+        onNext={onNext}
+        onPrev={onPrev}
+      />
+    )
+
+    const video = document.body.querySelector('video') as HTMLVideoElement | null
+    expect(video).not.toBeNull()
+    expect(video?.controls).toBe(true)
+    expect(video).toHaveAttribute('src', '/display/v1.mp4')
   })
 })

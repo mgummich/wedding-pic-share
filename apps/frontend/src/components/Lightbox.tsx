@@ -124,9 +124,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
             key={photo.id}
             src={photo.displayUrl}
             poster={photo.thumbUrl}
-            autoPlay
-            muted
-            loop
+            controls
             playsInline
             className="max-h-[90vh] max-w-[90vw] object-contain"
           />
