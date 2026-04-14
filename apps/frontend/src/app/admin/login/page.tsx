@@ -3,9 +3,11 @@
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminLogin, ApiError } from '@/lib/api'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 
 export default function AdminLoginPage() {
   const router = useRouter()
+  const { locale, setLocale, t } = useAdminI18n()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -20,14 +22,14 @@ export default function AdminLoginPage() {
       router.replace('/admin')
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError('Falscher Benutzername oder Passwort.')
+        setError(t('login.error.invalidCredentials'))
       } else if (err instanceof ApiError && err.status === 429) {
         const title = (err.body as { title?: unknown })?.title
         setError(typeof title === 'string'
           ? title
-          : 'Zu viele Fehlversuche. Bitte versuche es später erneut.')
+          : t('login.error.rateLimited'))
       } else {
-        setError('Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
+        setError(t('login.error.generic'))
       }
     } finally {
       setLoading(false)
@@ -37,13 +39,26 @@ export default function AdminLoginPage() {
   return (
     <main className="min-h-screen bg-surface-base flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
+        <div className="mb-4 flex justify-end">
+          <label htmlFor="admin-login-locale" className="sr-only">{t('common.language')}</label>
+          <select
+            id="admin-login-locale"
+            aria-label={t('common.language')}
+            value={locale}
+            onChange={(event) => setLocale(event.target.value as 'de' | 'en')}
+            className="rounded-card border border-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+          >
+            <option value="de">{t('common.language.de')}</option>
+            <option value="en">{t('common.language.en')}</option>
+          </select>
+        </div>
         <h1 className="font-display text-3xl text-text-primary text-center mb-8">
-          Admin-Bereich
+          {t('login.title')}
         </h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-text-primary mb-1">
-              Benutzername
+              {t('login.username')}
             </label>
             <input
               id="username"
@@ -58,7 +73,7 @@ export default function AdminLoginPage() {
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-text-primary mb-1">
-              Passwort
+              {t('login.password')}
             </label>
             <input
               id="password"
@@ -78,7 +93,7 @@ export default function AdminLoginPage() {
             className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white
                        font-medium transition-colors disabled:opacity-50"
           >
-            {loading ? 'Anmelden…' : 'Anmelden'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
       </div>

@@ -6,6 +6,9 @@ const { getGallery, notFound } = vi.hoisted(() => ({
   getGallery: vi.fn(),
   notFound: vi.fn(),
 }))
+const { redirect } = vi.hoisted(() => ({
+  redirect: vi.fn(),
+}))
 
 vi.mock('../src/lib/api.js', () => ({
   getGallery,
@@ -18,6 +21,7 @@ vi.mock('../src/lib/api.js', () => ({
 
 vi.mock('next/navigation', () => ({
   notFound,
+  redirect,
 }))
 
 vi.mock('../src/components/GuestNav.js', () => ({
@@ -61,5 +65,13 @@ describe('UploadPage', () => {
 
     expect(screen.getByText(/uploads sind zur zeit geschlossen/i)).toBeInTheDocument()
     expect(screen.queryByText(/form test/i)).not.toBeInTheDocument()
+  })
+
+  it('redirects to unlock page when gallery requires PIN', async () => {
+    getGallery.mockRejectedValueOnce({ status: 401 })
+
+    await UploadPage({ params: Promise.resolve({ slug: 'test' }) })
+
+    expect(redirect).toHaveBeenCalledWith('/g/test/unlock?next=%2Fg%2Ftest%2Fupload')
   })
 })

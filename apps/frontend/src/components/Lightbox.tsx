@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
+import { useAdminI18n } from './AdminLocaleContext'
 
 interface LightboxProps {
   photos: PhotoResponse[]
@@ -15,6 +16,7 @@ interface LightboxProps {
 }
 
 export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload }: LightboxProps) {
+  const { t } = useAdminI18n()
   const photo = photos[index]
   const hasPrev = index > 0
   const hasNext = index < photos.length - 1
@@ -71,7 +73,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
         onClick={(e) => { e.stopPropagation(); onClose() }}
         className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white
                    hover:bg-black/70 transition-colors"
-        aria-label="Schließen"
+        aria-label={t('lightbox.close')}
       >
         <X className="w-6 h-6" />
       </button>
@@ -84,7 +86,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
           onClick={(e) => e.stopPropagation()}
           className="absolute top-4 right-16 z-10 p-2 rounded-full bg-black/50 text-white
                      hover:bg-black/70 transition-colors"
-          aria-label="Foto herunterladen"
+          aria-label={t('lightbox.download')}
         >
           <Download className="w-6 h-6" />
         </a>
@@ -96,7 +98,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
           onClick={(e) => { e.stopPropagation(); onPrev() }}
           className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full
                      bg-black/50 text-white hover:bg-black/70 transition-colors"
-          aria-label="Vorheriges Foto"
+          aria-label={t('lightbox.prev')}
         >
           <ChevronLeft className="w-8 h-8" />
         </button>
@@ -108,7 +110,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
           onClick={(e) => { e.stopPropagation(); onNext() }}
           className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full
                      bg-black/50 text-white hover:bg-black/70 transition-colors"
-          aria-label="Nächstes Foto"
+          aria-label={t('lightbox.next')}
         >
           <ChevronRight className="w-8 h-8" />
         </button>
@@ -135,7 +137,9 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
           <img
             key={photo.id}
             src={photo.displayUrl}
-            alt={photo.guestName ? `Foto von ${photo.guestName}` : 'Hochzeitsfoto'}
+            alt={photo.guestName
+              ? t('lightbox.photoAltByGuest', { guest: photo.guestName })
+              : t('lightbox.photoAltDefault')}
             className="max-h-[90vh] max-w-[90vw] object-contain"
           />
         )}

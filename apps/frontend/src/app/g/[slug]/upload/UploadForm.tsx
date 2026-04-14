@@ -4,8 +4,9 @@ import { useState, useRef } from 'react'
 import { Upload, Camera } from 'lucide-react'
 import { uploadFile, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
-import { validateUploadFile, UPLOAD_ERROR_MESSAGES } from '@/lib/uploadValidation'
+import { validateUploadFile, getUploadErrorMessage } from '@/lib/uploadValidation'
 import { isTransientUploadError, runWithRetry } from '@/lib/uploadRetry'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 
 interface UploadFormProps {
   gallerySlug: string
@@ -17,6 +18,7 @@ const MAX_UPLOAD_ATTEMPTS = 3
 const UPLOAD_RETRY_BACKOFF_MS = [500, 1500]
 
 export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
+  const { locale, t } = useAdminI18n()
   const [files, setFiles] = useState<FileStatus[]>([])
   const [guestName, setGuestName] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
@@ -29,9 +31,9 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
 
   function toUploadErrorMessage(error: unknown): string {
     if (error instanceof ApiError) {
-      return UPLOAD_ERROR_MESSAGES[error.status] ?? 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.'
+      return getUploadErrorMessage(error.status, locale) ?? t('guest.uploadForm.error.generic')
     }
-    return 'Netzwerkfehler. Bitte versuche es erneut.'
+    return t('guest.uploadForm.error.network')
   }
 
   async function uploadSingleFile(file: File, submitOnAllDone = false): Promise<boolean> {
@@ -47,20 +49,19 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
     })
 
     if (result.ok) {
-      updateFiles((prev) =>
-        {
-          const next = prev.map((item) => item.file === file
-          ? { ...item, status: 'done', error: undefined, result: result.value }
-          : item
-          )
+      updateFiles((prev) => {
+        const next: FileStatus[] = prev.map((item): FileStatus => (
+          item.file === file
+            ? { ...item, status: 'done', error: undefined, result: result.value }
+            : item
+        ))
 
-          if (submitOnAllDone && next.length > 0 && next.every((item) => item.status === 'done')) {
-            setSubmitted(true)
-          }
-
-          return next
+        if (submitOnAllDone && next.length > 0 && next.every((item) => item.status === 'done')) {
+          setSubmitted(true)
         }
-      )
+
+        return next
+      })
       return true
     }
 
@@ -76,7 +77,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
     const validated = selected.map((f): FileStatus => {
-      const validationError = validateUploadFile(f)
+      const validationError = validateUploadFile(f, locale)
       if (validationError) {
         return { file: f, status: 'error', error: validationError }
       }
@@ -96,11 +97,11 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (files.length === 0) {
-      setFormError('Bitte wähle mindestens eine Datei aus.')
+      setFormError(t('guest.uploadForm.error.selectFile'))
       return
     }
     if (guestNameMode === 'REQUIRED' && !guestName.trim()) {
-      setFormError('Bitte gib deinen Namen ein.')
+      setFormError(t('guest.uploadForm.error.nameRequired'))
       return
     }
 
@@ -127,15 +128,15 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
           <span className="text-3xl">✓</span>
         </div>
-        <h2 className="font-display text-2xl text-text-primary mb-2">Danke!</h2>
+        <h2 className="font-display text-2xl text-text-primary mb-2">{t('guest.uploadForm.success.title')}</h2>
         <p className="text-text-muted">
-          Deine Fotos wurden eingereicht und werden bald freigegeben.
+          {t('guest.uploadForm.success.description')}
         </p>
         <button
           onClick={() => { updateFiles(() => []); setSubmitted(false) }}
           className="mt-6 px-5 py-2 rounded-full border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
         >
-          Weitere Fotos hochladen
+          {t('guest.uploadForm.success.uploadMore')}
         </button>
       </div>
     )
@@ -146,7 +147,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       {/* File picker */}
       <div>
         <label htmlFor="file-input" className="block text-sm font-medium text-text-primary mb-2">
-          Fotos & Videos
+          {t('guest.uploadForm.filesLabel')}
         </label>
         <div
           onClick={() => inputRef.current?.click()}
@@ -156,7 +157,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         >
           <Camera className="w-8 h-8 text-text-muted" />
           <span className="text-text-muted text-sm text-center">
-            Tippe hier, um Fotos oder Videos auszuwählen
+            {t('guest.uploadForm.filesHint')}
           </span>
         </div>
         <input
@@ -167,7 +168,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
           accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime"
           onChange={handleFileChange}
           className="sr-only"
-          aria-label="Fotos auswählen"
+          aria-label={t('guest.uploadForm.filesAria')}
         />
       </div>
 
@@ -187,11 +188,11 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
                   disabled={files.some((f) => f.status === 'uploading')}
                   className="text-xs font-medium text-accent hover:text-accent-hover disabled:opacity-50"
                 >
-                  Erneut versuchen
+                  {t('guest.uploadForm.retry')}
                 </button>
               ) : (
                 <span className="text-xs text-text-muted flex-shrink-0">
-                  {item.status === 'uploading' && 'Lädt…'}
+                  {item.status === 'uploading' && t('guest.uploadForm.status.uploading')}
                   {item.status === 'done' && '✓'}
                 </span>
               )}
@@ -204,14 +205,14 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       {guestNameMode !== 'HIDDEN' && (
         <div>
           <label htmlFor="guest-name" className="block text-sm font-medium text-text-primary mb-2">
-            Dein Name {guestNameMode === 'OPTIONAL' && '(optional)'}
+            {t('guest.uploadForm.nameLabel')} {guestNameMode === 'OPTIONAL' && t('common.optional')}
           </label>
           <input
             id="guest-name"
             type="text"
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            placeholder="Max Mustermann"
+            placeholder={t('guest.uploadForm.namePlaceholder')}
             maxLength={80}
             className="w-full px-4 py-2.5 rounded-card border border-border
                        focus:outline-none focus:border-accent text-text-primary
@@ -229,7 +230,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
                    font-medium transition-colors disabled:opacity-50"
       >
         <Upload className="w-4 h-4 inline mr-2" />
-        Hochladen
+        {t('guest.uploadForm.submit')}
       </button>
     </form>
   )

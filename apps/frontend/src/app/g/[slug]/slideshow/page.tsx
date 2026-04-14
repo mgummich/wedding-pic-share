@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback, use } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { getGallery } from '@/lib/api'
 import { useSSE } from '@/lib/sse'
 import { GuestNav } from '@/components/GuestNav'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 import type { PhotoResponse } from '@wedding/shared'
 
 const DISPLAY_DURATION_MS = Number(process.env.NEXT_PUBLIC_SLIDESHOW_INTERVAL_MS ?? 8000)
@@ -13,19 +15,34 @@ interface PageProps {
   params: Promise<{ slug: string }>
 }
 
+function hasStatus(error: unknown, status: number): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'status' in error
+    && (error as { status?: unknown }).status === status
+}
+
 export default function SlideshowPage({ params }: PageProps) {
   const { slug } = use(params)
+  const router = useRouter()
+  const { t } = useAdminI18n()
   const [photos, setPhotos] = useState<PhotoResponse[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [galleryName, setGalleryName] = useState('')
 
   useEffect(() => {
-    getGallery(slug, { limit: 50 }).then((g) => {
-      setPhotos(g.data)
-      setGalleryName(g.name)
-    })
-  }, [slug])
+    getGallery(slug, { limit: 50 })
+      .then((g) => {
+        setPhotos(g.data)
+        setGalleryName(g.name)
+      })
+      .catch((error: unknown) => {
+        if (hasStatus(error, 401)) {
+          router.replace(`/g/${slug}/unlock?next=${encodeURIComponent(`/g/${slug}/slideshow`)}`)
+        }
+      })
+  }, [router, slug])
 
   useSSE(slug, {
     onPhoto: useCallback((photo: PhotoResponse) => {
@@ -63,7 +80,7 @@ export default function SlideshowPage({ params }: PageProps) {
           style={{ background: 'var(--slideshow-bg)', color: 'var(--slideshow-text)' }}
         >
           <p className="font-display text-3xl mb-4">{galleryName}</p>
-          <p className="text-lg opacity-70">Noch keine Fotos freigegeben.</p>
+          <p className="text-lg opacity-70">{t('guest.slideshow.empty')}</p>
         </div>
       ) : (
         <div
@@ -98,7 +115,9 @@ export default function SlideshowPage({ params }: PageProps) {
                 <Image
                   key={current.id}
                   src={current.displayUrl}
-                  alt={current.guestName ? `Photo by ${current.guestName}` : 'Wedding photo'}
+                  alt={current.guestName
+                    ? t('photoCard.imageAltByGuest', { guest: current.guestName })
+                    : t('photoCard.imageAltDefault')}
                   fill
                   className="object-contain"
                   unoptimized
@@ -119,7 +138,7 @@ export default function SlideshowPage({ params }: PageProps) {
               )}
             </div>
             <div className="text-right">
-              <p className="text-xl opacity-80">📷 Teile deine Fotos</p>
+              <p className="text-xl opacity-80">{t('guest.slideshow.share')}</p>
               <p className="text-base opacity-50">/g/{slug}/upload</p>
             </div>
           </div>

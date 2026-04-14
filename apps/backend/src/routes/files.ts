@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { createReadStream } from 'fs'
 import { getClient } from '@wedding/db'
 import type { StorageService } from '../services/storage.js'
+import { hasGalleryAccess } from '../services/galleryAccess.js'
 
 export async function fileRoutes(
   fastify: FastifyInstance,
@@ -40,6 +41,13 @@ export async function fileRoutes(
     })
 
     if (!photo) return reply.code(404).send({ type: 'not-found', status: 404 })
+    if (!hasGalleryAccess(req, photo.gallery, fastify.config.sessionSecret)) {
+      return reply.code(401).send({
+        type: 'invalid-pin',
+        title: 'Falscher Secret Key.',
+        status: 401,
+      })
+    }
 
     let filename: string
     let contentType: string
@@ -56,6 +64,11 @@ export async function fileRoutes(
     } else {
       filename = photo.originalPath
       contentType = photo.mimeType
+    }
+
+    if (v === 'original' && !photo.gallery.allowGuestDownload) {
+      await fastify.requireAdmin(req, reply)
+      if (reply.sent) return
     }
 
     const filePath = opts.storage.filePath(gallerySlug, filename)

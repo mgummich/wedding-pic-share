@@ -9,9 +9,9 @@ import { tmpdir } from 'os'
 const execAsync = promisify(exec)
 
 export interface ImageProcessingResult {
-  thumb: Buffer      // 400px wide WEBP, EXIF stripped (ICC profile kept)
-  display: Buffer    // max 1920px wide WEBP, EXIF stripped
-  original: Buffer   // original converted to WEBP, EXIF stripped
+  thumb: Buffer      // 400px wide WEBP
+  display: Buffer    // max 1920px wide WEBP
+  original: Buffer   // original converted to WEBP
   blurDataUrl: string // base64 10px WEBP placeholder
 }
 
@@ -23,9 +23,13 @@ export interface VideoProcessingResult {
 
 export async function processImage(
   inputBuffer: Buffer,
-  _mimeType: string
+  _mimeType: string,
+  options: { stripExif?: boolean } = {}
 ): Promise<ImageProcessingResult> {
-  const base = sharp(inputBuffer).withMetadata().keepIccProfile() // keep ICC, strip GPS/EXIF
+  const stripExif = options.stripExif ?? true
+  const base = stripExif
+    ? sharp(inputBuffer).keepIccProfile()
+    : sharp(inputBuffer).withMetadata().keepIccProfile()
 
   const thumb = await base
     .clone()

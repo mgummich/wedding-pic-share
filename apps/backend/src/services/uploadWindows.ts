@@ -3,7 +3,7 @@ import type { UploadWindowResponse, GalleryResponse } from '@wedding/shared'
 
 type GalleryWithWindows = Pick<
   Gallery,
-  'id' | 'name' | 'slug' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'isActive'
+  'id' | 'name' | 'slug' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'isActive' | 'stripExif'
 > & {
   uploadWindows: UploadWindow[]
 }
@@ -35,6 +35,7 @@ export function toGalleryResponse(
     layout: gallery.layout,
     allowGuestDownload: gallery.allowGuestDownload,
     guestNameMode: gallery.guestNameMode,
+    stripExif: gallery.stripExif,
     photoCount,
     isActive: gallery.isActive,
     isUploadOpen: isUploadOpenAt(gallery.uploadWindows),

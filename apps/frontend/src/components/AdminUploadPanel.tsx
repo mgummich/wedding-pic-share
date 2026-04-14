@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react'
 import { Camera, RefreshCw, Upload } from 'lucide-react'
 import { adminUploadFile, ApiError } from '@/lib/api'
-import { UPLOAD_ERROR_MESSAGES, validateUploadFile } from '@/lib/uploadValidation'
+import { getUploadErrorMessage, validateUploadFile } from '@/lib/uploadValidation'
+import { useAdminI18n } from './AdminLocaleContext'
 import type { UploadResponse } from '@wedding/shared'
 
 type UploadQueueItem = {
@@ -25,6 +26,7 @@ export function AdminUploadPanel({
   guestNameMode,
   onApprovedUploads,
 }: AdminUploadPanelProps) {
+  const { locale, t } = useAdminI18n()
   const inputRef = useRef<HTMLInputElement>(null)
   const [queue, setQueue] = useState<UploadQueueItem[]>([])
   const [guestName, setGuestName] = useState('')
@@ -39,7 +41,7 @@ export function AdminUploadPanel({
     setQueue((prev) => [
       ...prev,
       ...selected.map((file) => {
-        const validationError = validateUploadFile(file)
+        const validationError = validateUploadFile(file, locale)
         return {
           id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`,
           file,
@@ -58,12 +60,12 @@ export function AdminUploadPanel({
     const queuedItems = queue.filter((item) => item.status === 'queued')
 
     if (queuedItems.length === 0) {
-      setFormError('Bitte füge mindestens eine Datei zur Upload-Warteschlange hinzu.')
+      setFormError(t('adminUpload.error.noFiles'))
       return
     }
 
     if (guestNameMode === 'REQUIRED' && !guestName.trim()) {
-      setFormError('Bitte gib einen Namen für diese Uploads ein.')
+      setFormError(t('adminUpload.error.nameRequired'))
       return
     }
 
@@ -92,8 +94,8 @@ export function AdminUploadPanel({
       } catch (error) {
         failedCount += 1
         const message = error instanceof ApiError
-          ? (UPLOAD_ERROR_MESSAGES[error.status] ?? 'Upload fehlgeschlagen. Bitte erneut versuchen.')
-          : 'Netzwerkfehler. Bitte erneut versuchen.'
+          ? (getUploadErrorMessage(error.status, locale) ?? t('adminUpload.error.uploadFailed'))
+          : t('adminUpload.error.network')
 
         setQueue((prev) => prev.map((entry) => (
           entry.id === item.id ? { ...entry, status: 'error', error: message } : entry
@@ -107,7 +109,12 @@ export function AdminUploadPanel({
       await onApprovedUploads?.()
     }
 
-    setSummary(buildSummary(approvedCount, pendingCount, failedCount))
+    setSummary(buildSummary({
+      approvedCount,
+      pendingCount,
+      failedCount,
+      t,
+    }))
   }
 
   function retryItem(itemId: string) {
@@ -125,17 +132,17 @@ export function AdminUploadPanel({
       <div className="rounded-card border border-border bg-surface-card p-4 space-y-4">
         <div>
           <h2 className="text-sm font-medium uppercase tracking-wide text-text-muted">
-            Admin Upload
+            {t('adminUpload.title')}
           </h2>
           <p className="mt-1 text-sm text-text-muted">
-            Mehrere Dateien werden stabil nacheinander hochgeladen.
+            {t('adminUpload.description')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="admin-upload-input" className="block text-sm font-medium text-text-primary mb-2">
-              Dateien
+              {t('adminUpload.files')}
             </label>
             <div
               onClick={() => inputRef.current?.click()}
@@ -143,7 +150,7 @@ export function AdminUploadPanel({
             >
               <Camera className="w-8 h-8 text-text-muted" />
               <span className="text-center text-sm text-text-muted">
-                Dateien zur Upload-Warteschlange hinzufügen
+                {t('adminUpload.filesHint')}
               </span>
             </div>
             <input
@@ -154,21 +161,21 @@ export function AdminUploadPanel({
               accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime"
               onChange={handleFileChange}
               className="sr-only"
-              aria-label="Dateien auswählen"
+              aria-label={t('adminUpload.filesAria')}
             />
           </div>
 
           {guestNameMode !== 'HIDDEN' && (
             <div>
               <label htmlFor="admin-guest-name" className="block text-sm font-medium text-text-primary mb-2">
-                Name {guestNameMode === 'OPTIONAL' ? '(optional)' : '(Pflicht)'}
+                {t('adminUpload.nameLabel')} {guestNameMode === 'OPTIONAL' ? t('adminUpload.nameOptional') : t('adminUpload.nameRequired')}
               </label>
               <input
                 id="admin-guest-name"
                 type="text"
                 value={guestName}
                 onChange={(event) => setGuestName(event.target.value)}
-                placeholder="Zum Beispiel: Trauzeuge"
+                placeholder={t('adminUpload.namePlaceholder')}
                 maxLength={80}
                 className="w-full rounded-card border border-border bg-surface-base px-4 py-2.5 text-text-primary focus:border-accent focus:outline-none"
               />
@@ -176,13 +183,13 @@ export function AdminUploadPanel({
           )}
 
           {queue.length > 0 && (
-            <ul className="space-y-2" aria-label="Upload-Warteschlange">
+            <ul className="space-y-2" aria-label={t('adminUpload.queueAria')}>
               {queue.map((item) => (
                 <li key={item.id} className="rounded-card border border-border px-3 py-3">
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-text-primary">{item.file.name}</p>
-                      <p className="mt-1 text-xs text-text-muted">{statusLabel(item.status)}</p>
+                      <p className="mt-1 text-xs text-text-muted">{statusLabel(item.status, t)}</p>
                       {item.error && <p className="mt-1 text-xs text-error">{item.error}</p>}
                     </div>
                     {item.status === 'error' && (
@@ -192,7 +199,7 @@ export function AdminUploadPanel({
                         className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent hover:text-accent"
                       >
                         <RefreshCw className="w-3 h-3" />
-                        Erneut versuchen
+                        {t('adminUpload.retry')}
                       </button>
                     )}
                   </div>
@@ -210,7 +217,7 @@ export function AdminUploadPanel({
             className="w-full rounded-full bg-accent py-3 font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             <Upload className="mr-2 inline h-4 w-4" />
-            {isUploading ? 'Uploads laufen…' : 'Uploads starten'}
+            {isUploading ? t('adminUpload.submitting') : t('adminUpload.submit')}
           </button>
         </form>
       </div>
@@ -218,25 +225,38 @@ export function AdminUploadPanel({
   )
 }
 
-function buildSummary(approvedCount: number, pendingCount: number, failedCount: number): string | null {
+function buildSummary({
+  approvedCount,
+  pendingCount,
+  failedCount,
+  t,
+}: {
+  approvedCount: number
+  pendingCount: number
+  failedCount: number
+  t: (key: Parameters<ReturnType<typeof useAdminI18n>['t']>[0], params?: Record<string, string | number>) => string
+}): string | null {
   const parts: string[] = []
-  if (approvedCount > 0) parts.push(`${approvedCount} freigegeben`)
-  if (pendingCount > 0) parts.push(`${pendingCount} in Moderation`)
-  if (failedCount > 0) parts.push(`${failedCount} fehlgeschlagen`)
-  return parts.length > 0 ? `Upload abgeschlossen: ${parts.join(', ')}.` : null
+  if (approvedCount > 0) parts.push(t('adminUpload.summary.approved', { count: approvedCount }))
+  if (pendingCount > 0) parts.push(t('adminUpload.summary.pending', { count: pendingCount }))
+  if (failedCount > 0) parts.push(t('adminUpload.summary.failed', { count: failedCount }))
+  return parts.length > 0 ? t('adminUpload.summary.complete', { parts: parts.join(', ') }) : null
 }
 
-function statusLabel(status: UploadQueueItem['status']): string {
+function statusLabel(
+  status: UploadQueueItem['status'],
+  t: ReturnType<typeof useAdminI18n>['t']
+): string {
   switch (status) {
     case 'queued':
-      return 'In Warteschlange'
+      return t('adminUpload.status.queued')
     case 'uploading':
-      return 'Wird hochgeladen'
+      return t('adminUpload.status.uploading')
     case 'approved':
-      return 'Freigegeben'
+      return t('adminUpload.status.approved')
     case 'pending':
-      return 'In Moderation'
+      return t('adminUpload.status.pending')
     case 'error':
-      return 'Fehlgeschlagen'
+      return t('adminUpload.status.error')
   }
 }

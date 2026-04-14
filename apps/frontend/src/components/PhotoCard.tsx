@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { Expand } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
+import { useAdminI18n } from './AdminLocaleContext'
 
 interface PhotoCardProps {
   photo: PhotoResponse
@@ -11,6 +12,7 @@ interface PhotoCardProps {
 }
 
 export function PhotoCard({ photo, onClick, priority = false }: PhotoCardProps) {
+  const { t } = useAdminI18n()
   const isVideo = photo.mediaType === 'VIDEO'
 
   return (
@@ -23,12 +25,20 @@ export function PhotoCard({ photo, onClick, priority = false }: PhotoCardProps) 
       role={isVideo ? undefined : 'button'}
       tabIndex={isVideo ? undefined : 0}
       onKeyDown={isVideo ? undefined : (e) => e.key === 'Enter' && onClick?.(photo)}
-      aria-label={isVideo ? undefined : (photo.guestName ? `Photo by ${photo.guestName}` : 'Gallery photo')}
+      aria-label={isVideo
+        ? undefined
+        : (
+            photo.guestName
+              ? t('photoCard.openPhotoByGuest', { guest: photo.guestName })
+              : t('photoCard.openPhotoDefault')
+          )}
     >
       {!isVideo && (
         <Image
           src={photo.thumbUrl}
-          alt={photo.guestName ? `Photo by ${photo.guestName}` : 'Wedding photo'}
+          alt={photo.guestName
+            ? t('photoCard.imageAltByGuest', { guest: photo.guestName })
+            : t('photoCard.imageAltDefault')}
           width={400}
           height={300}
           className="w-full h-auto object-cover"
@@ -54,7 +64,7 @@ export function PhotoCard({ photo, onClick, priority = false }: PhotoCardProps) 
           {onClick && (
             <button
               type="button"
-              aria-label="Video vergrößern"
+              aria-label={t('photoCard.openVideo')}
               onClick={(e) => {
                 e.stopPropagation()
                 onClick(photo)

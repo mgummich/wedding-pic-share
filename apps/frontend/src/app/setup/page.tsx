@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ApiError, getSetupStatus, submitSetup } from '@/lib/api'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 
 const MIN_PASSWORD_LENGTH = 12
 
@@ -10,6 +11,7 @@ type Step = 1 | 2
 
 export default function SetupPage() {
   const router = useRouter()
+  const { t } = useAdminI18n()
   const [ready, setReady] = useState(false)
   const [step, setStep] = useState<Step>(1)
   const [username, setUsername] = useState('')
@@ -35,7 +37,7 @@ export default function SetupPage() {
         setReady(true)
       } catch {
         if (!cancelled) {
-          setError('Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
+          setError(t('setup.error.generic'))
           setReady(true)
         }
       }
@@ -46,14 +48,14 @@ export default function SetupPage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, t])
 
   function handleStepOneSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
 
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setError('Das Passwort muss mindestens 12 Zeichen lang sein.')
+      setError(t('setup.error.passwordTooShort'))
       return
     }
 
@@ -78,7 +80,7 @@ export default function SetupPage() {
         return
       }
 
-      setError('Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
+      setError(t('setup.error.generic'))
       setLoading(false)
     }
   }
@@ -86,7 +88,7 @@ export default function SetupPage() {
   if (!ready) {
     return (
       <main className="min-h-screen bg-surface-base flex items-center justify-center px-4">
-        <p className="text-sm text-text-muted">Setup wird geladen…</p>
+        <p className="text-sm text-text-muted">{t('setup.loading')}</p>
       </main>
     )
   }
@@ -95,21 +97,21 @@ export default function SetupPage() {
     <main className="min-h-screen bg-surface-base px-4 py-10">
       <div className="mx-auto w-full max-w-lg">
         <header className="mb-8 text-center">
-          <p className="text-sm uppercase tracking-[0.2em] text-text-muted mb-3">Ersteinrichtung</p>
-          <h1 className="font-display text-4xl text-text-primary">Wedding Pics Setup</h1>
+          <p className="text-sm uppercase tracking-[0.2em] text-text-muted mb-3">{t('setup.titleLabel')}</p>
+          <h1 className="font-display text-4xl text-text-primary">{t('setup.title')}</h1>
         </header>
 
         <div className="rounded-card border border-border bg-surface-card p-6 shadow-soft">
           {step === 1 ? (
             <form onSubmit={handleStepOneSubmit} className="space-y-5">
               <div>
-                <p className="text-sm text-text-muted mb-2">Schritt 1 von 2</p>
-                <h2 className="font-display text-2xl text-text-primary">Admin-Zugangsdaten</h2>
+                <p className="text-sm text-text-muted mb-2">{t('setup.step1')}</p>
+                <h2 className="font-display text-2xl text-text-primary">{t('setup.step1Title')}</h2>
               </div>
 
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-text-primary mb-1">
-                  Benutzername
+                  {t('setup.username')}
                 </label>
                 <input
                   id="username"
@@ -125,7 +127,7 @@ export default function SetupPage() {
 
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-text-primary mb-1">
-                  Passwort
+                  {t('setup.password')}
                 </label>
                 <input
                   id="password"
@@ -138,7 +140,7 @@ export default function SetupPage() {
                   autoComplete="new-password"
                   className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
                 />
-                <p className="text-xs text-text-muted mt-1">Mindestens 12 Zeichen</p>
+                <p className="text-xs text-text-muted mt-1">{t('setup.passwordHint')}</p>
               </div>
 
               {error && <p className="text-sm text-error">{error}</p>}
@@ -147,22 +149,22 @@ export default function SetupPage() {
                 type="submit"
                 className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors"
               >
-                Weiter
+                {t('setup.next')}
               </button>
             </form>
           ) : (
             <div className="space-y-5">
               <div>
-                <p className="text-sm text-text-muted mb-2">Schritt 2 von 2</p>
-                <h2 className="font-display text-2xl text-text-primary">Erste Galerie</h2>
+                <p className="text-sm text-text-muted mb-2">{t('setup.step2')}</p>
+                <h2 className="font-display text-2xl text-text-primary">{t('setup.step2Title')}</h2>
                 <p className="text-sm text-text-muted mt-2">
-                  Optional: Erstelle direkt die erste Hochzeit und Galerie.
+                  {t('setup.step2Description')}
                 </p>
               </div>
 
               <div>
                 <label htmlFor="wedding-name" className="block text-sm font-medium text-text-primary mb-1">
-                  Name der Hochzeit
+                  {t('setup.weddingName')}
                 </label>
                 <input
                   id="wedding-name"
@@ -176,7 +178,7 @@ export default function SetupPage() {
 
               <div>
                 <label htmlFor="gallery-name" className="block text-sm font-medium text-text-primary mb-1">
-                  Name der Galerie
+                  {t('setup.galleryName')}
                 </label>
                 <input
                   id="gallery-name"
@@ -197,7 +199,7 @@ export default function SetupPage() {
                   disabled={loading}
                   className="flex-1 py-3 rounded-full border border-border text-text-primary font-medium hover:border-accent transition-colors disabled:opacity-50"
                 >
-                  Überspringen
+                  {t('setup.skip')}
                 </button>
                 <button
                   type="button"
@@ -205,7 +207,7 @@ export default function SetupPage() {
                   disabled={loading}
                   className="flex-1 py-3 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors disabled:opacity-50"
                 >
-                  {loading ? 'Wird gespeichert…' : 'Galerie erstellen'}
+                  {loading ? t('setup.saving') : t('setup.createGallery')}
                 </button>
               </div>
             </div>

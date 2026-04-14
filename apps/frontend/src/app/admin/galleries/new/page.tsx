@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createGallery, ApiError } from '@/lib/api'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 
 function toSlug(value: string) {
   return value
@@ -16,6 +17,7 @@ function toSlug(value: string) {
 
 export default function NewGalleryPage() {
   const router = useRouter()
+  const { t } = useAdminI18n()
   const [weddingName, setWeddingName] = useState('')
   const [weddingSlug, setWeddingSlug] = useState('')
   const [galleryName, setGalleryName] = useState('')
@@ -57,9 +59,9 @@ export default function NewGalleryPage() {
       router.replace('/admin')
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError('Eine Galerie mit diesem Slug existiert bereits.')
+        setError(t('newGallery.error.conflict'))
       } else {
-        setError('Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
+        setError(t('newGallery.error.generic'))
       }
       setLoading(false)
     }
@@ -71,16 +73,16 @@ export default function NewGalleryPage() {
         <Link href="/admin" className="p-1.5 text-text-muted hover:text-text-primary transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <h1 className="font-display text-2xl text-text-primary">Neue Galerie</h1>
+        <h1 className="font-display text-2xl text-text-primary">{t('newGallery.title')}</h1>
       </header>
 
       <form onSubmit={handleSubmit} className="px-4 py-6 space-y-5 max-w-lg">
         <fieldset className="space-y-4">
-          <legend className="text-sm font-medium text-text-muted uppercase tracking-wide">Hochzeit</legend>
+          <legend className="text-sm font-medium text-text-muted uppercase tracking-wide">{t('newGallery.wedding.section')}</legend>
 
           <div>
             <label htmlFor="wedding-name" className="block text-sm font-medium text-text-primary mb-1">
-              Name der Hochzeit
+              {t('newGallery.wedding.name')}
             </label>
             <input
               id="wedding-name"
@@ -89,14 +91,14 @@ export default function NewGalleryPage() {
               maxLength={100}
               value={weddingName}
               onChange={(e) => handleWeddingNameChange(e.target.value)}
-              placeholder="Anna & Max"
+              placeholder={t('newGallery.wedding.namePlaceholder')}
               className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
             />
           </div>
 
           <div>
             <label htmlFor="wedding-slug" className="block text-sm font-medium text-text-primary mb-1">
-              Slug
+              {t('newGallery.wedding.slug')}
             </label>
             <input
               id="wedding-slug"
@@ -106,19 +108,19 @@ export default function NewGalleryPage() {
               pattern="[a-z0-9-]+"
               value={weddingSlug}
               onChange={(e) => setWeddingSlug(e.target.value)}
-              placeholder="anna-max"
+              placeholder={t('newGallery.wedding.slugPlaceholder')}
               className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
             />
-            <p className="text-xs text-text-muted mt-1">Nur Kleinbuchstaben, Zahlen und Bindestriche</p>
+            <p className="text-xs text-text-muted mt-1">{t('newGallery.slugHint')}</p>
           </div>
         </fieldset>
 
         <fieldset className="space-y-4 pt-2">
-          <legend className="text-sm font-medium text-text-muted uppercase tracking-wide">Galerie</legend>
+          <legend className="text-sm font-medium text-text-muted uppercase tracking-wide">{t('newGallery.gallery.section')}</legend>
 
           <div>
             <label htmlFor="gallery-name" className="block text-sm font-medium text-text-primary mb-1">
-              Name der Galerie
+              {t('newGallery.gallery.name')}
             </label>
             <input
               id="gallery-name"
@@ -127,14 +129,14 @@ export default function NewGalleryPage() {
               maxLength={100}
               value={galleryName}
               onChange={(e) => handleGalleryNameChange(e.target.value)}
-              placeholder="Hochzeitsfeier"
+              placeholder={t('newGallery.gallery.namePlaceholder')}
               className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
             />
           </div>
 
           <div>
             <label htmlFor="gallery-slug" className="block text-sm font-medium text-text-primary mb-1">
-              Slug
+              {t('newGallery.gallery.slug')}
             </label>
             <input
               id="gallery-slug"
@@ -144,14 +146,14 @@ export default function NewGalleryPage() {
               pattern="[a-z0-9-]+"
               value={gallerySlug}
               onChange={(e) => setGallerySlug(e.target.value)}
-              placeholder="hochzeitsfeier"
+              placeholder={t('newGallery.gallery.slugPlaceholder')}
               className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
             />
           </div>
 
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-text-primary mb-1">
-              Beschreibung <span className="text-text-muted font-normal">(optional)</span>
+              {t('newGallery.description')} <span className="text-text-muted font-normal">{t('newGallery.optional')}</span>
             </label>
             <textarea
               id="description"
@@ -159,13 +161,13 @@ export default function NewGalleryPage() {
               maxLength={500}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Kurze Beschreibung der Galerie…"
+              placeholder={t('newGallery.descriptionPlaceholder')}
               className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary resize-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Layout</label>
+            <label className="block text-sm font-medium text-text-primary mb-2">{t('newGallery.layout')}</label>
             <div className="flex gap-3">
               {(['MASONRY', 'GRID'] as const).map((l) => (
                 <label key={l} className="flex items-center gap-2 cursor-pointer">
@@ -177,16 +179,18 @@ export default function NewGalleryPage() {
                     onChange={() => setLayout(l)}
                     className="accent-accent"
                   />
-                  <span className="text-sm text-text-primary">{l === 'MASONRY' ? 'Masonry' : 'Raster'}</span>
+                  <span className="text-sm text-text-primary">
+                    {l === 'MASONRY' ? t('newGallery.layout.masonry') : t('newGallery.layout.grid')}
+                  </span>
                 </label>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Gastname</label>
+            <label className="block text-sm font-medium text-text-primary mb-2">{t('newGallery.guestName')}</label>
             <div className="flex flex-col gap-2">
-              {([['OPTIONAL', 'Optional'], ['REQUIRED', 'Pflichtfeld'], ['HIDDEN', 'Ausgeblendet']] as const).map(([val, label]) => (
+              {([['OPTIONAL', t('newGallery.guestName.optional')], ['REQUIRED', t('newGallery.guestName.required')], ['HIDDEN', t('newGallery.guestName.hidden')]] as const).map(([val, label]) => (
                 <label key={val} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -203,9 +207,9 @@ export default function NewGalleryPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Moderation</label>
+            <label className="block text-sm font-medium text-text-primary mb-2">{t('newGallery.moderation')}</label>
             <div className="flex gap-3">
-              {([['MANUAL', 'Manuell'], ['AUTO', 'Automatisch']] as const).map(([val, label]) => (
+              {([['MANUAL', t('newGallery.moderation.manual')], ['AUTO', t('newGallery.moderation.auto')]] as const).map(([val, label]) => (
                 <label key={val} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -228,7 +232,7 @@ export default function NewGalleryPage() {
               onChange={(e) => setAllowGuestDownload(e.target.checked)}
               className="w-4 h-4 accent-accent"
             />
-            <span className="text-sm text-text-primary">Gäste dürfen Fotos herunterladen</span>
+            <span className="text-sm text-text-primary">{t('newGallery.allowDownload')}</span>
           </label>
         </fieldset>
 
@@ -239,7 +243,7 @@ export default function NewGalleryPage() {
           disabled={loading}
           className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors disabled:opacity-50"
         >
-          {loading ? 'Wird erstellt…' : 'Galerie erstellen'}
+          {loading ? t('newGallery.submit.loading') : t('newGallery.submit.create')}
         </button>
       </form>
     </main>

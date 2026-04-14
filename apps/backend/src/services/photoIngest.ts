@@ -15,6 +15,7 @@ type IngestGallery = {
   id: string
   slug: string
   moderationMode: 'MANUAL' | 'AUTO'
+  stripExif: boolean
 }
 
 type IngestUploadInput = {
@@ -82,7 +83,7 @@ export async function ingestUploadedPhoto({
   let duration: number | null = null
 
   if (!isVideo) {
-    const result = await processImage(buffer, detectedType.mime)
+    const result = await processImage(buffer, detectedType.mime, { stripExif: gallery.stripExif })
     await storage.save(gallery.slug, `${photoId}_thumb.webp`, result.thumb)
     await storage.save(gallery.slug, `${photoId}_display.webp`, result.display)
     await storage.save(gallery.slug, `${photoId}_original.webp`, result.original)
@@ -119,7 +120,7 @@ export async function ingestUploadedPhoto({
       blurDataUrl,
       duration,
       mimeType: detectedType.mime,
-      exifStripped: !isVideo,
+      exifStripped: !isVideo && gallery.stripExif,
       status: autoApprove ? 'APPROVED' : 'PENDING',
     },
   })

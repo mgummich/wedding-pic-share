@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { AdminSidebar } from '../src/components/AdminSidebar'
 import AdminLayout from '../src/app/admin/layout'
 import { adminLogout, getAdminGalleries } from '../src/lib/api'
+import { AdminLocaleProvider } from '../src/components/AdminLocaleContext'
 
 const { replace, usePathname } = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -50,7 +51,11 @@ describe('Admin shell', () => {
   })
 
   it('renders the sidebar with galleries from the API', async () => {
-    render(<AdminSidebar />)
+    render(
+      <AdminLocaleProvider>
+        <AdminSidebar />
+      </AdminLocaleProvider>
+    )
 
     expect(screen.getByRole('button', { name: /seitenleiste öffnen/i })).toBeInTheDocument()
     await waitFor(() => {
@@ -62,7 +67,11 @@ describe('Admin shell', () => {
 
   it('logs out and redirects to login', async () => {
     vi.mocked(adminLogout).mockResolvedValue(undefined)
-    render(<AdminSidebar />)
+    render(
+      <AdminLocaleProvider>
+        <AdminSidebar />
+      </AdminLocaleProvider>
+    )
 
     await userEvent.click(screen.getByRole('button', { name: /abmelden/i }))
 
@@ -94,5 +103,24 @@ describe('Admin shell', () => {
     await waitFor(() => {
       expect(screen.getByText('Wedding Pics')).toBeInTheDocument()
     })
+  })
+
+  it('switches sidebar copy to English when language is changed', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <AdminLocaleProvider>
+        <AdminSidebar />
+      </AdminLocaleProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Galerien/i)).toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /Sprache/i }), 'en')
+
+    expect(screen.getByText('Galleries')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Sign out/i })).toBeInTheDocument()
   })
 })

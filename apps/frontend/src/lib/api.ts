@@ -68,6 +68,16 @@ export async function uploadFile(
   return uploadMultipart(`/api/v1/g/${slug}/upload`, file, guestName)
 }
 
+export async function verifyGalleryAccess(
+  slug: string,
+  secretKey: string
+): Promise<{ ok: true }> {
+  return apiFetch(`/api/v1/g/${slug}/access`, {
+    method: 'POST',
+    body: JSON.stringify({ secretKey }),
+  })
+}
+
 export async function adminUploadFile(
   galleryId: string,
   file: File,
@@ -153,6 +163,7 @@ export async function createGallery(data: {
   allowGuestDownload?: boolean
   guestNameMode?: 'OPTIONAL' | 'REQUIRED' | 'HIDDEN'
   moderationMode?: 'MANUAL' | 'AUTO'
+  secretKey?: string
 }): Promise<GalleryResponse & { id: string; weddingId: string }> {
   return apiFetch('/api/v1/admin/galleries', { method: 'POST', body: JSON.stringify(data) })
 }
@@ -161,8 +172,9 @@ export async function updateGallery(
   id: string,
   data: Partial<Pick<
     GalleryResponse,
-    'name' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'isActive'
+    'name' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'stripExif' | 'isActive'
   >> & {
+    secretKey?: string | null
     uploadWindows?: Array<Pick<UploadWindowResponse, 'start' | 'end'>>
   }
 ): Promise<GalleryResponse> {

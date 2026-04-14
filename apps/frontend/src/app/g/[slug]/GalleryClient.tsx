@@ -5,6 +5,7 @@ import { PhotoGrid } from '@/components/PhotoGrid'
 import { UploadButton } from '@/components/UploadButton'
 import { EmptyState } from '@/components/EmptyState'
 import { Lightbox } from '@/components/Lightbox'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 import { useSSE } from '@/lib/sse'
 import { getGallery } from '@/lib/api'
 import type { PhotoResponse, GalleryResponse } from '@wedding/shared'
@@ -22,6 +23,7 @@ export function GalleryClient({
   initialCursor,
   initialHasMore,
 }: GalleryClientProps) {
+  const { t } = useAdminI18n()
   const [photos, setPhotos] = useState(initialPhotos)
   const [cursor, setCursor] = useState(initialCursor)
   const [hasMore, setHasMore] = useState(initialHasMore)
@@ -60,8 +62,8 @@ export function GalleryClient({
     return (
       <>
         <EmptyState
-          title="Noch keine Fotos"
-          description="Sei der Erste und teile deinen schönsten Moment!"
+          title={t('guest.gallery.emptyTitle')}
+          description={t('guest.gallery.emptyDescription')}
         />
         <UploadButton gallerySlug={gallery.slug} isEmpty />
       </>
@@ -85,7 +87,7 @@ export function GalleryClient({
                        hover:border-accent hover:text-accent transition-colors
                        disabled:opacity-50"
           >
-            {loading ? 'Lädt…' : 'Mehr laden'}
+            {loading ? t('guest.gallery.loadingMore') : t('guest.gallery.loadMore')}
           </button>
         </div>
       )}
@@ -100,7 +102,7 @@ export function GalleryClient({
             className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-border
                        text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
           >
-            Alle Fotos herunterladen
+            {t('guest.gallery.downloadAll')}
           </a>
         </div>
       )}

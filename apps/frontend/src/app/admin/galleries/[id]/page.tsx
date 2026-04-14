@@ -8,6 +8,7 @@ import { ArrowLeft, Trash2, QrCode, Download } from 'lucide-react'
 import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import { AdminUploadPanel } from '@/components/AdminUploadPanel'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 import type { AdminPhotoResponse } from '@/lib/api'
 import type { UploadWindowResponse } from '@wedding/shared'
 
@@ -32,6 +33,7 @@ function toIsoString(value: string): string {
 export default function GallerySettingsPage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
+  const { t } = useAdminI18n()
 
   const [gallery, setGallery] = useState<GalleryData | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -43,6 +45,9 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [layout, setLayout] = useState<'MASONRY' | 'GRID'>('MASONRY')
   const [guestNameMode, setGuestNameMode] = useState<'OPTIONAL' | 'REQUIRED' | 'HIDDEN'>('OPTIONAL')
   const [allowGuestDownload, setAllowGuestDownload] = useState(false)
+  const [stripExif, setStripExif] = useState(true)
+  const [secretKeyInput, setSecretKeyInput] = useState('')
+  const [clearSecretKey, setClearSecretKey] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const [uploadWindows, setUploadWindows] = useState<UploadWindowDraft[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -72,6 +77,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
         setLayout(found.layout)
         setGuestNameMode(found.guestNameMode)
         setAllowGuestDownload(found.allowGuestDownload)
+        setStripExif(found.stripExif)
         setIsActive(found.isActive)
         setUploadWindows(found.uploadWindows.map((window) => ({
           id: window.id,
@@ -94,13 +100,14 @@ export default function GallerySettingsPage({ params }: PageProps) {
     setSaved(false)
     try {
       if (uploadWindows.some((window) => !window.start || !window.end)) {
-        setSaveError('Bitte fuelle alle Start- und Endzeiten aus oder entferne das unvollstaendige Zeitfenster.')
+        setSaveError(t('gallerySettings.saveError.incompleteWindow'))
         return
       }
       if (uploadWindows.some((window) => new Date(window.start) >= new Date(window.end))) {
-        setSaveError('Jedes Upload-Zeitfenster braucht ein Ende nach dem Start.')
+        setSaveError(t('gallerySettings.saveError.invalidWindow'))
         return
       }
+      const normalizedSecretKey = secretKeyInput.trim()
 
       const updated = await updateGallery(id, {
         name,
@@ -108,6 +115,8 @@ export default function GallerySettingsPage({ params }: PageProps) {
         layout,
         guestNameMode,
         allowGuestDownload,
+        stripExif,
+        secretKey: clearSecretKey ? null : (normalizedSecretKey.length > 0 ? normalizedSecretKey : undefined),
         isActive,
         uploadWindows: uploadWindows.map((window) => ({
           start: toIsoString(window.start),
@@ -115,15 +124,18 @@ export default function GallerySettingsPage({ params }: PageProps) {
         })),
       })
       setGallery((prev) => prev ? { ...prev, ...updated } : prev)
+      setStripExif(updated.stripExif)
       setIsActive(updated.isActive)
       setUploadWindows(updated.uploadWindows.map((window) => ({
         id: window.id,
         start: toDateTimeLocal(window.start),
         end: toDateTimeLocal(window.end),
       })))
+      setSecretKeyInput('')
+      setClearSecretKey(false)
       setSaved(true)
     } catch {
-      setSaveError('Speichern fehlgeschlagen. Bitte versuche es erneut.')
+      setSaveError(t('gallerySettings.saveError.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -135,7 +147,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       await deleteGallery(id)
       router.replace('/admin')
     } catch {
-      setSaveError('Löschen fehlgeschlagen.')
+      setSaveError(t('gallerySettings.saveError.deleteFailed'))
       setDeleting(false)
       setConfirmDelete(false)
     }
@@ -147,7 +159,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
     try {
       const res = await fetch(`/api/v1/admin/galleries/${id}/export`, { credentials: 'include' })
       if (!res.ok) {
-        setSaveError('Export fehlgeschlagen. Bitte versuche es erneut.')
+        setSaveError(t('gallerySettings.saveError.exportFailed'))
         return
       }
       const blob = await res.blob()
@@ -167,8 +179,8 @@ export default function GallerySettingsPage({ params }: PageProps) {
   if (loadError) {
     return (
       <main className="min-h-screen bg-surface-base flex flex-col items-center justify-center px-4">
-        <p className="text-text-muted mb-4">Galerie nicht gefunden.</p>
-        <Link href="/admin" className="text-accent hover:underline">Zurück zur Übersicht</Link>
+        <p className="text-text-muted mb-4">{t('gallerySettings.notFound')}</p>
+        <Link href="/admin" className="text-accent hover:underline">{t('gallerySettings.backToOverview')}</Link>
       </main>
     )
   }
@@ -200,7 +212,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       <form onSubmit={handleSave} className="px-4 py-6 space-y-5 max-w-lg">
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-text-primary mb-1">
-            Name
+            {t('gallerySettings.field.name')}
           </label>
           <input
             id="name"
@@ -215,7 +227,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
 
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-text-primary mb-1">
-            Beschreibung <span className="text-text-muted font-normal">(optional)</span>
+            {t('gallerySettings.field.description')} <span className="text-text-muted font-normal">{t('common.optional')}</span>
           </label>
           <textarea
             id="description"
@@ -228,7 +240,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-2">Layout</label>
+          <label className="block text-sm font-medium text-text-primary mb-2">{t('gallerySettings.layout')}</label>
           <div className="flex gap-3">
             {(['MASONRY', 'GRID'] as const).map((l) => (
               <label key={l} className="flex items-center gap-2 cursor-pointer">
@@ -240,16 +252,22 @@ export default function GallerySettingsPage({ params }: PageProps) {
                   onChange={() => setLayout(l)}
                   className="accent-accent"
                 />
-                <span className="text-sm text-text-primary">{l === 'MASONRY' ? 'Masonry' : 'Raster'}</span>
+                <span className="text-sm text-text-primary">
+                  {l === 'MASONRY' ? t('gallerySettings.layout.masonry') : t('gallerySettings.layout.grid')}
+                </span>
               </label>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-2">Gastname</label>
+          <label className="block text-sm font-medium text-text-primary mb-2">{t('gallerySettings.guestName')}</label>
           <div className="flex flex-col gap-2">
-            {([['OPTIONAL', 'Optional'], ['REQUIRED', 'Pflichtfeld'], ['HIDDEN', 'Ausgeblendet']] as const).map(([val, label]) => (
+            {([
+              ['OPTIONAL', t('gallerySettings.guestName.optional')],
+              ['REQUIRED', t('gallerySettings.guestName.required')],
+              ['HIDDEN', t('gallerySettings.guestName.hidden')],
+            ] as const).map(([val, label]) => (
               <label key={val} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -272,14 +290,67 @@ export default function GallerySettingsPage({ params }: PageProps) {
             onChange={(e) => setAllowGuestDownload(e.target.checked)}
             className="w-4 h-4 accent-accent"
           />
-          <span className="text-sm text-text-primary">Gäste dürfen Fotos herunterladen</span>
+          <span className="text-sm text-text-primary">{t('gallerySettings.allowDownload')}</span>
         </label>
+
+        <section className="space-y-2 rounded-card border border-border p-4">
+          <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.exif.title')}</h2>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={stripExif}
+              onChange={(e) => setStripExif(e.target.checked)}
+              className="w-4 h-4 accent-accent"
+            />
+            <span className="text-sm text-text-primary">{t('gallerySettings.exif.strip')}</span>
+          </label>
+          <p className="text-xs text-text-muted">
+            {t('gallerySettings.exif.recommended')}
+          </p>
+        </section>
 
         <section className="space-y-3 rounded-card border border-border p-4">
           <div>
-            <h2 className="text-sm font-medium text-text-primary">Single-Gallery-Mode</h2>
+            <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.pin.title')}</h2>
             <p className="text-xs text-text-muted mt-1">
-              Wenn diese Galerie aktiv ist, werden Root-URLs auf diese Galerie aufgelöst.
+              {t('gallerySettings.pin.description')}
+            </p>
+          </div>
+          <label htmlFor="secretKey" className="block text-sm text-text-primary">
+            {t('gallerySettings.pin.new')}
+          </label>
+          <input
+            id="secretKey"
+            type="password"
+            autoComplete="new-password"
+            minLength={4}
+            maxLength={32}
+            value={secretKeyInput}
+            onChange={(e) => {
+              setSecretKeyInput(e.target.value)
+              if (clearSecretKey) {
+                setClearSecretKey(false)
+              }
+            }}
+            placeholder={t('gallerySettings.pin.placeholder')}
+            className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+          />
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={clearSecretKey}
+              onChange={(e) => setClearSecretKey(e.target.checked)}
+              className="w-4 h-4 accent-accent"
+            />
+            <span className="text-sm text-text-primary">{t('gallerySettings.pin.clear')}</span>
+          </label>
+        </section>
+
+        <section className="space-y-3 rounded-card border border-border p-4">
+          <div>
+            <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.root.title')}</h2>
+            <p className="text-xs text-text-muted mt-1">
+              {t('gallerySettings.root.description')}
             </p>
           </div>
           <label className="flex items-center gap-3 cursor-pointer">
@@ -292,35 +363,35 @@ export default function GallerySettingsPage({ params }: PageProps) {
               }}
               className="w-4 h-4 accent-accent"
             />
-            <span className="text-sm text-text-primary">Als aktive Root-Galerie markieren</span>
+            <span className="text-sm text-text-primary">{t('gallerySettings.root.markActive')}</span>
           </label>
           <p className="text-xs text-text-muted font-mono">
             / → /g/{gallery.slug} · /upload → /g/{gallery.slug}/upload · /slideshow → /g/{gallery.slug}/slideshow
           </p>
           {isActive && (
             <p className="text-xs text-accent">
-              Diese Galerie ist aktuell als Root-Ziel aktiv.
+              {t('gallerySettings.root.activeHint')}
             </p>
           )}
         </section>
 
         <section className="space-y-3 rounded-card border border-border p-4">
           <div>
-            <h2 className="text-sm font-medium text-text-primary">Upload-Zeitfenster</h2>
+            <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.windows.title')}</h2>
             <p className="text-xs text-text-muted mt-1">
-              Ohne Zeitfenster bleiben Uploads dauerhaft geöffnet.
+              {t('gallerySettings.windows.description')}
             </p>
           </div>
 
           {uploadWindows.length === 0 ? (
-            <p className="text-sm text-text-muted">Keine Zeitfenster konfiguriert.</p>
+            <p className="text-sm text-text-muted">{t('gallerySettings.windows.empty')}</p>
           ) : (
             <div className="space-y-3">
               {uploadWindows.map((window, index) => (
                 <div key={window.id} className="rounded-card border border-border p-3 space-y-3">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <label className="text-sm text-text-primary">
-                      <span className="block mb-1">Start</span>
+                      <span className="block mb-1">{t('gallerySettings.windows.start')}</span>
                       <input
                         type="datetime-local"
                         value={window.start}
@@ -334,7 +405,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                       />
                     </label>
                     <label className="text-sm text-text-primary">
-                      <span className="block mb-1">Ende</span>
+                      <span className="block mb-1">{t('gallerySettings.windows.end')}</span>
                       <input
                         type="datetime-local"
                         value={window.end}
@@ -356,7 +427,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                     }}
                     className="text-sm text-error hover:underline"
                   >
-                    Zeitfenster löschen
+                    {t('gallerySettings.windows.delete')}
                   </button>
                 </div>
               ))}
@@ -378,19 +449,19 @@ export default function GallerySettingsPage({ params }: PageProps) {
             }}
             className="px-4 py-2 rounded-full border border-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
           >
-            Zeitfenster hinzufügen
+            {t('gallerySettings.windows.add')}
           </button>
         </section>
 
         {saveError && <p className="text-sm text-error">{saveError}</p>}
-        {saved && <p className="text-sm text-success">Gespeichert ✓</p>}
+        {saved && <p className="text-sm text-success">{t('gallerySettings.saveSuccess')}</p>}
 
         <button
           type="submit"
           disabled={saving}
           className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors disabled:opacity-50"
         >
-          {saving ? 'Wird gespeichert…' : 'Speichern'}
+          {saving ? t('gallerySettings.submit.saving') : t('gallerySettings.submit.save')}
         </button>
       </form>
 
@@ -398,7 +469,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       {gallery && (
         <section className="px-4 pb-6 max-w-lg">
           <h2 className="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">
-            Aktionen
+            {t('gallerySettings.actions.title')}
           </h2>
           <div className="flex flex-wrap gap-3">
             <a
@@ -406,20 +477,20 @@ export default function GallerySettingsPage({ params }: PageProps) {
               download={`${gallery.slug}-qr.png`}
               className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
-              aria-label="QR-Code als PNG herunterladen"
+              aria-label={t('gallerySettings.actions.qrPngAria')}
             >
               <QrCode className="w-4 h-4" />
-              QR-Code (PNG)
+              {t('gallerySettings.actions.qrPng')}
             </a>
             <a
               href={`/api/v1/g/${gallery.slug}/qr?format=svg`}
               download={`${gallery.slug}-qr.svg`}
               className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
-              aria-label="QR-Code als SVG herunterladen"
+              aria-label={t('gallerySettings.actions.qrSvgAria')}
             >
               <QrCode className="w-4 h-4" />
-              QR-Code (SVG)
+              {t('gallerySettings.actions.qrSvg')}
             </a>
             <button
               onClick={handleExport}
@@ -427,10 +498,10 @@ export default function GallerySettingsPage({ params }: PageProps) {
               className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm
                          disabled:opacity-50"
-              aria-label="Fotos als ZIP exportieren"
+              aria-label={t('gallerySettings.actions.exportZipAria')}
             >
               <Download className="w-4 h-4" />
-              {exporting ? 'Wird exportiert…' : 'ZIP exportieren'}
+              {exporting ? t('gallerySettings.actions.exporting') : t('gallerySettings.actions.exportZip')}
             </button>
           </div>
         </section>
@@ -445,7 +516,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       {photos.length > 0 && (
         <section className="max-w-lg px-4 pb-8">
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-text-muted">
-            Freigegebene Fotos ({photos.length})
+            {t('gallerySettings.approvedPhotos', { count: photos.length })}
           </h2>
           <div className="grid grid-cols-3 gap-2">
             {photos.map((photo, index) => (
@@ -453,11 +524,11 @@ export default function GallerySettingsPage({ params }: PageProps) {
                 key={photo.id}
                 onClick={() => setOpenIndex(index)}
                 className="group relative aspect-square overflow-hidden rounded-card"
-                aria-label="Foto vergrößern"
+                aria-label={t('gallerySettings.photoEnlargeAria')}
               >
                 <Image
                   src={photo.thumbUrl}
-                  alt={photo.guestName ?? 'Hochzeitsfoto'}
+                  alt={photo.guestName ?? t('lightbox.photoAltDefault')}
                   fill
                   className="object-cover transition-transform duration-200 group-hover:scale-105"
                   unoptimized
@@ -471,9 +542,9 @@ export default function GallerySettingsPage({ params }: PageProps) {
       {/* Danger zone */}
       <div className="px-4 pb-10 max-w-lg">
         <div className="border border-error/30 rounded-card p-4">
-          <p className="text-sm font-medium text-text-primary mb-1">Galerie löschen</p>
+          <p className="text-sm font-medium text-text-primary mb-1">{t('gallerySettings.danger.title')}</p>
           <p className="text-xs text-text-muted mb-3">
-            Löscht die Galerie und alle zugehörigen Fotos unwiderruflich.
+            {t('gallerySettings.danger.description')}
           </p>
           {!confirmDelete ? (
             <button
@@ -481,7 +552,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
               className="flex items-center gap-2 px-4 py-2 rounded-full border border-error text-error text-sm hover:bg-error hover:text-white transition-colors"
             >
               <Trash2 className="w-4 h-4" />
-              Galerie löschen
+              {t('gallerySettings.danger.delete')}
             </button>
           ) : (
             <div className="flex items-center gap-3">
@@ -490,13 +561,13 @@ export default function GallerySettingsPage({ params }: PageProps) {
                 disabled={deleting}
                 className="px-4 py-2 rounded-full bg-error text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                {deleting ? 'Wird gelöscht…' : 'Wirklich löschen'}
+                {deleting ? t('gallerySettings.danger.deleting') : t('gallerySettings.danger.confirmDelete')}
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
                 className="px-4 py-2 rounded-full border border-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
               >
-                Abbrechen
+                {t('common.cancel')}
               </button>
             </div>
           )}

@@ -177,6 +177,90 @@ describe('POST /api/v1/g/:slug/upload', () => {
     expect(res.statusCode).toBe(403)
     expect(res.json().type).toBe('upload-window-closed')
   })
+
+  it('requires gallery PIN before guest uploads when secretKey is configured', async () => {
+    const protect = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: { secretKey: '1357', uploadWindows: [] },
+    })
+    expect(protect.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: '#112233' },
+    }).jpeg().toBuffer()
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'protected.jpg')
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(blocked.statusCode).toBe(401)
+    expect(blocked.json().type).toBe('invalid-pin')
+
+    const unlock = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/access`,
+      payload: { secretKey: '1357' },
+    })
+    expect(unlock.statusCode).toBe(200)
+    const accessCookie = String(unlock.headers['set-cookie']).split(';')[0]
+
+    const allowed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: {
+        'content-type': multipart.contentType,
+        cookie: accessCookie,
+      },
+      payload: multipart.body,
+    })
+    expect(allowed.statusCode).toBe(201)
+  })
+
+  it('requires admin auth for original file access when guest download is disabled', async () => {
+    const reset = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        secretKey: null,
+        uploadWindows: [],
+        allowGuestDownload: false,
+      },
+    })
+    expect(reset.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 120, height: 120, channels: 3, background: '#334455' },
+    }).jpeg().toBuffer()
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'original-protected.jpg')
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(upload.statusCode).toBe(201)
+    const photoId = upload.json().id as string
+
+    const blocked = await app.inject({
+      method: 'GET',
+      url: `/api/v1/files/${gallerySlug}/${photoId}?v=original`,
+    })
+    expect(blocked.statusCode).toBe(401)
+    expect(blocked.json().type).toBe('unauthorized')
+
+    const allowed = await app.inject({
+      method: 'GET',
+      url: `/api/v1/files/${gallerySlug}/${photoId}?v=original`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(allowed.statusCode).toBe(200)
+  })
 })
 
 function buildMultipartPayload(fileBuffer: Buffer, mimeType: string, filename: string) {

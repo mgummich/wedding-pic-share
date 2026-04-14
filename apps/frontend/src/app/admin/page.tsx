@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAdminGalleries, ApiError } from '@/lib/api'
 import { Settings } from 'lucide-react'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 
 export default function AdminDashboardPage() {
   const router = useRouter()
+  const { t } = useAdminI18n()
   const [galleries, setGalleries] = useState<Awaited<ReturnType<typeof getAdminGalleries>>>([])
   const [loading, setLoading] = useState(true)
   const sortedGalleries = [...galleries].sort((a, b) => {
@@ -28,9 +30,9 @@ export default function AdminDashboardPage() {
     <main className="min-h-screen bg-surface-base">
       <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-border">
         <div>
-          <h1 className="font-display text-2xl text-text-primary">Galerien</h1>
+          <h1 className="font-display text-2xl text-text-primary">{t('dashboard.title')}</h1>
           <p className="text-xs text-text-muted mt-1">
-            Im Single-Gallery-Mode zeigen <span className="font-mono">/</span>, <span className="font-mono">/upload</span> und <span className="font-mono">/slideshow</span> auf die aktive Galerie.
+            {t('dashboard.singleGalleryHint')}
           </p>
         </div>
       </header>
@@ -46,12 +48,12 @@ export default function AdminDashboardPage() {
 
         {!loading && galleries.length === 0 && (
           <div className="flex flex-col items-center py-16 text-center">
-            <p className="text-text-muted mb-4">Noch keine Galerien. Erstelle die erste!</p>
+            <p className="text-text-muted mb-4">{t('dashboard.empty')}</p>
             <Link
               href="/admin/galleries/new"
               className="px-5 py-2.5 rounded-full bg-accent text-white hover:bg-accent-hover transition-colors"
             >
-              Erste Galerie erstellen
+              {t('dashboard.createFirst')}
             </Link>
           </div>
         )}
@@ -67,11 +69,13 @@ export default function AdminDashboardPage() {
                   <h2 className="font-medium text-text-primary">{gallery.name}</h2>
                   {gallery.isActive && (
                     <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
-                      Root aktiv
+                      {t('dashboard.rootActive')}
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-text-muted mt-0.5">{gallery.photoCount} Fotos</p>
+                <p className="text-sm text-text-muted mt-0.5">
+                  {t('dashboard.photos', { count: gallery.photoCount })}
+                </p>
                 <p className="text-xs text-text-muted mt-0.5 font-mono">/g/{gallery.slug}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -79,11 +83,11 @@ export default function AdminDashboardPage() {
                   href={`/admin/galleries/${gallery.id}/moderate`}
                   className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
                 >
-                  Moderieren
+                  {t('dashboard.moderate')}
                 </Link>
                 <Link
                   href={`/admin/galleries/${gallery.id}`}
-                  aria-label="Einstellungen"
+                  aria-label={t('dashboard.settingsAria')}
                   className="p-1.5 text-text-muted hover:text-accent transition-colors"
                 >
                   <Settings className="w-4 h-4" />

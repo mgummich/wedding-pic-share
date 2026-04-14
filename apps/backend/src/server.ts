@@ -36,6 +36,7 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
   const resolvedConfig = config ?? loadConfig()
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
+    trustProxy: 'loopback, linklocal, uniquelocal',
   })
 
   const maxVideoSize = resolvedConfig.maxVideoSizeMb * 1024 * 1024

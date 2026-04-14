@@ -1,12 +1,16 @@
 import type { FastifyInstance } from 'fastify'
 import { getClient } from '@wedding/db'
 import type { GalleryResponse, WeddingResponse } from '@wedding/shared'
+import bcrypt from 'bcryptjs'
 import { toGalleryResponse } from '../../services/uploadWindows.js'
 
 type UploadWindowInput = {
   start: string
   end: string
 }
+
+const SECRET_KEY_MIN_LENGTH = 4
+const SECRET_KEY_MAX_LENGTH = 32
 
 function parseUploadWindows(input: unknown): Array<{ start: Date; end: Date }> | null {
   if (!Array.isArray(input)) return null
@@ -23,6 +27,22 @@ function parseUploadWindows(input: unknown): Array<{ start: Date; end: Date }> |
   })
 
   return windows.every(Boolean) ? windows as Array<{ start: Date; end: Date }> : null
+}
+
+function parseSecretKey(
+  input: unknown,
+  options: { allowNull: boolean }
+): { ok: true; value: string | null | undefined } | { ok: false } {
+  if (input === undefined) return { ok: true, value: undefined }
+  if (options.allowNull && input === null) return { ok: true, value: null }
+  if (typeof input !== 'string') return { ok: false }
+
+  const normalized = input.trim()
+  if (normalized.length < SECRET_KEY_MIN_LENGTH || normalized.length > SECRET_KEY_MAX_LENGTH) {
+    return { ok: false }
+  }
+
+  return { ok: true, value: normalized }
 }
 
 export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void> {
@@ -67,6 +87,8 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
           allowGuestDownload: { type: 'boolean' },
           guestNameMode: { type: 'string', enum: ['OPTIONAL', 'REQUIRED', 'HIDDEN'] },
           moderationMode: { type: 'string', enum: ['MANUAL', 'AUTO'] },
+          stripExif: { type: 'boolean' },
+          secretKey: { type: 'string', minLength: SECRET_KEY_MIN_LENGTH, maxLength: SECRET_KEY_MAX_LENGTH },
         },
       },
     },
@@ -81,7 +103,21 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
       allowGuestDownload?: boolean
       guestNameMode?: 'OPTIONAL' | 'REQUIRED' | 'HIDDEN'
       moderationMode?: 'MANUAL' | 'AUTO'
+      stripExif?: boolean
+      secretKey?: string
     }
+
+    const parsedSecretKey = parseSecretKey(body.secretKey, { allowNull: false })
+    if (!parsedSecretKey.ok) {
+      return reply.code(400).send({
+        type: 'validation-error',
+        title: 'Ungueltige Galerie-PIN.',
+        status: 400,
+      })
+    }
+    const hashedSecretKey = parsedSecretKey.value
+      ? await bcrypt.hash(parsedSecretKey.value, 12)
+      : undefined
 
     const db = getClient()
     const wedding = await db.wedding.upsert({
@@ -111,6 +147,8 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
         allowGuestDownload: body.allowGuestDownload ?? false,
         guestNameMode: body.guestNameMode ?? 'OPTIONAL',
         moderationMode: body.moderationMode ?? 'MANUAL',
+        stripExif: body.stripExif ?? true,
+        secretKey: hashedSecretKey,
       },
     })
 
@@ -137,6 +175,13 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
           allowGuestDownload: { type: 'boolean' },
           guestNameMode: { type: 'string', enum: ['OPTIONAL', 'REQUIRED', 'HIDDEN'] },
           moderationMode: { type: 'string', enum: ['MANUAL', 'AUTO'] },
+          stripExif: { type: 'boolean' },
+          secretKey: {
+            anyOf: [
+              { type: 'string', minLength: SECRET_KEY_MIN_LENGTH, maxLength: SECRET_KEY_MAX_LENGTH },
+              { type: 'null' },
+            ],
+          },
           isActive: { type: 'boolean' },
           uploadWindows: {
             type: 'array',
@@ -161,6 +206,7 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
       const {
         uploadWindows: rawUploadWindows,
         isActive,
+        secretKey: rawSecretKey,
         ...rest
       } = body
 
@@ -172,6 +218,14 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
         return reply.code(400).send({
           type: 'validation-error',
           title: 'Ungueltiges Upload-Zeitfenster.',
+          status: 400,
+        })
+      }
+      const parsedSecretKey = parseSecretKey(rawSecretKey, { allowNull: true })
+      if (!parsedSecretKey.ok) {
+        return reply.code(400).send({
+          type: 'validation-error',
+          title: 'Ungueltige Galerie-PIN.',
           status: 400,
         })
       }
@@ -198,6 +252,11 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
         const updateData: Record<string, unknown> = { ...rest }
         if (typeof isActive === 'boolean') {
           updateData.isActive = isActive
+        }
+        if (parsedSecretKey.value !== undefined) {
+          updateData.secretKey = parsedSecretKey.value === null
+            ? null
+            : await bcrypt.hash(parsedSecretKey.value, 12)
         }
 
         await tx.gallery.update({

@@ -7,6 +7,7 @@ import { CheckCircle, XCircle } from 'lucide-react'
 import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import type { AdminPhotoResponse } from '@/lib/api'
+import { useAdminI18n } from '@/components/AdminLocaleContext'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -15,6 +16,7 @@ interface PageProps {
 export default function ModerationPage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
+  const { t } = useAdminI18n()
   const [photos, setPhotos] = useState<AdminPhotoResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [openIndex, setOpenIndex] = useState<number | null>(null)
@@ -57,8 +59,8 @@ export default function ModerationPage({ params }: PageProps) {
   if (photos.length === 0) {
     return (
       <main className="min-h-screen bg-surface-base flex flex-col items-center justify-center px-4">
-        <p className="font-display text-2xl text-text-primary mb-2">Alles erledigt!</p>
-        <p className="text-text-muted">Keine ausstehenden Fotos.</p>
+        <p className="font-display text-2xl text-text-primary mb-2">{t('moderation.doneTitle')}</p>
+        <p className="text-text-muted">{t('moderation.doneDescription')}</p>
       </main>
     )
   }
@@ -67,13 +69,13 @@ export default function ModerationPage({ params }: PageProps) {
     <main className="min-h-screen bg-surface-base">
       <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-border sticky top-0 bg-surface-base z-10">
         <div>
-          <h1 className="font-medium text-text-primary">{photos.length} ausstehend</h1>
+          <h1 className="font-medium text-text-primary">{t('moderation.pending', { count: photos.length })}</h1>
         </div>
         <button
           onClick={handleApproveAll}
           className="text-sm px-4 py-2 rounded-full bg-success text-white hover:opacity-90 transition-opacity"
         >
-          Alle freigeben
+          {t('moderation.approveAll')}
         </button>
       </header>
 
@@ -83,11 +85,11 @@ export default function ModerationPage({ params }: PageProps) {
             <button
               className="w-full text-left"
               onClick={() => setOpenIndex(index)}
-              aria-label="Foto vergrößern"
+              aria-label={t('moderation.photoEnlargeAria')}
             >
               <Image
                 src={photo.thumbUrl}
-                alt="Ausstehendes Foto"
+                alt={t('moderation.pendingPhotoAlt')}
                 width={400}
                 height={400}
                 className="w-full aspect-square object-cover"
@@ -103,14 +105,14 @@ export default function ModerationPage({ params }: PageProps) {
               <button
                 onClick={() => handleModerate(photo.id, 'REJECTED')}
                 className="flex-1 py-3 bg-error/80 hover:bg-error flex items-center justify-center transition-colors"
-                aria-label="Ablehnen"
+                aria-label={t('moderation.rejectAria')}
               >
                 <XCircle className="w-6 h-6 text-white" />
               </button>
               <button
                 onClick={() => handleModerate(photo.id, 'APPROVED')}
                 className="flex-1 py-3 bg-success/80 hover:bg-success flex items-center justify-center transition-colors"
-                aria-label="Freigeben"
+                aria-label={t('moderation.approveAria')}
               >
                 <CheckCircle className="w-6 h-6 text-white" />
               </button>

@@ -13,6 +13,7 @@ export interface GalleryResponse {
   layout: 'MASONRY' | 'GRID'
   allowGuestDownload: boolean
   guestNameMode: 'OPTIONAL' | 'REQUIRED' | 'HIDDEN'
+  stripExif: boolean
   photoCount: number
   isActive: boolean
   isUploadOpen: boolean

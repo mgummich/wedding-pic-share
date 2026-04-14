@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
-import { closeClient } from '@wedding/db'
+import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import { join } from 'path'
 import { unlink } from 'fs/promises'
+import bcrypt from 'bcryptjs'
 
 const DB_PATH = '/tmp/wps-gallery-test.db'
 
@@ -69,6 +70,7 @@ describe('POST /api/v1/admin/galleries', () => {
     galleryId = body.id
     expect(body.slug).toBe('party')
     expect(body.layout).toBe('MASONRY')
+    expect(body.stripExif).toBe(true)
   })
 
   it('returns 409 on duplicate slug within same wedding', async () => {
@@ -108,6 +110,7 @@ describe('GET /api/v1/g/:slug', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.name).toBe('Party')
+    expect(body.stripExif).toBe(true)
     expect(typeof body.photoCount).toBe('number')
     expect(body.pagination).toBeDefined()
     expect(body.data).toBeInstanceOf(Array)
@@ -148,11 +151,30 @@ describe('PATCH /api/v1/admin/galleries/:id', () => {
       method: 'PATCH',
       url: `/api/v1/admin/galleries/${galleryId}`,
       headers: { cookie: sessionCookie },
-      payload: { allowGuestDownload: true, layout: 'GRID' },
+      payload: { allowGuestDownload: true, layout: 'GRID', stripExif: false },
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().allowGuestDownload).toBe(true)
     expect(res.json().layout).toBe('GRID')
+    expect(res.json().stripExif).toBe(false)
+  })
+
+  it('stores secretKey as bcrypt hash and never exposes it in responses', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: { secretKey: '2580' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).not.toHaveProperty('secretKey')
+
+    const db = getClient()
+    const gallery = await db.gallery.findUniqueOrThrow({ where: { id: galleryId } })
+    expect(gallery.secretKey).toBeTruthy()
+    expect(gallery.secretKey).not.toBe('2580')
+    expect(await bcrypt.compare('2580', gallery.secretKey as string)).toBe(true)
   })
 
   it('deactivates previously active galleries when another gallery is activated', async () => {
@@ -197,6 +219,87 @@ describe('PATCH /api/v1/admin/galleries/:id', () => {
     const galleries = weddings.flatMap((w) => w.galleries)
     expect(galleries.find((g) => g.id === galleryId)?.isActive).toBe(false)
     expect(galleries.find((g) => g.id === secondId)?.isActive).toBe(true)
+  })
+})
+
+describe('Gallery PIN access', () => {
+  it('requires a valid PIN for protected guest gallery routes', async () => {
+    const protect = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: { secretKey: '2468' },
+    })
+    expect(protect.statusCode).toBe(200)
+
+    const blocked = await app.inject({ method: 'GET', url: '/api/v1/g/party' })
+    expect(blocked.statusCode).toBe(401)
+    expect(blocked.json().type).toBe('invalid-pin')
+
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/api/v1/g/party/access',
+      payload: { secretKey: '1111' },
+    })
+    expect(wrong.statusCode).toBe(401)
+    expect(wrong.json().type).toBe('invalid-pin')
+
+    const unlock = await app.inject({
+      method: 'POST',
+      url: '/api/v1/g/party/access',
+      payload: { secretKey: '2468' },
+    })
+    expect(unlock.statusCode).toBe(200)
+    const accessCookie = String(unlock.headers['set-cookie']).split(';')[0]
+    expect(accessCookie).toContain('gallery_access_party=')
+    expect(accessCookie).not.toContain('$2')
+
+    const unlocked = await app.inject({
+      method: 'GET',
+      url: '/api/v1/g/party',
+      headers: { cookie: accessCookie },
+    })
+    expect(unlocked.statusCode).toBe(200)
+  })
+
+  it('blocks PIN brute-force attempts after 10 failed attempts per IP', async () => {
+    const protect = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: { secretKey: '9999' },
+    })
+    expect(protect.statusCode).toBe(200)
+
+    for (let i = 0; i < 10; i += 1) {
+      const wrong = await app.inject({
+        method: 'POST',
+        url: '/api/v1/g/party/access',
+        remoteAddress: '10.5.5.5',
+        payload: { secretKey: '0000' },
+      })
+      expect(wrong.statusCode).toBe(401)
+    }
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/v1/g/party/access',
+      remoteAddress: '10.5.5.5',
+      payload: { secretKey: '0000' },
+    })
+    expect(blocked.statusCode).toBe(429)
+    expect(blocked.json().type).toBe('pin-attempts-exceeded')
+  })
+
+  it('does not reveal whether a slug exists on access endpoint', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/g/does-not-exist/access',
+      payload: { secretKey: '1234' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.json().type).toBe('invalid-pin')
   })
 })
 

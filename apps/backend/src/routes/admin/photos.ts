@@ -19,7 +19,7 @@ export async function adminPhotoRoutes(
     const db = getClient()
     const gallery = await db.gallery.findUnique({
       where: { id },
-      select: { id: true, slug: true, moderationMode: true },
+      select: { id: true, slug: true, moderationMode: true, stripExif: true },
     })
 
     if (!gallery) {
@@ -32,6 +32,7 @@ export async function adminPhotoRoutes(
           id: gallery.id,
           slug: gallery.slug,
           moderationMode: gallery.moderationMode as 'MANUAL' | 'AUTO',
+          stripExif: gallery.stripExif,
         },
         upload: await req.file(),
         storage: opts.storage,

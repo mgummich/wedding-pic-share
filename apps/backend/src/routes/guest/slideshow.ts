@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { getClient } from '@wedding/db'
 import type { SseManager } from '../../services/sse.js'
 import { randomUUID } from 'crypto'
+import { hasGalleryAccess } from '../../services/galleryAccess.js'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
 
@@ -20,6 +21,13 @@ export async function guestSlideshowRoutes(
     const gallery = await db.gallery.findFirst({ where: { slug } })
     if (!gallery) {
       return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
+    }
+    if (!hasGalleryAccess(req, gallery, fastify.config.sessionSecret)) {
+      return reply.code(401).send({
+        type: 'invalid-pin',
+        title: 'Falscher Secret Key.',
+        status: 401,
+      })
     }
 
     const connectionId = randomUUID()

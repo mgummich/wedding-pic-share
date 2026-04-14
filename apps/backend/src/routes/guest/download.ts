@@ -3,6 +3,7 @@ import archiver from 'archiver'
 import { createReadStream } from 'fs'
 import { getClient } from '@wedding/db'
 import type { StorageService } from '../../services/storage.js'
+import { hasGalleryAccess } from '../../services/galleryAccess.js'
 
 export async function guestDownloadRoutes(
   fastify: FastifyInstance,
@@ -18,6 +19,13 @@ export async function guestDownloadRoutes(
 
     const gallery = await db.gallery.findFirst({ where: { slug } })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
+    if (!hasGalleryAccess(req, gallery, fastify.config.sessionSecret)) {
+      return reply.code(401).send({
+        type: 'invalid-pin',
+        title: 'Falscher Secret Key.',
+        status: 401,
+      })
+    }
     if (!gallery.allowGuestDownload) {
       return reply.code(403).send({ type: 'forbidden', title: 'Download not allowed', status: 403 })
     }

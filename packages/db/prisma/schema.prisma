@@ -55,6 +55,7 @@ model Gallery {
   guestNameMode      GuestNameMode  @default(OPTIONAL)
   moderationMode     ModerationMode @default(MANUAL)
   isActive           Boolean        @default(false)
+  stripExif          Boolean        @default(true)
   secretKey          String?
   createdAt          DateTime       @default(now())
   photos             Photo[]

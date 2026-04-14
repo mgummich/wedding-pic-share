@@ -34,6 +34,24 @@ describe('processImage', () => {
     // Small image should not be enlarged beyond its original size
     expect(thumbMeta.width).toBeLessThanOrEqual(400)
   })
+
+  it('strips or keeps EXIF metadata based on gallery policy', async () => {
+    const inputBuf = await sharp({
+      create: { width: 1200, height: 800, channels: 3, background: '#336699' },
+    }).jpeg().withMetadata({ orientation: 6 }).toBuffer()
+
+    const inputMeta = await sharp(inputBuf).metadata()
+    expect(inputMeta.orientation).toBe(6)
+
+    const stripped = await processImage(inputBuf, 'image/jpeg', { stripExif: true })
+    const kept = await processImage(inputBuf, 'image/jpeg', { stripExif: false })
+
+    const strippedMeta = await sharp(stripped.original).metadata()
+    const keptMeta = await sharp(kept.original).metadata()
+
+    expect(strippedMeta.orientation).toBeUndefined()
+    expect(keptMeta.orientation).toBe(6)
+  })
 })
 
 describe('generateBlurDataUrl', () => {

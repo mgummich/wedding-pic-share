@@ -5,6 +5,7 @@ import type { SseManager } from '../../services/sse.js'
 import type { UploadNotifier } from '../../services/uploadNotifier.js'
 import { isUploadOpenAt } from '../../services/uploadWindows.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
+import { hasGalleryAccess } from '../../services/galleryAccess.js'
 
 export async function guestUploadRoutes(
   fastify: FastifyInstance,
@@ -21,6 +22,13 @@ export async function guestUploadRoutes(
     if (!gallery) {
       return reply.code(404).send({ type: 'gallery-not-found', title: 'Gallery Not Found', status: 404 })
     }
+    if (!hasGalleryAccess(req, gallery, fastify.config.sessionSecret)) {
+      return reply.code(401).send({
+        type: 'invalid-pin',
+        title: 'Falscher Secret Key.',
+        status: 401,
+      })
+    }
 
     if (!isUploadOpenAt(gallery.uploadWindows)) {
       return reply.code(403).send({
@@ -36,6 +44,7 @@ export async function guestUploadRoutes(
           id: gallery.id,
           slug: gallery.slug,
           moderationMode: gallery.moderationMode as 'MANUAL' | 'AUTO',
+          stripExif: gallery.stripExif,
         },
         upload: await req.file(),
         storage: opts.storage,

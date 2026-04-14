@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { adminUploadFile, getGallery, updateGallery } from '../src/lib/api.js'
+import { adminUploadFile, getGallery, updateGallery, verifyGalleryAccess } from '../src/lib/api.js'
 
 describe('api client', () => {
   beforeEach(() => {
@@ -61,6 +61,7 @@ describe('api client', () => {
         layout: 'MASONRY',
         allowGuestDownload: false,
         guestNameMode: 'OPTIONAL',
+        stripExif: true,
         photoCount: 0,
         isActive: true,
         isUploadOpen: true,
@@ -70,6 +71,8 @@ describe('api client', () => {
 
     await updateGallery('g1', {
       isActive: true,
+      stripExif: false,
+      secretKey: '4321',
       uploadWindows: [
         {
           start: '2035-06-01T12:00:00.000Z',
@@ -84,6 +87,8 @@ describe('api client', () => {
         method: 'PATCH',
         body: JSON.stringify({
           isActive: true,
+          stripExif: false,
+          secretKey: '4321',
           uploadWindows: [
             {
               start: '2035-06-01T12:00:00.000Z',
@@ -91,6 +96,24 @@ describe('api client', () => {
             },
           ],
         }),
+      })
+    )
+  })
+
+  it('verifyGalleryAccess posts pin to unlock gallery', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response)
+
+    await verifyGalleryAccess('party', '2468')
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/g/party/access'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ secretKey: '2468' }),
+        credentials: 'include',
       })
     )
   })
