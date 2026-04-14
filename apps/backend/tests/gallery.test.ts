@@ -71,6 +71,21 @@ describe('POST /api/v1/admin/galleries', () => {
     expect(res.statusCode).toBe(409)
   })
 
+  it('returns 409 on duplicate slug across different weddings', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/galleries',
+      headers: { cookie: sessionCookie },
+      payload: {
+        weddingName: 'Another Wedding',
+        weddingSlug: 'another-wedding-2026',
+        galleryName: 'Party Other Wedding',
+        gallerySlug: 'party',
+      },
+    })
+    expect(res.statusCode).toBe(409)
+  })
+
   it('rejects invalid slug characters', async () => {
     const res = await app.inject({
       method: 'POST',

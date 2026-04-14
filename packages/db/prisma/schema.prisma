@@ -54,7 +54,7 @@ model Gallery {
   weddingId          String
   wedding            Wedding        @relation(fields: [weddingId], references: [id])
   name               String
-  slug               String
+  slug               String         @unique
   description        String?
   coverImage         String?
   layout             GalleryLayout  @default(MASONRY)
@@ -74,8 +74,6 @@ model Gallery {
   createdAt          DateTime       @default(now())
   photos             Photo[]
   uploadWindows      UploadWindow[]
-
-  @@unique([weddingId, slug])
 }
 
 model UploadWindow {

@@ -139,12 +139,12 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
     })
 
     const existing = await db.gallery.findUnique({
-      where: { weddingId_slug: { weddingId: wedding.id, slug: body.gallerySlug } },
+      where: { slug: body.gallerySlug },
     })
     if (existing) {
       return reply.code(409).send({
         type: 'conflict',
-        title: 'Gallery slug already exists for this wedding',
+        title: 'Gallery slug already exists',
         status: 409,
       })
     }
