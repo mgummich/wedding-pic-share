@@ -143,6 +143,38 @@ test.describe('Guest Upload', () => {
     await expect(page.getByText(/deine fotos wurden eingereicht/i)).toBeVisible()
   })
 
+  test('transient 503 upload failure is auto-retried and succeeds', async ({ page }) => {
+    const upload = new UploadPage(page)
+    await upload.goto(TEST_GALLERY_SLUG)
+
+    let attempts = 0
+    await page.route(`**/api/v1/g/${TEST_GALLERY_SLUG}/upload`, async (route) => {
+      attempts += 1
+      if (attempts === 1) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'temporary upstream failure' }),
+        })
+        return
+      }
+
+      await route.continue()
+    })
+
+    await upload.fileInput.setInputFiles({
+      name: 'test-photo-retry.png',
+      mimeType: 'image/png',
+      buffer: uniquePng(),
+    })
+
+    await upload.submitButton.click()
+    await expect(upload.successHeading).toBeVisible({ timeout: 15_000 })
+    await expect
+      .poll(() => attempts, { timeout: 15_000 })
+      .toBeGreaterThanOrEqual(2)
+  })
+
   test('after successful upload, "weitere Fotos" button resets form', async ({ page }) => {
     const upload = new UploadPage(page)
     await upload.goto(TEST_GALLERY_SLUG)

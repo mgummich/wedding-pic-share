@@ -5,6 +5,7 @@ import { Upload, Camera } from 'lucide-react'
 import { uploadFile, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
 import { validateUploadFile, UPLOAD_ERROR_MESSAGES } from '@/lib/uploadValidation'
+import { isTransientUploadError, runWithRetry } from '@/lib/uploadRetry'
 
 interface UploadFormProps {
   gallerySlug: string
@@ -12,6 +13,8 @@ interface UploadFormProps {
 }
 
 type FileStatus = { file: File; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; result?: UploadResponse }
+const MAX_UPLOAD_ATTEMPTS = 3
+const UPLOAD_RETRY_BACKOFF_MS = [500, 1500]
 
 export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
   const [files, setFiles] = useState<FileStatus[]>([])
@@ -19,6 +22,56 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
   const [formError, setFormError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  function updateFiles(updater: (prev: FileStatus[]) => FileStatus[]) {
+    setFiles((prev) => updater(prev))
+  }
+
+  function toUploadErrorMessage(error: unknown): string {
+    if (error instanceof ApiError) {
+      return UPLOAD_ERROR_MESSAGES[error.status] ?? 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.'
+    }
+    return 'Netzwerkfehler. Bitte versuche es erneut.'
+  }
+
+  async function uploadSingleFile(file: File, submitOnAllDone = false): Promise<boolean> {
+    updateFiles((prev) => prev.map((item) =>
+      item.file === file ? { ...item, status: 'uploading', error: undefined } : item
+    ))
+
+    const result = await runWithRetry({
+      operation: () => uploadFile(gallerySlug, file, guestName.trim() || undefined),
+      shouldRetry: isTransientUploadError,
+      maxAttempts: MAX_UPLOAD_ATTEMPTS,
+      backoffMs: UPLOAD_RETRY_BACKOFF_MS,
+    })
+
+    if (result.ok) {
+      updateFiles((prev) =>
+        {
+          const next = prev.map((item) => item.file === file
+          ? { ...item, status: 'done', error: undefined, result: result.value }
+          : item
+          )
+
+          if (submitOnAllDone && next.length > 0 && next.every((item) => item.status === 'done')) {
+            setSubmitted(true)
+          }
+
+          return next
+        }
+      )
+      return true
+    }
+
+    updateFiles((prev) =>
+      prev.map((item) => item.file === file
+        ? { ...item, status: 'error', error: toUploadErrorMessage(result.error) }
+        : item
+      )
+    )
+    return false
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
@@ -29,8 +82,15 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       }
       return { file: f, status: 'pending' }
     })
-    setFiles(validated)
+    updateFiles(() => validated)
     setFormError(null)
+    setSubmitted(false)
+  }
+
+  async function handleRetry(file: File) {
+    setFormError(null)
+    setSubmitted(false)
+    await uploadSingleFile(file, true)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -45,31 +105,20 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
     }
 
     const pending = files.filter((f) => f.status === 'pending')
-    setFiles((prev) => prev.map((f) =>
-      f.status === 'pending' ? { ...f, status: 'uploading' } : f
-    ))
+    const nonPendingBeforeSubmit = files.filter((f) => f.status !== 'pending')
+    setSubmitted(false)
 
     let allSucceeded = true
     for (const item of pending) {
-      try {
-        const result = await uploadFile(gallerySlug, item.file, guestName.trim() || undefined)
-        setFiles((prev) =>
-          prev.map((f) => f.file === item.file ? { ...f, status: 'done', result } : f)
-        )
-      } catch (err) {
+      const ok = await uploadSingleFile(item.file)
+      if (!ok) {
         allSucceeded = false
-        const message =
-          err instanceof ApiError
-            ? (UPLOAD_ERROR_MESSAGES[err.status] ?? 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
-            : 'Netzwerkfehler. Bitte versuche es erneut.'
-        setFiles((prev) =>
-          prev.map((f) => f.file === item.file ? { ...f, status: 'error', error: message } : f)
-        )
       }
     }
 
-    // Use local tracking (not the stale `files` closure) to determine success
-    if (allSucceeded && pending.length > 0) setSubmitted(true)
+    if (allSucceeded && pending.length > 0 && nonPendingBeforeSubmit.every((item) => item.status === 'done')) {
+      setSubmitted(true)
+    }
   }
 
   if (submitted && files.every((f) => f.status === 'done')) {
@@ -83,7 +132,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
           Deine Fotos wurden eingereicht und werden bald freigegeben.
         </p>
         <button
-          onClick={() => { setFiles([]); setSubmitted(false) }}
+          onClick={() => { updateFiles(() => []); setSubmitted(false) }}
           className="mt-6 px-5 py-2 rounded-full border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
         >
           Weitere Fotos hochladen
@@ -131,11 +180,21 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
                 <p className="text-sm text-text-primary truncate">{item.file.name}</p>
                 {item.error && <p className="text-xs text-error mt-0.5">{item.error}</p>}
               </div>
-              <span className="text-xs text-text-muted flex-shrink-0">
-                {item.status === 'uploading' && 'Lädt…'}
-                {item.status === 'done' && '✓'}
-                {item.status === 'error' && '✗'}
-              </span>
+              {item.status === 'error' ? (
+                <button
+                  type="button"
+                  onClick={() => handleRetry(item.file)}
+                  disabled={files.some((f) => f.status === 'uploading')}
+                  className="text-xs font-medium text-accent hover:text-accent-hover disabled:opacity-50"
+                >
+                  Erneut versuchen
+                </button>
+              ) : (
+                <span className="text-xs text-text-muted flex-shrink-0">
+                  {item.status === 'uploading' && 'Lädt…'}
+                  {item.status === 'done' && '✓'}
+                </span>
+              )}
             </li>
           ))}
         </ul>
