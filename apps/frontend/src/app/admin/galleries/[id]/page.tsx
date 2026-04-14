@@ -18,6 +18,8 @@ interface PageProps {
 
 type GalleryData = Awaited<ReturnType<typeof getAdminGalleries>>[number]
 type UploadWindowDraft = Pick<UploadWindowResponse, 'id'> & { start: string; end: string }
+const ARCHIVE_POLL_INTERVAL_MS = 1500
+const ARCHIVE_POLL_TIMEOUT_MS = 90 * 1000
 
 function toDateTimeLocal(value: string): string {
   const date = new Date(value)
@@ -43,6 +45,12 @@ function dateLocale(locale: string): string {
   if (locale === 'es') return 'es-ES'
   if (locale === 'fr') return 'fr-FR'
   return 'en-US'
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }
 
 export default function GallerySettingsPage({ params }: PageProps) {
@@ -201,8 +209,25 @@ export default function GallerySettingsPage({ params }: PageProps) {
     setSaveError(null)
 
     try {
-      const updated = await archiveGallery(id)
-      setGallery((prev) => prev ? { ...prev, ...updated } : prev)
+      const initial = await archiveGallery(id)
+      setGallery((prev) => prev ? { ...prev, ...initial } : prev)
+
+      let latest = initial
+      const deadline = Date.now() + ARCHIVE_POLL_TIMEOUT_MS
+      while (!latest.isArchived && latest.archiveStatus === 'IN_PROGRESS' && Date.now() < deadline) {
+        await sleep(ARCHIVE_POLL_INTERVAL_MS)
+        const galleries = await getAdminGalleries()
+        const next = galleries.find((item) => item.id === id)
+        if (!next) break
+        latest = next
+        setGallery((prev) => prev ? { ...prev, ...next } : prev)
+      }
+
+      if (!latest.isArchived) {
+        setSaveError(latest.archiveError ?? t('gallerySettings.saveError.archiveFailed'))
+        return
+      }
+
       setUploadWindows([])
       setSaved(false)
     } catch {

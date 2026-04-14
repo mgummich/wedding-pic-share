@@ -24,6 +24,18 @@ describe('api client', () => {
       id: 'g1',
       name: 'Test',
       slug: 'test',
+      description: null,
+      layout: 'MASONRY',
+      allowGuestDownload: false,
+      guestNameMode: 'OPTIONAL',
+      stripExif: true,
+      photoCount: 0,
+      isActive: true,
+      isArchived: false,
+      archivedAt: null,
+      archiveSizeBytes: null,
+      isUploadOpen: true,
+      uploadWindows: [],
       data: [],
       pagination: { nextCursor: null, hasMore: false },
     }
@@ -43,7 +55,25 @@ describe('api client', () => {
   it('getGallery passes cursor param when provided', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ data: [], pagination: { nextCursor: null, hasMore: false } }),
+      json: async () => ({
+        id: 'g1',
+        name: 'Test',
+        slug: 'test',
+        description: null,
+        layout: 'MASONRY',
+        allowGuestDownload: false,
+        guestNameMode: 'OPTIONAL',
+        stripExif: true,
+        photoCount: 0,
+        isActive: true,
+        isArchived: false,
+        archivedAt: null,
+        archiveSizeBytes: null,
+        isUploadOpen: true,
+        uploadWindows: [],
+        data: [],
+        pagination: { nextCursor: null, hasMore: false },
+      }),
     } as Response)
 
     await getGallery('test', { cursor: 'abc123' })

@@ -1,6 +1,5 @@
 import type {
   GalleryResponse,
-  WeddingResponse,
   PhotoResponse,
   PaginatedResponse,
   UploadResponse,
@@ -24,6 +23,66 @@ class ApiError extends Error {
     message: string
   ) {
     super(message)
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function assertPhotoResponse(value: unknown, context: string): asserts value is PhotoResponse {
+  if (!isObject(value)) throw new Error(`${context}: expected object`)
+  if (typeof value.id !== 'string') throw new Error(`${context}: invalid id`)
+  if (value.mediaType !== 'IMAGE' && value.mediaType !== 'VIDEO') throw new Error(`${context}: invalid mediaType`)
+  if (typeof value.thumbUrl !== 'string') throw new Error(`${context}: invalid thumbUrl`)
+  if (typeof value.displayUrl !== 'string') throw new Error(`${context}: invalid displayUrl`)
+  if (!(typeof value.duration === 'number' || value.duration === null)) throw new Error(`${context}: invalid duration`)
+  if (!(typeof value.guestName === 'string' || value.guestName === null)) throw new Error(`${context}: invalid guestName`)
+  if (typeof value.createdAt !== 'string') throw new Error(`${context}: invalid createdAt`)
+}
+
+function assertUploadWindowResponse(value: unknown, context: string): asserts value is UploadWindowResponse {
+  if (!isObject(value)) throw new Error(`${context}: expected object`)
+  if (typeof value.id !== 'string') throw new Error(`${context}: invalid id`)
+  if (typeof value.start !== 'string') throw new Error(`${context}: invalid start`)
+  if (typeof value.end !== 'string') throw new Error(`${context}: invalid end`)
+  if (typeof value.createdAt !== 'string') throw new Error(`${context}: invalid createdAt`)
+}
+
+function assertGalleryResponse(value: unknown, context: string): asserts value is GalleryResponse {
+  if (!isObject(value)) throw new Error(`${context}: expected object`)
+  if (typeof value.id !== 'string') throw new Error(`${context}: invalid id`)
+  if (typeof value.name !== 'string') throw new Error(`${context}: invalid name`)
+  if (typeof value.slug !== 'string') throw new Error(`${context}: invalid slug`)
+  if (!(typeof value.description === 'string' || value.description === null)) {
+    throw new Error(`${context}: invalid description`)
+  }
+  if (value.layout !== 'MASONRY' && value.layout !== 'GRID') throw new Error(`${context}: invalid layout`)
+  if (typeof value.allowGuestDownload !== 'boolean') throw new Error(`${context}: invalid allowGuestDownload`)
+  if (!['OPTIONAL', 'REQUIRED', 'HIDDEN'].includes(String(value.guestNameMode))) {
+    throw new Error(`${context}: invalid guestNameMode`)
+  }
+  if (typeof value.stripExif !== 'boolean') throw new Error(`${context}: invalid stripExif`)
+  if (typeof value.photoCount !== 'number') throw new Error(`${context}: invalid photoCount`)
+  if (typeof value.isActive !== 'boolean') throw new Error(`${context}: invalid isActive`)
+  if (typeof value.isArchived !== 'boolean') throw new Error(`${context}: invalid isArchived`)
+  if (!(typeof value.archivedAt === 'string' || value.archivedAt === null)) throw new Error(`${context}: invalid archivedAt`)
+  if (!(typeof value.archiveSizeBytes === 'number' || value.archiveSizeBytes === null)) {
+    throw new Error(`${context}: invalid archiveSizeBytes`)
+  }
+  if (value.archiveStatus !== undefined && !['IDLE', 'IN_PROGRESS', 'COMPLETED', 'FAILED'].includes(String(value.archiveStatus))) {
+    throw new Error(`${context}: invalid archiveStatus`)
+  }
+  if (value.archiveError !== undefined && !(typeof value.archiveError === 'string' || value.archiveError === null)) {
+    throw new Error(`${context}: invalid archiveError`)
+  }
+  if (value.archiveRequestedAt !== undefined && !(typeof value.archiveRequestedAt === 'string' || value.archiveRequestedAt === null)) {
+    throw new Error(`${context}: invalid archiveRequestedAt`)
+  }
+  if (typeof value.isUploadOpen !== 'boolean') throw new Error(`${context}: invalid isUploadOpen`)
+  if (!Array.isArray(value.uploadWindows)) throw new Error(`${context}: invalid uploadWindows`)
+  for (let i = 0; i < value.uploadWindows.length; i += 1) {
+    assertUploadWindowResponse(value.uploadWindows[i], `${context}.uploadWindows[${i}]`)
   }
 }
 
@@ -137,7 +196,27 @@ export async function getGallery(
   if (opts.cursor) params.set('cursor', opts.cursor)
   if (opts.limit) params.set('limit', String(opts.limit))
   const qs = params.size ? `?${params}` : ''
-  return apiFetch(`/api/v1/g/${slug}${qs}`)
+  const payload = await apiFetch<unknown>(`/api/v1/g/${slug}${qs}`)
+  if (!isObject(payload)) {
+    throw new Error('getGallery: expected object response')
+  }
+  assertGalleryResponse(payload, 'getGallery')
+  if (!Array.isArray(payload.data)) {
+    throw new Error('getGallery: invalid data')
+  }
+  for (let i = 0; i < payload.data.length; i += 1) {
+    assertPhotoResponse(payload.data[i], `getGallery.data[${i}]`)
+  }
+  if (!isObject(payload.pagination)) {
+    throw new Error('getGallery: invalid pagination')
+  }
+  if (!(typeof payload.pagination.nextCursor === 'string' || payload.pagination.nextCursor === null)) {
+    throw new Error('getGallery: invalid nextCursor')
+  }
+  if (typeof payload.pagination.hasMore !== 'boolean') {
+    throw new Error('getGallery: invalid hasMore')
+  }
+  return payload as unknown as GalleryPageResponse
 }
 
 // ─── Upload ─────────────────────────────────────────────────────────────────
@@ -290,8 +369,22 @@ export async function submitSetup(data: {
 export async function getAdminGalleries(): Promise<
   Array<GalleryResponse & { weddingName: string; weddingSlug: string }>
 > {
-  const weddings = await apiFetch<WeddingResponse[]>('/api/v1/admin/galleries')
-  return weddings.flatMap((w) =>
+  const weddings = await apiFetch<unknown>('/api/v1/admin/galleries')
+  if (!Array.isArray(weddings)) {
+    throw new Error('getAdminGalleries: expected array response')
+  }
+  for (let i = 0; i < weddings.length; i += 1) {
+    const wedding = weddings[i]
+    if (!isObject(wedding)) throw new Error(`getAdminGalleries[${i}]: expected object`)
+    if (typeof wedding.name !== 'string') throw new Error(`getAdminGalleries[${i}]: invalid wedding name`)
+    if (typeof wedding.slug !== 'string') throw new Error(`getAdminGalleries[${i}]: invalid wedding slug`)
+    if (!Array.isArray(wedding.galleries)) throw new Error(`getAdminGalleries[${i}]: invalid galleries`)
+    for (let j = 0; j < wedding.galleries.length; j += 1) {
+      assertGalleryResponse(wedding.galleries[j], `getAdminGalleries[${i}].galleries[${j}]`)
+    }
+  }
+  const typedWeddings = weddings as Array<{ name: string; slug: string; galleries: GalleryResponse[] }>
+  return typedWeddings.flatMap((w) =>
     w.galleries.map((g) => ({ ...g, weddingName: w.name, weddingSlug: w.slug }))
   )
 }
@@ -308,7 +401,15 @@ export async function createGallery(data: {
   moderationMode?: 'MANUAL' | 'AUTO'
   secretKey?: string
 }): Promise<GalleryResponse & { id: string; weddingId: string }> {
-  return apiFetch('/api/v1/admin/galleries', { method: 'POST', body: JSON.stringify(data) })
+  const payload = await apiFetch<unknown>('/api/v1/admin/galleries', { method: 'POST', body: JSON.stringify(data) })
+  assertGalleryResponse(payload, 'createGallery')
+  if (!isObject(payload)) {
+    throw new Error('createGallery: expected object')
+  }
+  if (typeof payload.weddingId !== 'string') {
+    throw new Error('createGallery: invalid weddingId')
+  }
+  return payload as unknown as GalleryResponse & { id: string; weddingId: string }
 }
 
 export async function updateGallery(
@@ -321,7 +422,9 @@ export async function updateGallery(
     uploadWindows?: Array<Pick<UploadWindowResponse, 'start' | 'end'>>
   }
 ): Promise<GalleryResponse> {
-  return apiFetch(`/api/v1/admin/galleries/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  const payload = await apiFetch<unknown>(`/api/v1/admin/galleries/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  assertGalleryResponse(payload, 'updateGallery')
+  return payload
 }
 
 export async function deleteGallery(id: string): Promise<void> {
@@ -329,7 +432,9 @@ export async function deleteGallery(id: string): Promise<void> {
 }
 
 export async function archiveGallery(id: string): Promise<GalleryResponse> {
-  return apiFetch(`/api/v1/admin/galleries/${id}/archive`, { method: 'POST' })
+  const payload = await apiFetch<unknown>(`/api/v1/admin/galleries/${id}/archive`, { method: 'POST' })
+  assertGalleryResponse(payload, 'archiveGallery')
+  return payload
 }
 
 export async function exportGallery(id: string): Promise<Blob> {
