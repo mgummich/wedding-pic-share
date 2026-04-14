@@ -5,7 +5,7 @@ import { PhotoGrid } from '@/components/PhotoGrid'
 import { UploadButton } from '@/components/UploadButton'
 import { EmptyState } from '@/components/EmptyState'
 import { Lightbox } from '@/components/Lightbox'
-import { useAdminI18n } from '@/components/AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 import { useSSE } from '@/lib/sse'
 import { getGallery } from '@/lib/api'
 import type { PhotoResponse, GalleryResponse } from '@wedding/shared'
@@ -23,11 +23,12 @@ export function GalleryClient({
   initialCursor,
   initialHasMore,
 }: GalleryClientProps) {
-  const { t } = useAdminI18n()
+  const { t } = useGuestI18n()
   const [photos, setPhotos] = useState(initialPhotos)
   const [cursor, setCursor] = useState(initialCursor)
   const [hasMore, setHasMore] = useState(initialHasMore)
   const [loading, setLoading] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   // SSE: prepend new photos approved by admin in real-time
@@ -42,12 +43,15 @@ export function GalleryClient({
 
   async function loadMore() {
     if (!hasMore || loading || !cursor) return
+    setLoadMoreError(null)
     setLoading(true)
     try {
       const result = await getGallery(gallery.slug, { cursor })
       setPhotos((prev) => [...prev, ...result.data])
       setCursor(result.pagination.nextCursor)
       setHasMore(result.pagination.hasMore)
+    } catch {
+      setLoadMoreError(t('guest.gallery.loadMoreError'))
     } finally {
       setLoading(false)
     }
@@ -80,15 +84,18 @@ export function GalleryClient({
 
       {hasMore && (
         <div className="flex justify-center mt-8 pb-24">
-          <button
-            onClick={loadMore}
-            disabled={loading}
-            className="px-6 py-2.5 rounded-full border border-border text-text-muted
+          <div className="space-y-2">
+            <button
+              onClick={loadMore}
+              disabled={loading}
+              className="px-6 py-2.5 rounded-full border border-border text-text-muted
                        hover:border-accent hover:text-accent transition-colors
                        disabled:opacity-50"
-          >
-            {loading ? t('guest.gallery.loadingMore') : t('guest.gallery.loadMore')}
-          </button>
+            >
+              {loading ? t('guest.gallery.loadingMore') : t('guest.gallery.loadMore')}
+            </button>
+            {loadMoreError && <p className="text-xs text-error text-center">{loadMoreError}</p>}
+          </div>
         </div>
       )}
 
@@ -117,6 +124,7 @@ export function GalleryClient({
           onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
           onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
           allowDownload={gallery.allowGuestDownload}
+          t={t}
         />
       )}
     </>

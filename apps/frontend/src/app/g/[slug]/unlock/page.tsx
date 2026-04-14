@@ -4,7 +4,7 @@ import { FormEvent, use, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ApiError, verifyGalleryAccess } from '@/lib/api'
-import { useAdminI18n } from '@/components/AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -14,7 +14,7 @@ export default function GalleryUnlockPage({ params }: PageProps) {
   const { slug } = use(params)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { t } = useAdminI18n()
+  const { t } = useGuestI18n()
   const [secretKey, setSecretKey] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)

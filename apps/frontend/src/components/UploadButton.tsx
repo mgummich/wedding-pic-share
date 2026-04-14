@@ -2,7 +2,7 @@
 
 import { Camera } from 'lucide-react'
 import Link from 'next/link'
-import { useAdminI18n } from './AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 
 interface UploadButtonProps {
   gallerySlug: string
@@ -10,7 +10,7 @@ interface UploadButtonProps {
 }
 
 export function UploadButton({ gallerySlug, isEmpty = false }: UploadButtonProps) {
-  const { t } = useAdminI18n()
+  const { t } = useGuestI18n()
 
   return (
     <div className="fixed bottom-6 right-6 z-10">

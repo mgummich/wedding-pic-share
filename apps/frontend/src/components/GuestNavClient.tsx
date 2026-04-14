@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutGrid, Camera, Play } from 'lucide-react'
-import { useAdminI18n } from './AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 
 interface GuestNavClientProps {
   gallerySlug: string
@@ -17,7 +17,7 @@ const NAV_LINKS = [
 
 export function GuestNavClient({ gallerySlug }: GuestNavClientProps) {
   const pathname = usePathname()
-  const { t } = useAdminI18n()
+  const { t } = useGuestI18n()
 
   return (
     <div className="flex items-center gap-1">

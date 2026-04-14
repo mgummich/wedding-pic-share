@@ -1,7 +1,7 @@
 'use client'
 
 import { GuestNavClient } from './GuestNavClient'
-import { useAdminI18n } from './AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 
 interface GuestNavProps {
   gallerySlug: string
@@ -9,7 +9,7 @@ interface GuestNavProps {
 }
 
 export function GuestNav({ gallerySlug, galleryName }: GuestNavProps) {
-  const { t } = useAdminI18n()
+  const { t } = useGuestI18n()
 
   return (
     <nav aria-label={t('guest.nav.aria')} className="sticky top-0 z-30 bg-surface-base/95 backdrop-blur border-b border-border">

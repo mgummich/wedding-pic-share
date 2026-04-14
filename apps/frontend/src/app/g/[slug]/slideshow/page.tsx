@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { getGallery } from '@/lib/api'
 import { useSSE } from '@/lib/sse'
 import { GuestNav } from '@/components/GuestNav'
-import { useAdminI18n } from '@/components/AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 import type { PhotoResponse } from '@wedding/shared'
 
 const DISPLAY_DURATION_MS = Number(process.env.NEXT_PUBLIC_SLIDESHOW_INTERVAL_MS ?? 8000)
@@ -25,7 +25,7 @@ function hasStatus(error: unknown, status: number): boolean {
 export default function SlideshowPage({ params }: PageProps) {
   const { slug } = use(params)
   const router = useRouter()
-  const { t } = useAdminI18n()
+  const { t } = useGuestI18n()
   const [photos, setPhotos] = useState<PhotoResponse[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)

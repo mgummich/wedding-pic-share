@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import { Expand } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
-import { useAdminI18n } from './AdminLocaleContext'
+import { useGuestI18n } from '@/lib/guestI18n'
 
 interface PhotoCardProps {
   photo: PhotoResponse
@@ -12,7 +12,7 @@ interface PhotoCardProps {
 }
 
 export function PhotoCard({ photo, onClick, priority = false }: PhotoCardProps) {
-  const { t } = useAdminI18n()
+  const { t } = useGuestI18n()
   const isVideo = photo.mediaType === 'VIDEO'
 
   return (
