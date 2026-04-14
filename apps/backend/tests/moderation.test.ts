@@ -1,40 +1,31 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
 import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
-import { execSync } from 'node:child_process'
-import path from 'node:path'
-import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = '/tmp/wps-mod-test.db'
+import type { SseManager } from '../src/services/sse.js'
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
 let sessionCookie: string
 let gallerySlug: string
 let photoId: string
+let testEnv: BackendTestEnv
+const sseBroadcast = vi.fn<SseManager['broadcast']>()
 
 beforeAll(async () => {
-  if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-  process.env.DATABASE_URL = `file:${DB_PATH}`
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'admin'
-  process.env.ADMIN_PASSWORD = 'Password123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = '/tmp/wps-mod-test-storage'
-  process.env.NODE_ENV = 'test'
-
-  execSync('npx prisma migrate deploy', {
-    cwd: path.join(__dirname, '../../../packages/db'),
-    env: { ...process.env },
-    stdio: 'inherit',
-  })
+  testEnv = await createBackendTestEnv('moderation')
 
   const config = loadConfig()
-  app = await buildApp(config)
+  const sse: SseManager = {
+    add: () => {},
+    remove: () => {},
+    broadcast: sseBroadcast,
+    sendHeartbeat: () => {},
+    connectionCount: () => 0,
+  }
+  app = await buildApp(config, { sse })
   await app.ready()
 
   const { seedAdmin } = await import('../src/seed.js')
@@ -60,20 +51,21 @@ beforeAll(async () => {
     create: { width: 100, height: 100, channels: 3, background: '#123456' },
   }).jpeg().toBuffer()
 
-  const form = new FormData()
-  form.append('file', new Blob([jpegBuf], { type: 'image/jpeg' }), 'mod-test.jpg')
+  const initialUpload = buildMultipartPayload(jpegBuf, 'image/jpeg', 'mod-test.jpg')
 
   const uploadRes = await app.inject({
     method: 'POST',
     url: `/api/v1/g/${gallerySlug}/upload`,
-    payload: form,
+    headers: { 'content-type': initialUpload.contentType },
+    payload: initialUpload.body,
   })
   photoId = uploadRes.json().id
 })
 
 afterAll(async () => {
-  await app.close()
+  await app?.close()
   await closeClient()
+  await testEnv.cleanup()
 })
 
 describe('GET /api/v1/admin/galleries/:id/photos', () => {
@@ -168,6 +160,8 @@ describe('GET /api/v1/admin/galleries/:id/photos', () => {
 
 describe('PATCH /api/v1/admin/photos/:id', () => {
   it('approves a photo and broadcasts SSE', async () => {
+    sseBroadcast.mockClear()
+
     const res = await app.inject({
       method: 'PATCH',
       url: `/api/v1/admin/photos/${photoId}`,
@@ -176,6 +170,52 @@ describe('PATCH /api/v1/admin/photos/:id', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().status).toBe('APPROVED')
+    expect(sseBroadcast).toHaveBeenCalledTimes(1)
+    expect(sseBroadcast).toHaveBeenCalledWith(expect.any(String), 'new-photo', expect.objectContaining({
+      id: photoId,
+    }))
+  })
+})
+
+describe('DELETE /api/v1/admin/photos/:id', () => {
+  it('soft-deletes a photo so it no longer appears in admin listings', async () => {
+    const buf = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#9966aa' },
+    }).jpeg().toBuffer()
+    const multipart = buildMultipartPayload(buf, 'image/jpeg', 'soft-delete.jpg')
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(upload.statusCode).toBe(201)
+    const uploadedId = upload.json().id as string
+
+    const gallery = await getClient().gallery.findFirstOrThrow({ where: { slug: gallerySlug } })
+    const listedBefore = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/galleries/${gallery.id}/photos?status=PENDING`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(listedBefore.statusCode).toBe(200)
+    expect((listedBefore.json().data as Array<{ id: string }>).some((photo) => photo.id === uploadedId)).toBe(true)
+
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/admin/photos/${uploadedId}`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(deleteRes.statusCode).toBe(200)
+    expect(deleteRes.json()).toEqual({ ok: true })
+
+    const listedAfter = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/galleries/${gallery.id}/photos?status=PENDING`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(listedAfter.statusCode).toBe(200)
+    expect((listedAfter.json().data as Array<{ id: string }>).some((photo) => photo.id === uploadedId)).toBe(false)
   })
 })
 
@@ -187,9 +227,13 @@ describe('POST /api/v1/admin/photos/batch', () => {
       const buf = await sharp({
         create: { width: 50, height: 50, channels: 3, background: `#${i}${i}${i}${i}${i}${i}` },
       }).jpeg().toBuffer()
-      const form = new FormData()
-      form.append('file', new Blob([buf], { type: 'image/jpeg' }), `batch${i}.jpg`)
-      const r = await app.inject({ method: 'POST', url: `/api/v1/g/${gallerySlug}/upload`, payload: form })
+      const multipart = buildMultipartPayload(buf, 'image/jpeg', `batch${i}.jpg`)
+      const r = await app.inject({
+        method: 'POST',
+        url: `/api/v1/g/${gallerySlug}/upload`,
+        headers: { 'content-type': multipart.contentType },
+        payload: multipart.body,
+      })
       ids.push(r.json().id)
     }
 
@@ -202,4 +246,68 @@ describe('POST /api/v1/admin/photos/batch', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().processed).toBe(2)
   })
+
+  it('approves multiple photos and broadcasts one SSE event per approved photo', async () => {
+    sseBroadcast.mockClear()
+
+    const ids: string[] = []
+    for (let i = 0; i < 2; i += 1) {
+      const buf = await sharp({
+        create: { width: 80, height: 80, channels: 3, background: `#22${i}${i}aa` },
+      }).jpeg().toBuffer()
+      const multipart = buildMultipartPayload(buf, 'image/jpeg', `batch-approve-${i}.jpg`)
+      const upload = await app.inject({
+        method: 'POST',
+        url: `/api/v1/g/${gallerySlug}/upload`,
+        headers: { 'content-type': multipart.contentType },
+        payload: multipart.body,
+      })
+      expect(upload.statusCode).toBe(201)
+      ids.push(upload.json().id)
+    }
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/photos/batch',
+      headers: { cookie: sessionCookie },
+      payload: { action: 'approve', photoIds: ids },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().processed).toBe(2)
+    expect(sseBroadcast).toHaveBeenCalledTimes(2)
+    expect(sseBroadcast).toHaveBeenNthCalledWith(
+      1,
+      expect.any(String),
+      'new-photo',
+      expect.objectContaining({ id: ids[0] })
+    )
+    expect(sseBroadcast).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      'new-photo',
+      expect.objectContaining({ id: ids[1] })
+    )
+  })
 })
+
+function buildMultipartPayload(
+  fileBuffer: Buffer,
+  mimeType: string,
+  filename: string,
+  fields: Record<string, string> = {}
+) {
+  const boundary = `----FormBoundary${Math.random().toString(36).slice(2)}`
+  const fieldParts = Object.entries(fields).map(([key, value]) => Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
+  ))
+
+  const body = Buffer.concat([
+    ...fieldParts,
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`),
+    fileBuffer,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ])
+
+  return { body, contentType: `multipart/form-data; boundary=${boundary}` }
+}

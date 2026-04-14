@@ -4,37 +4,20 @@ import { loadConfig } from '../src/config.js'
 import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
-import { execSync } from 'node:child_process'
 import path from 'node:path'
-import fs from 'node:fs'
 import { unlink } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
 import type { UploadNotifier } from '../src/services/uploadNotifier.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = '/tmp/wps-upload-test.db'
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
 let sessionCookie: string
 let gallerySlug: string
 let galleryId: string
+let testEnv: BackendTestEnv
 const notifyGuestUpload = vi.fn<UploadNotifier['notifyGuestUpload']>().mockResolvedValue(undefined)
 
 beforeAll(async () => {
-  if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-  process.env.DATABASE_URL = `file:${DB_PATH}`
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'admin'
-  process.env.ADMIN_PASSWORD = 'Password123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = '/tmp/wps-upload-test-storage'
-  process.env.NODE_ENV = 'test'
-
-  execSync('npx prisma migrate deploy', {
-    cwd: path.join(__dirname, '../../../packages/db'),
-    env: { ...process.env },
-    stdio: 'inherit',
-  })
+  testEnv = await createBackendTestEnv('upload')
 
   const config = loadConfig()
   app = await buildApp(config, {
@@ -70,9 +53,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close()
   await closeClient()
-  if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-  if (fs.existsSync(`${DB_PATH}-shm`)) fs.unlinkSync(`${DB_PATH}-shm`)
-  if (fs.existsSync(`${DB_PATH}-wal`)) fs.unlinkSync(`${DB_PATH}-wal`)
+  await testEnv.cleanup()
 })
 
 beforeEach(() => {
@@ -404,7 +385,7 @@ describe('POST /api/v1/g/:slug/upload', () => {
 
     const db = getClient()
     const photo = await db.photo.findUniqueOrThrow({ where: { id: photoId } })
-    await unlink(path.join('/tmp/wps-upload-test-storage', gallerySlug, photo.displayPath))
+    await unlink(path.join(testEnv.storagePath, gallerySlug, photo.displayPath))
 
     const res = await app.inject({
       method: 'GET',
@@ -423,6 +404,64 @@ describe('POST /api/v1/g/:slug/upload', () => {
     })
 
     expect(res.statusCode).toBe(400)
+  })
+
+  it('blocks gallery zip download when guest download is disabled', async () => {
+    const update = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        allowGuestDownload: false,
+        secretKey: null,
+      },
+    })
+    expect(update.statusCode).toBe(200)
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/g/${gallerySlug}/download`,
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().type).toBe('forbidden')
+  })
+
+  it('streams a zip archive when guest download is enabled', async () => {
+    const update = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        allowGuestDownload: true,
+        moderationMode: 'AUTO',
+        secretKey: null,
+        uploadWindows: [],
+      },
+    })
+    expect(update.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 120, height: 120, channels: 3, background: '#3366aa' },
+    }).jpeg().toBuffer()
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'download-ready.jpg')
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(upload.statusCode).toBe(201)
+    expect(upload.json().status).toBe('APPROVED')
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/g/${gallerySlug}/download`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.rawPayload.length).toBeGreaterThan(20)
+    expect(res.rawPayload.subarray(0, 2).toString('utf8')).toBe('PK')
   })
 })
 

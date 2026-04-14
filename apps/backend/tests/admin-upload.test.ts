@@ -4,13 +4,7 @@ import { loadConfig } from '../src/config.js'
 import { closeClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
-import { execSync } from 'node:child_process'
-import path from 'node:path'
-import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = '/tmp/wps-admin-upload-test.db'
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
 let sessionCookie: string
@@ -18,22 +12,10 @@ let manualGalleryId: string
 let autoGalleryId: string
 let windowedGalleryId: string
 let duplicateGalleryId: string
+let testEnv: BackendTestEnv
 
 beforeAll(async () => {
-  if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-  process.env.DATABASE_URL = `file:${DB_PATH}`
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'admin'
-  process.env.ADMIN_PASSWORD = 'Password123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = '/tmp/wps-admin-upload-test-storage'
-  process.env.NODE_ENV = 'test'
-
-  execSync('npx prisma migrate deploy', {
-    cwd: path.join(__dirname, '../../../packages/db'),
-    env: { ...process.env },
-    stdio: 'inherit',
-  })
+  testEnv = await createBackendTestEnv('admin-upload')
 
   const config = loadConfig()
   app = await buildApp(config)
@@ -103,9 +85,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close()
   await closeClient()
-  if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-  if (fs.existsSync(`${DB_PATH}-shm`)) fs.unlinkSync(`${DB_PATH}-shm`)
-  if (fs.existsSync(`${DB_PATH}-wal`)) fs.unlinkSync(`${DB_PATH}-wal`)
+  await testEnv.cleanup()
 })
 
 describe('POST /api/v1/admin/galleries/:id/upload', () => {

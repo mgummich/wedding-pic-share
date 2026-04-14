@@ -4,40 +4,20 @@ import { loadConfig } from '../src/config.js'
 import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
-import { execSync } from 'node:child_process'
 import path from 'node:path'
-import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { unlink } from 'node:fs/promises'
 import type { SseManager } from '../src/services/sse.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = '/tmp/wps-archive-test.db'
-const STORAGE_PATH = '/tmp/wps-archive-test-storage'
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
 let sessionCookie: string
 let galleryId: string
 let gallerySlug: string
 const sseBroadcast = vi.fn<SseManager['broadcast']>()
+let testEnv: BackendTestEnv
 
 beforeAll(async () => {
-  if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-  if (fs.existsSync(STORAGE_PATH)) fs.rmSync(STORAGE_PATH, { recursive: true, force: true })
-
-  process.env.DATABASE_URL = `file:${DB_PATH}`
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'admin'
-  process.env.ADMIN_PASSWORD = 'Password123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = STORAGE_PATH
-  process.env.NODE_ENV = 'test'
-
-  execSync('npx prisma migrate deploy', {
-    cwd: path.join(__dirname, '../../../packages/db'),
-    env: { ...process.env },
-    stdio: 'inherit',
-  })
+  testEnv = await createBackendTestEnv('archive')
 
   const config = loadConfig()
   const sse: SseManager = {
@@ -110,10 +90,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close()
   await closeClient()
-  if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-  if (fs.existsSync(`${DB_PATH}-shm`)) fs.unlinkSync(`${DB_PATH}-shm`)
-  if (fs.existsSync(`${DB_PATH}-wal`)) fs.unlinkSync(`${DB_PATH}-wal`)
-  if (fs.existsSync(STORAGE_PATH)) fs.rmSync(STORAGE_PATH, { recursive: true, force: true })
+  await testEnv.cleanup()
 })
 
 describe('POST /api/v1/admin/galleries/:id/archive', () => {
@@ -193,7 +170,7 @@ describe('POST /api/v1/admin/galleries/:id/archive', () => {
       orderBy: { createdAt: 'asc' },
     })
 
-    await unlink(path.join(STORAGE_PATH, gallery.slug, photo.originalPath))
+    await unlink(path.join(testEnv.storagePath, gallery.slug, photo.originalPath))
 
     const res = await app.inject({
       method: 'GET',

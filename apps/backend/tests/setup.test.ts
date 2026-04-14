@@ -1,30 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { unlink } from 'fs/promises'
-import { join } from 'path'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
 import { closeClient, getClient } from '@wedding/db'
-
-const DB_PATH = `/tmp/wps-setup-test-${process.pid}.db`
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
+let testEnv: BackendTestEnv
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = `file:${DB_PATH}`
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'admin'
-  process.env.ADMIN_PASSWORD = 'Password123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = '/tmp/wps-test-setup'
-  process.env.NODE_ENV = 'test'
-
-  const { execSync } = await import('child_process')
-  execSync('npx prisma migrate deploy', {
-    cwd: join(process.cwd(), '../../packages/db'),
-    env: { ...process.env },
-    stdio: 'pipe',
-  })
+  testEnv = await createBackendTestEnv('setup')
 
   app = await buildApp(loadConfig())
   await app.ready()
@@ -44,9 +29,7 @@ afterAll(async () => {
     await app.close()
   }
   await closeClient()
-  await unlink(DB_PATH).catch(() => {})
-  await unlink(`${DB_PATH}-wal`).catch(() => {})
-  await unlink(`${DB_PATH}-shm`).catch(() => {})
+  await testEnv.cleanup()
 })
 
 describe('GET /api/v1/setup/status', () => {

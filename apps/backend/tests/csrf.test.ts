@@ -3,25 +3,15 @@ import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
 import { closeClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
-import { unlink } from 'fs/promises'
-import { join } from 'path'
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
+let testEnv: BackendTestEnv
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = 'file:/tmp/wps-csrf-test.db'
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'csrfadmin'
-  process.env.ADMIN_PASSWORD = 'TestPassword123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = '/tmp/wps-test-csrf'
-  process.env.NODE_ENV = 'test'
-
-  const { execSync } = await import('child_process')
-  execSync('npx prisma migrate deploy', {
-    cwd: join(process.cwd(), '../../packages/db'),
-    env: { ...process.env },
-    stdio: 'pipe',
+  testEnv = await createBackendTestEnv('csrf', {
+    adminUsername: 'csrfadmin',
+    adminPassword: 'TestPassword123!',
   })
 
   const config = loadConfig()
@@ -33,9 +23,9 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await app.close()
+  await app?.close()
   await closeClient()
-  await unlink('/tmp/wps-csrf-test.db').catch(() => {})
+  await testEnv.cleanup()
 })
 
 describe('admin csrf protection', () => {

@@ -1,30 +1,19 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { unlink } from 'fs/promises'
-import { join } from 'path'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
 import { seedAdmin } from '../src/seed.js'
 import { closeClient, getClient } from '@wedding/db'
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
-const DB_PATH = `/tmp/wps-bruteforce-test-${process.pid}.db`
 let nowMs = Date.parse('2026-04-12T09:00:00.000Z')
+let testEnv: BackendTestEnv
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = `file:${DB_PATH}`
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'testadmin'
-  process.env.ADMIN_PASSWORD = 'TestPassword123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = '/tmp/wps-test-bruteforce'
-  process.env.NODE_ENV = 'test'
-
-  const { execSync } = await import('child_process')
-  execSync('npx prisma migrate deploy', {
-    cwd: join(process.cwd(), '../../packages/db'),
-    env: { ...process.env },
-    stdio: 'pipe',
+  testEnv = await createBackendTestEnv('brute-force', {
+    adminUsername: 'testadmin',
+    adminPassword: 'TestPassword123!',
   })
 
   const config = loadConfig()
@@ -51,9 +40,7 @@ afterAll(async () => {
   if (app) {
     await app.close()
   }
-  await unlink(DB_PATH).catch(() => {})
-  await unlink(`${DB_PATH}-wal`).catch(() => {})
-  await unlink(`${DB_PATH}-shm`).catch(() => {})
+  await testEnv.cleanup()
 })
 
 async function login(password: string, ip = '127.0.0.1') {

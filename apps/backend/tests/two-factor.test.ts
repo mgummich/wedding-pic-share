@@ -1,16 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { unlink } from 'fs/promises'
-import { join } from 'path'
 import { createHmac } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
 import { seedAdmin } from '../src/seed.js'
 import { closeClient, getClient } from '@wedding/db'
+import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
-const DB_PATH = `/tmp/wps-2fa-test-${process.pid}.db`
+let testEnv: BackendTestEnv
 
 const FIXED_TIME = Date.parse('2026-04-14T12:00:00.000Z')
 
@@ -52,21 +51,13 @@ function generateTotp(secret: string, timestampMs: number): string {
 }
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = `file:${DB_PATH}`
-  process.env.SESSION_SECRET = 'test-secret-32-chars-xxxxxxxxxxxx'
-  process.env.ADMIN_USERNAME = 'testadmin'
-  process.env.ADMIN_PASSWORD = 'TestPassword123!'
-  process.env.FRONTEND_URL = 'http://localhost:3000'
-  process.env.STORAGE_LOCAL_PATH = '/tmp/wps-test-2fa'
-  process.env.NODE_ENV = 'test'
-  process.env.TOTP_ENABLED = 'true'
-  process.env.TOTP_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-
-  const { execSync } = await import('child_process')
-  execSync('npx prisma migrate deploy', {
-    cwd: join(process.cwd(), '../../packages/db'),
-    env: { ...process.env },
-    stdio: 'pipe',
+  testEnv = await createBackendTestEnv('two-factor', {
+    adminUsername: 'testadmin',
+    adminPassword: 'TestPassword123!',
+    extraEnv: {
+      TOTP_ENABLED: 'true',
+      TOTP_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    },
   })
 
   const config = loadConfig()
@@ -92,9 +83,7 @@ afterAll(async () => {
   if (app) {
     await app.close()
   }
-  await unlink(DB_PATH).catch(() => {})
-  await unlink(`${DB_PATH}-wal`).catch(() => {})
-  await unlink(`${DB_PATH}-shm`).catch(() => {})
+  await testEnv.cleanup()
 })
 
 describe('admin two-factor authentication', () => {
