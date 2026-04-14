@@ -15,6 +15,7 @@
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.0.0",
     "@wedding/shared": "workspace:*",
+    "qrcode": "^1.5.4",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -25,6 +26,7 @@
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.0.0",
     "@types/node": "^20.0.0",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.0.0",

@@ -1,10 +1,12 @@
-export type AdminLocale = 'de' | 'en'
+export type AdminLocale = 'de' | 'en' | 'es' | 'fr'
 
 export const adminMessages = {
   de: {
     'common.language': 'Sprache',
     'common.language.de': 'Deutsch',
     'common.language.en': 'Englisch',
+    'common.language.es': 'Spanisch',
+    'common.language.fr': 'Französisch',
     'common.optional': '(optional)',
     'common.loading': 'Lädt…',
     'common.cancel': 'Abbrechen',
@@ -27,6 +29,29 @@ export const adminMessages = {
     'dashboard.photos': '{count} Fotos',
     'dashboard.moderate': 'Moderieren',
     'dashboard.settingsAria': 'Einstellungen',
+    'dashboard.2fa.title': 'Zwei-Faktor-Authentifizierung',
+    'dashboard.2fa.enabled': '2FA ist aktiv.',
+    'dashboard.2fa.notConfigured': '2FA ist für dieses Konto noch nicht eingerichtet.',
+    'dashboard.2fa.step1': 'Schritt 1: Passwort bestätigen',
+    'dashboard.2fa.step2': 'Schritt 2: Code aus Authenticator-App eingeben',
+    'dashboard.2fa.password': 'Passwort',
+    'dashboard.2fa.code': '2FA-Code',
+    'dashboard.2fa.secret': 'Manueller Schlüssel',
+    'dashboard.2fa.otpauth': 'OTPAuth-URL',
+    'dashboard.2fa.qrAlt': 'QR-Code für 2FA-Setup',
+    'dashboard.2fa.copySecret': 'Schlüssel kopieren',
+    'dashboard.2fa.copyOtpAuth': 'URL kopieren',
+    'dashboard.2fa.copySuccess': 'Kopiert.',
+    'dashboard.2fa.copyFailed': 'Kopieren fehlgeschlagen.',
+    'dashboard.2fa.start': '2FA-Setup starten',
+    'dashboard.2fa.verify': '2FA aktivieren',
+    'dashboard.2fa.loading': 'Lädt…',
+    'dashboard.2fa.saving': 'Wird verarbeitet…',
+    'dashboard.2fa.setupSuccess': 'Secret erstellt. Bitte in deiner Authenticator-App hinzufügen und Code bestätigen.',
+    'dashboard.2fa.verifySuccess': '2FA erfolgreich aktiviert.',
+    'dashboard.2fa.error.invalidPassword': 'Passwort ungültig.',
+    'dashboard.2fa.error.invalidCode': '2FA-Code ungültig.',
+    'dashboard.2fa.error.generic': '2FA-Aktion fehlgeschlagen. Bitte erneut versuchen.',
 
     'newGallery.title': 'Neue Galerie',
     'newGallery.wedding.section': 'Hochzeit',
@@ -93,11 +118,18 @@ export const adminMessages = {
     'gallerySettings.actions.title': 'Aktionen',
     'gallerySettings.actions.qrPng': 'QR-Code (PNG)',
     'gallerySettings.actions.qrSvg': 'QR-Code (SVG)',
+    'gallerySettings.actions.tableCardPdf': 'Tischkärtchen (PDF)',
+    'gallerySettings.actions.archive': 'Galerie abschließen & archivieren',
+    'gallerySettings.actions.archiving': 'Archivierung läuft…',
+    'gallerySettings.actions.archived': 'Galerie archiviert',
     'gallerySettings.actions.exportZip': 'ZIP exportieren',
     'gallerySettings.actions.exporting': 'Wird exportiert…',
     'gallerySettings.actions.qrPngAria': 'QR-Code als PNG herunterladen',
     'gallerySettings.actions.qrSvgAria': 'QR-Code als SVG herunterladen',
+    'gallerySettings.actions.tableCardPdfAria': 'Tischkärtchen als PDF herunterladen',
+    'gallerySettings.actions.archiveAria': 'Galerie abschließen und ZIP-Archiv erstellen',
     'gallerySettings.actions.exportZipAria': 'Fotos als ZIP exportieren',
+    'gallerySettings.actions.archiveMeta': 'Abgeschlossen am {archivedAt} · Archivgröße: {size}',
     'gallerySettings.approvedPhotos': 'Freigegebene Fotos ({count})',
     'gallerySettings.photoEnlargeAria': 'Foto vergrößern',
     'gallerySettings.danger.title': 'Galerie löschen',
@@ -110,6 +142,7 @@ export const adminMessages = {
     'gallerySettings.saveError.saveFailed': 'Speichern fehlgeschlagen. Bitte versuche es erneut.',
     'gallerySettings.saveError.deleteFailed': 'Löschen fehlgeschlagen.',
     'gallerySettings.saveError.exportFailed': 'Export fehlgeschlagen. Bitte versuche es erneut.',
+    'gallerySettings.saveError.archiveFailed': 'Archivierung fehlgeschlagen. Bitte versuche es erneut.',
     'gallerySettings.saveSuccess': 'Gespeichert ✓',
     'gallerySettings.submit.saving': 'Wird gespeichert…',
     'gallerySettings.submit.save': 'Speichern',
@@ -133,6 +166,8 @@ export const adminMessages = {
     'adminUpload.nameRequired': '(Pflicht)',
     'adminUpload.namePlaceholder': 'Zum Beispiel: Trauzeuge',
     'adminUpload.queueAria': 'Upload-Warteschlange',
+    'adminUpload.photographerMode': 'Fotograf-Modus (Auto-Freigabe)',
+    'adminUpload.photographerModeHint': 'Uploads werden direkt freigegeben, auch wenn die Galerie sonst manuelle Moderation nutzt.',
     'adminUpload.error.noFiles': 'Bitte füge mindestens eine Datei zur Upload-Warteschlange hinzu.',
     'adminUpload.error.nameRequired': 'Bitte gib einen Namen für diese Uploads ein.',
     'adminUpload.error.uploadFailed': 'Upload fehlgeschlagen. Bitte erneut versuchen.',
@@ -153,7 +188,10 @@ export const adminMessages = {
     'login.title': 'Admin-Bereich',
     'login.username': 'Benutzername',
     'login.password': 'Passwort',
+    'login.totpCode': '2FA-Code',
     'login.error.invalidCredentials': 'Falscher Benutzername oder Passwort.',
+    'login.error.totpRequired': '2FA-Code erforderlich.',
+    'login.error.invalidTotp': 'Ungültiger 2FA-Code.',
     'login.error.rateLimited': 'Zu viele Fehlversuche. Bitte versuche es später erneut.',
     'login.error.generic': 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.',
     'login.submit': 'Anmelden',
@@ -207,6 +245,8 @@ export const adminMessages = {
 
     'guest.slideshow.empty': 'Noch keine Fotos freigegeben.',
     'guest.slideshow.share': '📷 Teile deine Fotos',
+    'guest.slideshow.closedTitle': 'Galerie ist abgeschlossen',
+    'guest.slideshow.closedDescription': 'Die Slideshow wurde beendet. Vielen Dank fürs Mitfeiern!',
 
     'lightbox.close': 'Schließen',
     'lightbox.download': 'Foto herunterladen',
@@ -245,6 +285,8 @@ export const adminMessages = {
     'common.language': 'Language',
     'common.language.de': 'German',
     'common.language.en': 'English',
+    'common.language.es': 'Spanish',
+    'common.language.fr': 'French',
     'common.optional': '(optional)',
     'common.loading': 'Loading…',
     'common.cancel': 'Cancel',
@@ -267,6 +309,29 @@ export const adminMessages = {
     'dashboard.photos': '{count} photos',
     'dashboard.moderate': 'Moderate',
     'dashboard.settingsAria': 'Settings',
+    'dashboard.2fa.title': 'Two-factor authentication',
+    'dashboard.2fa.enabled': '2FA is enabled.',
+    'dashboard.2fa.notConfigured': '2FA is not configured for this account yet.',
+    'dashboard.2fa.step1': 'Step 1: Confirm password',
+    'dashboard.2fa.step2': 'Step 2: Enter code from authenticator app',
+    'dashboard.2fa.password': 'Password',
+    'dashboard.2fa.code': '2FA code',
+    'dashboard.2fa.secret': 'Manual key',
+    'dashboard.2fa.otpauth': 'OTPAuth URL',
+    'dashboard.2fa.qrAlt': 'QR code for 2FA setup',
+    'dashboard.2fa.copySecret': 'Copy key',
+    'dashboard.2fa.copyOtpAuth': 'Copy URL',
+    'dashboard.2fa.copySuccess': 'Copied.',
+    'dashboard.2fa.copyFailed': 'Copy failed.',
+    'dashboard.2fa.start': 'Start 2FA setup',
+    'dashboard.2fa.verify': 'Enable 2FA',
+    'dashboard.2fa.loading': 'Loading…',
+    'dashboard.2fa.saving': 'Processing…',
+    'dashboard.2fa.setupSuccess': 'Secret created. Add it to your authenticator app and confirm with a code.',
+    'dashboard.2fa.verifySuccess': '2FA enabled successfully.',
+    'dashboard.2fa.error.invalidPassword': 'Invalid password.',
+    'dashboard.2fa.error.invalidCode': 'Invalid 2FA code.',
+    'dashboard.2fa.error.generic': '2FA action failed. Please try again.',
 
     'newGallery.title': 'New gallery',
     'newGallery.wedding.section': 'Wedding',
@@ -333,11 +398,18 @@ export const adminMessages = {
     'gallerySettings.actions.title': 'Actions',
     'gallerySettings.actions.qrPng': 'QR code (PNG)',
     'gallerySettings.actions.qrSvg': 'QR code (SVG)',
+    'gallerySettings.actions.tableCardPdf': 'Table card (PDF)',
+    'gallerySettings.actions.archive': 'Close & archive gallery',
+    'gallerySettings.actions.archiving': 'Archiving…',
+    'gallerySettings.actions.archived': 'Gallery archived',
     'gallerySettings.actions.exportZip': 'Export ZIP',
     'gallerySettings.actions.exporting': 'Exporting…',
     'gallerySettings.actions.qrPngAria': 'Download QR code as PNG',
     'gallerySettings.actions.qrSvgAria': 'Download QR code as SVG',
+    'gallerySettings.actions.tableCardPdfAria': 'Download table card as PDF',
+    'gallerySettings.actions.archiveAria': 'Close gallery and create ZIP archive',
     'gallerySettings.actions.exportZipAria': 'Export photos as ZIP',
+    'gallerySettings.actions.archiveMeta': 'Closed on {archivedAt} · Archive size: {size}',
     'gallerySettings.approvedPhotos': 'Approved photos ({count})',
     'gallerySettings.photoEnlargeAria': 'Enlarge photo',
     'gallerySettings.danger.title': 'Delete gallery',
@@ -350,6 +422,7 @@ export const adminMessages = {
     'gallerySettings.saveError.saveFailed': 'Saving failed. Please try again.',
     'gallerySettings.saveError.deleteFailed': 'Delete failed.',
     'gallerySettings.saveError.exportFailed': 'Export failed. Please try again.',
+    'gallerySettings.saveError.archiveFailed': 'Archiving failed. Please try again.',
     'gallerySettings.saveSuccess': 'Saved ✓',
     'gallerySettings.submit.saving': 'Saving…',
     'gallerySettings.submit.save': 'Save',
@@ -373,6 +446,8 @@ export const adminMessages = {
     'adminUpload.nameRequired': '(required)',
     'adminUpload.namePlaceholder': 'For example: Best man',
     'adminUpload.queueAria': 'Upload queue',
+    'adminUpload.photographerMode': 'Photographer mode (auto-approve)',
+    'adminUpload.photographerModeHint': 'Uploads are approved immediately, even when the gallery usually uses manual moderation.',
     'adminUpload.error.noFiles': 'Please add at least one file to the upload queue.',
     'adminUpload.error.nameRequired': 'Please provide a name for these uploads.',
     'adminUpload.error.uploadFailed': 'Upload failed. Please try again.',
@@ -393,7 +468,10 @@ export const adminMessages = {
     'login.title': 'Admin area',
     'login.username': 'Username',
     'login.password': 'Password',
+    'login.totpCode': '2FA code',
     'login.error.invalidCredentials': 'Invalid username or password.',
+    'login.error.totpRequired': '2FA code required.',
+    'login.error.invalidTotp': 'Invalid 2FA code.',
     'login.error.rateLimited': 'Too many failed attempts. Please try again later.',
     'login.error.generic': 'Something went wrong. Please try again.',
     'login.submit': 'Sign in',
@@ -447,6 +525,8 @@ export const adminMessages = {
 
     'guest.slideshow.empty': 'No photos approved yet.',
     'guest.slideshow.share': '📷 Share your photos',
+    'guest.slideshow.closedTitle': 'Gallery is closed',
+    'guest.slideshow.closedDescription': 'The slideshow has ended. Thanks for celebrating with us!',
 
     'lightbox.close': 'Close',
     'lightbox.download': 'Download photo',
@@ -485,8 +565,43 @@ export const adminMessages = {
 
 export type AdminMessageKey = keyof typeof adminMessages.de
 
+const localeMessageOverrides: Record<Exclude<AdminLocale, keyof typeof adminMessages>, Partial<Record<AdminMessageKey, string>>> = {
+  es: {
+    'common.language': 'Idioma',
+    'common.language.de': 'Alemán',
+    'common.language.en': 'Inglés',
+    'common.language.es': 'Español',
+    'common.language.fr': 'Francés',
+    'login.submit': 'Iniciar sesión',
+    'login.submitting': 'Iniciando sesión…',
+  },
+  fr: {
+    'common.language': 'Langue',
+    'common.language.de': 'Allemand',
+    'common.language.en': 'Anglais',
+    'common.language.es': 'Espagnol',
+    'common.language.fr': 'Français',
+    'login.submit': 'Se connecter',
+    'login.submitting': 'Connexion…',
+  },
+}
+
+function getMessagesForLocale(locale: AdminLocale): Record<AdminMessageKey, string> {
+  if (locale === 'de' || locale === 'en') {
+    return adminMessages[locale]
+  }
+
+  return {
+    ...adminMessages.en,
+    ...localeMessageOverrides[locale],
+  }
+}
+
 export function normalizeAdminLocale(locale: string | null | undefined): AdminLocale {
-  return locale === 'en' ? 'en' : 'de'
+  if (locale === 'de' || locale === 'en' || locale === 'es' || locale === 'fr') {
+    return locale
+  }
+  return 'de'
 }
 
 export function resolveAdminLocaleFromCookie(cookieValue: string | null | undefined): AdminLocale {
@@ -505,7 +620,7 @@ export function translateAdminMessage(
   key: AdminMessageKey,
   params: Record<string, string | number> = {}
 ): string {
-  const template = adminMessages[locale][key]
+  const template = getMessagesForLocale(locale)[key]
   return template.replace(/\{(\w+)\}/g, (_full, token: string) => {
     const value = params[token]
     return value === undefined ? '' : String(value)

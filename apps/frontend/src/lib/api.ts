@@ -13,6 +13,9 @@ const BASE_URL =
   typeof window === 'undefined'
     ? (process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000')
     : ''
+const ADMIN_CSRF_PATH = '/api/v1/admin/csrf'
+let adminCsrfToken: string | null = null
+let adminCsrfTokenInFlight: Promise<string> | null = null
 
 class ApiError extends Error {
   constructor(
@@ -24,17 +27,68 @@ class ApiError extends Error {
   }
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+function isAdminMutation(path: string, method: string): boolean {
+  if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) return false
+  if (!path.startsWith('/api/v1/admin/')) return false
+  return path !== '/api/v1/admin/login' && path !== ADMIN_CSRF_PATH
+}
+
+async function fetchAdminCsrfToken(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && adminCsrfToken) {
+    return adminCsrfToken
+  }
+  if (!forceRefresh && adminCsrfTokenInFlight) {
+    return adminCsrfTokenInFlight
+  }
+
+  adminCsrfTokenInFlight = (async () => {
+    const res = await fetch(`${BASE_URL}${ADMIN_CSRF_PATH}`, {
+      method: 'GET',
+      credentials: 'include',
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new ApiError(res.status, body, `${res.status}`)
+    }
+    const body = await res.json() as { csrfToken?: unknown }
+    if (typeof body.csrfToken !== 'string' || body.csrfToken.length < 8) {
+      throw new Error('Invalid CSRF token response')
+    }
+    adminCsrfToken = body.csrfToken
+    return body.csrfToken
+  })()
+
+  try {
+    return await adminCsrfTokenInFlight
+  } finally {
+    adminCsrfTokenInFlight = null
+  }
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit, retryCsrf = true): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const requiresCsrf = isAdminMutation(path, method)
+  const csrfHeaders: Record<string, string> = {}
+  if (requiresCsrf) {
+    const token = await fetchAdminCsrfToken()
+    csrfHeaders['x-csrf-token'] = token
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       ...(init?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...csrfHeaders,
       ...init?.headers,
     },
     credentials: 'include',
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
+    if (requiresCsrf && retryCsrf && res.status === 403) {
+      await fetchAdminCsrfToken(true)
+      return apiFetch<T>(path, init, false)
+    }
     throw new ApiError(res.status, body, `${res.status}`)
   }
   return res.json()
@@ -81,27 +135,44 @@ export async function verifyGalleryAccess(
 export async function adminUploadFile(
   galleryId: string,
   file: File,
-  guestName?: string
+  guestName?: string,
+  opts?: { autoApprove?: boolean }
 ): Promise<UploadResponse> {
-  return uploadMultipart(`/api/v1/admin/galleries/${galleryId}/upload`, file, guestName)
+  const params = new URLSearchParams()
+  if (opts?.autoApprove) {
+    params.set('mode', 'photographer')
+  }
+  const qs = params.size ? `?${params}` : ''
+  return uploadMultipart(`/api/v1/admin/galleries/${galleryId}/upload${qs}`, file, guestName)
 }
 
 async function uploadMultipart(
   path: string,
   file: File,
-  guestName?: string
+  guestName?: string,
+  retryCsrf = true
 ): Promise<UploadResponse> {
   const form = new FormData()
   form.append('file', file)
   if (guestName) form.append('guestName', guestName)
 
+  const headers: Record<string, string> = {}
+  if (isAdminMutation(path, 'POST')) {
+    headers['x-csrf-token'] = await fetchAdminCsrfToken()
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     body: form,
+    headers,
     credentials: 'include',
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
+    if (isAdminMutation(path, 'POST') && retryCsrf && res.status === 403) {
+      await fetchAdminCsrfToken(true)
+      return uploadMultipart(path, file, guestName, false)
+    }
     throw new ApiError(res.status, body, `Upload failed: ${res.status}`)
   }
   return res.json()
@@ -109,15 +180,48 @@ async function uploadMultipart(
 
 // ─── Admin Auth ──────────────────────────────────────────────────────────────
 
-export async function adminLogin(username: string, password: string): Promise<void> {
+export async function adminLogin(username: string, password: string, totpCode?: string): Promise<void> {
+  adminCsrfToken = null
+  const payload: { username: string; password: string; totpCode?: string } = { username, password }
+  if (totpCode) {
+    payload.totpCode = totpCode
+  }
   await apiFetch('/api/v1/admin/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify(payload),
   })
 }
 
 export async function adminLogout(): Promise<void> {
+  adminCsrfToken = null
   await apiFetch('/api/v1/admin/logout', { method: 'POST' })
+}
+
+export type AdminTwoFactorStatusResponse = {
+  enabled: boolean
+  configured: boolean
+}
+
+export async function getAdminTwoFactorStatus(): Promise<AdminTwoFactorStatusResponse> {
+  return apiFetch('/api/v1/admin/2fa/status')
+}
+
+export async function setupAdminTwoFactor(password: string): Promise<{
+  secret: string
+  setupToken: string
+  otpauthUrl: string
+}> {
+  return apiFetch('/api/v1/admin/2fa/setup', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+export async function verifyAdminTwoFactor(code: string, setupToken: string): Promise<void> {
+  await apiFetch('/api/v1/admin/2fa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ code, setupToken }),
+  })
 }
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
@@ -185,6 +289,10 @@ export async function deleteGallery(id: string): Promise<void> {
   await apiFetch(`/api/v1/admin/galleries/${id}`, { method: 'DELETE' })
 }
 
+export async function archiveGallery(id: string): Promise<GalleryResponse> {
+  return apiFetch(`/api/v1/admin/galleries/${id}/archive`, { method: 'POST' })
+}
+
 // ─── Admin Photos ────────────────────────────────────────────────────────────
 
 export type AdminPhotoResponse = PhotoResponse & {
@@ -219,3 +327,8 @@ export async function batchModerate(data: {
 }
 
 export { ApiError }
+
+export function __resetApiClientStateForTests(): void {
+  adminCsrfToken = null
+  adminCsrfTokenInFlight = null
+}
