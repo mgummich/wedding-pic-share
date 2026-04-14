@@ -65,11 +65,27 @@ export async function uploadFile(
   file: File,
   guestName?: string
 ): Promise<UploadResponse> {
+  return uploadMultipart(`/api/v1/g/${slug}/upload`, file, guestName)
+}
+
+export async function adminUploadFile(
+  galleryId: string,
+  file: File,
+  guestName?: string
+): Promise<UploadResponse> {
+  return uploadMultipart(`/api/v1/admin/galleries/${galleryId}/upload`, file, guestName)
+}
+
+async function uploadMultipart(
+  path: string,
+  file: File,
+  guestName?: string
+): Promise<UploadResponse> {
   const form = new FormData()
   form.append('file', file)
   if (guestName) form.append('guestName', guestName)
 
-  const res = await fetch(`${BASE_URL}/api/v1/g/${slug}/upload`, {
+  const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     body: form,
     credentials: 'include',

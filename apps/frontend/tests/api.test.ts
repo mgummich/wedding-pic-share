@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getGallery, updateGallery } from '../src/lib/api.js'
+import { adminUploadFile, getGallery, updateGallery } from '../src/lib/api.js'
 
 describe('api client', () => {
   beforeEach(() => {
@@ -93,5 +93,34 @@ describe('api client', () => {
         }),
       })
     )
+  })
+
+  it('adminUploadFile posts multipart form data to the admin gallery upload endpoint', async () => {
+    const file = new File(['hello'], 'photo.jpg', { type: 'image/jpeg' })
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'photo-1',
+        status: 'PENDING',
+        mediaType: 'IMAGE',
+        thumbUrl: '/thumb.webp',
+        duration: null,
+      }),
+    } as Response)
+
+    const result = await adminUploadFile('gallery-1', file, 'Alex')
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/admin/galleries/gallery-1/upload'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(FormData),
+        credentials: 'include',
+      })
+    )
+    const [, init] = vi.mocked(fetch).mock.calls[0] ?? []
+    expect((init?.body as FormData).get('file')).toBe(file)
+    expect((init?.body as FormData).get('guestName')).toBe('Alex')
+    expect(result.status).toBe('PENDING')
   })
 })
