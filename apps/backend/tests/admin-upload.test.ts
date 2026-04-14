@@ -5,6 +5,7 @@ import { closeClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import sharp from 'sharp'
 import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
+import { getGalleryUploadWindowsVersion } from './helpers/uploadWindowsVersion.js'
 
 let app: FastifyInstance
 let sessionCookie: string
@@ -63,6 +64,7 @@ beforeAll(async () => {
     url: `/api/v1/admin/galleries/${windowedGalleryId}`,
     headers: { cookie: sessionCookie },
     payload: {
+      uploadWindowsVersion: await getGalleryUploadWindowsVersion(windowedGalleryId),
       uploadWindows: [
         {
           start: '2035-06-01T12:00:00.000Z',

@@ -8,6 +8,7 @@ import path from 'node:path'
 import { unlink } from 'node:fs/promises'
 import type { UploadNotifier } from '../src/services/uploadNotifier.js'
 import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
+import { getGalleryUploadWindowsVersion } from './helpers/uploadWindowsVersion.js'
 
 let app: FastifyInstance
 let sessionCookie: string
@@ -159,6 +160,7 @@ describe('POST /api/v1/g/:slug/upload', () => {
       url: `/api/v1/admin/galleries/${galleryId}`,
       headers: { cookie: sessionCookie },
       payload: {
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [
           {
             start: '2035-06-01T12:00:00.000Z',
@@ -190,7 +192,11 @@ describe('POST /api/v1/g/:slug/upload', () => {
       method: 'PATCH',
       url: `/api/v1/admin/galleries/${galleryId}`,
       headers: { cookie: sessionCookie },
-      payload: { secretKey: '1357', uploadWindows: [] },
+      payload: {
+        secretKey: '1357',
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
+        uploadWindows: [],
+      },
     })
     expect(protect.statusCode).toBe(200)
 
@@ -235,6 +241,7 @@ describe('POST /api/v1/g/:slug/upload', () => {
       headers: { cookie: sessionCookie },
       payload: {
         secretKey: null,
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [],
         allowGuestDownload: false,
       },
@@ -276,6 +283,7 @@ describe('POST /api/v1/g/:slug/upload', () => {
       headers: { cookie: sessionCookie },
       payload: {
         secretKey: null,
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [],
       },
     })
@@ -317,6 +325,7 @@ describe('POST /api/v1/g/:slug/upload', () => {
       headers: { cookie: sessionCookie },
       payload: {
         secretKey: null,
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [],
       },
     })
@@ -365,6 +374,7 @@ describe('POST /api/v1/g/:slug/upload', () => {
       headers: { cookie: sessionCookie },
       payload: {
         secretKey: null,
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [],
       },
     })
@@ -436,6 +446,7 @@ describe('POST /api/v1/g/:slug/upload', () => {
         allowGuestDownload: true,
         moderationMode: 'AUTO',
         secretKey: null,
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [],
       },
     })

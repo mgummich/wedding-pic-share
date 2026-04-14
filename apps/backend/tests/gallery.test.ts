@@ -8,6 +8,7 @@ import sharp from 'sharp'
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
+import { getGalleryUploadWindowsVersion } from './helpers/uploadWindowsVersion.js'
 
 let app: FastifyInstance
 let sessionCookie: string
@@ -123,6 +124,7 @@ describe('GET /api/v1/g/:slug', () => {
       url: `/api/v1/admin/galleries/${galleryId}`,
       headers: { cookie: sessionCookie },
       payload: {
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [
           {
             start: '2035-06-01T12:00:00.000Z',
@@ -293,6 +295,25 @@ describe('PATCH /api/v1/admin/galleries/:id', () => {
 
     expect(res.statusCode).toBe(404)
     expect(res.json().type).toBe('gallery-not-found')
+  })
+
+  it('requires uploadWindowsVersion when uploadWindows are patched', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        uploadWindows: [
+          {
+            start: '2036-07-01T10:00:00.000Z',
+            end: '2036-07-01T11:00:00.000Z',
+          },
+        ],
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().type).toBe('validation-error')
   })
 
   it('returns 500 instead of masking unexpected failures as not-found', async () => {
@@ -544,7 +565,11 @@ describe('DELETE /api/v1/admin/galleries/:id', () => {
       method: 'PATCH',
       url: `/api/v1/admin/galleries/${galleryId}`,
       headers: { cookie: sessionCookie },
-      payload: { secretKey: null, uploadWindows: [] },
+      payload: {
+        secretKey: null,
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
+        uploadWindows: [],
+      },
     })
     expect(reset.statusCode).toBe(200)
 

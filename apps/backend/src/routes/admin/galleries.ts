@@ -257,6 +257,13 @@ export async function adminGalleryRoutes(
       }
 
       const uploadWindows = parsedUploadWindows ?? undefined
+      if (uploadWindows !== undefined && typeof uploadWindowsVersion !== 'string') {
+        return reply.code(400).send({
+          type: 'validation-error',
+          title: 'uploadWindowsVersion is required when uploadWindows is provided.',
+          status: 400,
+        })
+      }
 
       const gallery = await db.$transaction(async (tx) => {
         const existing = await tx.gallery.findUnique({

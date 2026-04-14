@@ -8,6 +8,7 @@ import path from 'node:path'
 import { unlink } from 'node:fs/promises'
 import type { SseManager } from '../src/services/sse.js'
 import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
+import { getGalleryUploadWindowsVersion } from './helpers/uploadWindowsVersion.js'
 
 let app: FastifyInstance
 let sessionCookie: string
@@ -63,6 +64,7 @@ beforeAll(async () => {
     url: `/api/v1/admin/galleries/${galleryId}`,
     headers: { cookie: sessionCookie },
     payload: {
+      uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
       uploadWindows: [
         {
           start: new Date(now - 60_000).toISOString(),
@@ -157,6 +159,7 @@ describe('POST /api/v1/admin/galleries/:id/archive', () => {
       url: `/api/v1/admin/galleries/${freshGalleryId}`,
       headers: { cookie: sessionCookie },
       payload: {
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(freshGalleryId),
         uploadWindows: [
           {
             start: new Date(now - 60_000).toISOString(),

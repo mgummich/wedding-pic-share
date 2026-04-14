@@ -125,6 +125,7 @@ describe('api client', () => {
       isActive: true,
       stripExif: false,
       secretKey: '4321',
+      uploadWindowsVersion: 'e3b0c44298fc1c149afbf4c8996fb924',
       uploadWindows: [
         {
           start: '2035-06-01T12:00:00.000Z',
@@ -145,6 +146,7 @@ describe('api client', () => {
           isActive: true,
           stripExif: false,
           secretKey: '4321',
+          uploadWindowsVersion: 'e3b0c44298fc1c149afbf4c8996fb924',
           uploadWindows: [
             {
               start: '2035-06-01T12:00:00.000Z',

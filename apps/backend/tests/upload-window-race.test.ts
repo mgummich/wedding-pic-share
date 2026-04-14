@@ -8,6 +8,7 @@ import { closeClient, getClient } from '@wedding/db'
 import { processImage, processVideo } from '../src/services/media.js'
 import type { MediaProcessor } from '../src/services/mediaProcessor.js'
 import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
+import { getGalleryUploadWindowsVersion } from './helpers/uploadWindowsVersion.js'
 
 let app: FastifyInstance
 let sessionCookie: string
@@ -80,6 +81,7 @@ describe('upload window race condition', () => {
       url: `/api/v1/admin/galleries/${galleryId}`,
       headers: { cookie: sessionCookie },
       payload: {
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [
           {
             start: new Date(now - 60_000).toISOString(),
@@ -107,6 +109,7 @@ describe('upload window race condition', () => {
       url: `/api/v1/admin/galleries/${galleryId}`,
       headers: { cookie: sessionCookie },
       payload: {
+        uploadWindowsVersion: await getGalleryUploadWindowsVersion(galleryId),
         uploadWindows: [
           {
             start: new Date(now - 120_000).toISOString(),

@@ -415,14 +415,24 @@ export async function createGallery(data: {
 
 export async function updateGallery(
   id: string,
-  data: Partial<Pick<
-    GalleryResponse,
-    'name' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'stripExif' | 'isActive'
-  >> & {
-    secretKey?: string | null
-    uploadWindowsVersion?: string
-    uploadWindows?: Array<Pick<UploadWindowResponse, 'start' | 'end'>>
-  }
+  data:
+    & Partial<Pick<
+      GalleryResponse,
+      'name' | 'description' | 'layout' | 'allowGuestDownload' | 'guestNameMode' | 'stripExif' | 'isActive'
+    >>
+    & {
+      secretKey?: string | null
+    }
+    & (
+      | {
+        uploadWindows?: undefined
+        uploadWindowsVersion?: string
+      }
+      | {
+        uploadWindows: Array<Pick<UploadWindowResponse, 'start' | 'end'>>
+        uploadWindowsVersion: string
+      }
+    )
 ): Promise<GalleryResponse> {
   const payload = await apiFetch<unknown>(`/api/v1/admin/galleries/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
   assertGalleryResponse(payload, 'updateGallery')
