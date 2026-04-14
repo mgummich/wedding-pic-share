@@ -24,6 +24,18 @@ const uploadErrorMessages = {
     tooLarge: 'This file is too large. Maximum allowed: {maxMb} MB.',
     missingGallery: 'This gallery does not exist or has been disabled.',
   },
+  es: {
+    duplicate: 'Esta foto ya se ha subido.',
+    unsupportedType: 'Este tipo de archivo no es compatible. Permitidos: JPEG, PNG, WEBP, HEIC, MP4, MOV.',
+    tooLarge: 'Este archivo es demasiado grande. Máximo permitido: {maxMb} MB.',
+    missingGallery: 'Esta galería no existe o se ha desactivado.',
+  },
+  fr: {
+    duplicate: 'Cette photo a déjà été importée.',
+    unsupportedType: 'Ce type de fichier n’est pas pris en charge. Autorisés: JPEG, PNG, WEBP, HEIC, MP4, MOV.',
+    tooLarge: 'Ce fichier est trop volumineux. Maximum autorisé: {maxMb} MB.',
+    missingGallery: 'Cette galerie n’existe pas ou a été désactivée.',
+  },
 } as const
 
 function withMaxMb(template: string, maxMb: number): string {

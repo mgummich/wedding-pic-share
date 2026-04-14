@@ -166,4 +166,33 @@ describe('AdminUploadPanel', () => {
     await screen.findByText(/1 in moderation/i)
     expect(adminUploadFile).toHaveBeenNthCalledWith(3, 'gallery-1', retryFile, undefined)
   })
+
+  it('passes photographer mode flag when auto-approval toggle is enabled', async () => {
+    const user = userEvent.setup()
+    vi.mocked(adminUploadFile).mockResolvedValueOnce({
+      id: 'photo-1',
+      status: 'APPROVED',
+      mediaType: 'IMAGE',
+      thumbUrl: '/thumb-1.webp',
+      duration: null,
+    })
+
+    render(<AdminUploadPanel galleryId="gallery-1" guestNameMode="HIDDEN" />)
+
+    await user.click(screen.getByRole('checkbox', { name: /fotograf-modus/i }))
+
+    const input = screen.getByLabelText(/dateien auswählen/i)
+    const file = new File(['a'], 'a.jpg', { type: 'image/jpeg' })
+    await user.upload(input, [file])
+    await user.click(screen.getByRole('button', { name: /uploads starten/i }))
+
+    await waitFor(() => {
+      expect(adminUploadFile).toHaveBeenCalledWith(
+        'gallery-1',
+        file,
+        undefined,
+        { autoApprove: true }
+      )
+    })
+  })
 })

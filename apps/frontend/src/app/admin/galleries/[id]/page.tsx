@@ -4,8 +4,8 @@ import { useEffect, useState, use, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Trash2, QrCode, Download } from 'lucide-react'
-import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, ApiError } from '@/lib/api'
+import { ArrowLeft, Trash2, QrCode, Download, FileText, Archive } from 'lucide-react'
+import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, archiveGallery, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import { AdminUploadPanel } from '@/components/AdminUploadPanel'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
@@ -30,10 +30,23 @@ function toIsoString(value: string): string {
   return new Date(value).toISOString()
 }
 
+function formatArchiveSize(bytes: number | null): string {
+  if (!bytes || bytes <= 0) return '0 KB'
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function dateLocale(locale: string): string {
+  if (locale === 'de') return 'de-DE'
+  if (locale === 'es') return 'es-ES'
+  if (locale === 'fr') return 'fr-FR'
+  return 'en-US'
+}
+
 export default function GallerySettingsPage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const { t } = useAdminI18n()
+  const { locale, t } = useAdminI18n()
 
   const [gallery, setGallery] = useState<GalleryData | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -56,6 +69,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [archiving, setArchiving] = useState(false)
 
   async function refreshApprovedPhotos() {
     try {
@@ -173,6 +187,23 @@ export default function GallerySettingsPage({ params }: PageProps) {
       setTimeout(() => URL.revokeObjectURL(url), 100)
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function handleArchive() {
+    if (!gallery || gallery.isArchived) return
+    setArchiving(true)
+    setSaveError(null)
+
+    try {
+      const updated = await archiveGallery(id)
+      setGallery((prev) => prev ? { ...prev, ...updated } : prev)
+      setUploadWindows([])
+      setSaved(false)
+    } catch {
+      setSaveError(t('gallerySettings.saveError.archiveFailed'))
+    } finally {
+      setArchiving(false)
     }
   }
 
@@ -492,6 +523,29 @@ export default function GallerySettingsPage({ params }: PageProps) {
               <QrCode className="w-4 h-4" />
               {t('gallerySettings.actions.qrSvg')}
             </a>
+            <a
+              href={`/api/v1/g/${gallery.slug}/qr?format=pdf&locale=${locale}`}
+              download={`${gallery.slug}-table-card.pdf`}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+                         text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
+              aria-label={t('gallerySettings.actions.tableCardPdfAria')}
+            >
+              <FileText className="w-4 h-4" />
+              {t('gallerySettings.actions.tableCardPdf')}
+            </a>
+            <button
+              onClick={handleArchive}
+              disabled={archiving || gallery.isArchived}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+                         text-text-muted hover:border-accent hover:text-accent transition-colors text-sm
+                         disabled:opacity-50"
+              aria-label={t('gallerySettings.actions.archiveAria')}
+            >
+              <Archive className="w-4 h-4" />
+              {gallery.isArchived
+                ? t('gallerySettings.actions.archived')
+                : (archiving ? t('gallerySettings.actions.archiving') : t('gallerySettings.actions.archive'))}
+            </button>
             <button
               onClick={handleExport}
               disabled={exporting}
@@ -504,6 +558,14 @@ export default function GallerySettingsPage({ params }: PageProps) {
               {exporting ? t('gallerySettings.actions.exporting') : t('gallerySettings.actions.exportZip')}
             </button>
           </div>
+          {gallery.isArchived && gallery.archivedAt && (
+            <p className="mt-3 text-xs text-text-muted">
+              {t('gallerySettings.actions.archiveMeta', {
+                archivedAt: new Date(gallery.archivedAt).toLocaleString(dateLocale(locale)),
+                size: formatArchiveSize(gallery.archiveSizeBytes),
+              })}
+            </p>
+          )}
         </section>
       )}
 

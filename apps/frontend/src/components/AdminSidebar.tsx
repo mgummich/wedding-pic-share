@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { LogOut, Plus, Menu, X } from 'lucide-react'
 import { getAdminGalleries, adminLogout, ApiError } from '@/lib/api'
 import { useAdminI18n } from './AdminLocaleContext'
+import type { AdminLocale } from '@/lib/adminI18n'
 
 export function AdminSidebar() {
   const router = useRouter()
@@ -113,11 +114,13 @@ export function AdminSidebar() {
             id="admin-locale"
             aria-label={t('common.language')}
             value={locale}
-            onChange={(event) => setLocale(event.target.value as 'de' | 'en')}
+            onChange={(event) => setLocale(event.target.value as AdminLocale)}
             className="mb-4 w-full rounded-card border border-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
           >
             <option value="de">{t('common.language.de')}</option>
             <option value="en">{t('common.language.en')}</option>
+            <option value="es">{t('common.language.es')}</option>
+            <option value="fr">{t('common.language.fr')}</option>
           </select>
           <button
             onClick={handleLogout}

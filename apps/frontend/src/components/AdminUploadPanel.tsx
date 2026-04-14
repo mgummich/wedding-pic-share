@@ -33,6 +33,7 @@ export function AdminUploadPanel({
   const [formError, setFormError] = useState<string | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [autoApproveMode, setAutoApproveMode] = useState(false)
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files ?? [])
@@ -83,7 +84,18 @@ export function AdminUploadPanel({
       )))
 
       try {
-        const result = await adminUploadFile(galleryId, item.file, guestName.trim() || undefined)
+        const result = autoApproveMode
+          ? await adminUploadFile(
+            galleryId,
+            item.file,
+            guestName.trim() || undefined,
+            { autoApprove: true }
+          )
+          : await adminUploadFile(
+            galleryId,
+            item.file,
+            guestName.trim() || undefined
+          )
         const nextStatus = result.status === 'APPROVED' ? 'approved' : 'pending'
         if (nextStatus === 'approved') approvedCount += 1
         if (nextStatus === 'pending') pendingCount += 1
@@ -181,6 +193,21 @@ export function AdminUploadPanel({
               />
             </div>
           )}
+
+          <div className="rounded-card border border-border px-3 py-2.5">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={autoApproveMode}
+                onChange={(event) => setAutoApproveMode(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-accent"
+              />
+              <span>
+                <span className="block text-sm text-text-primary">{t('adminUpload.photographerMode')}</span>
+                <span className="block text-xs text-text-muted">{t('adminUpload.photographerModeHint')}</span>
+              </span>
+            </label>
+          </div>
 
           {queue.length > 0 && (
             <ul className="space-y-2" aria-label={t('adminUpload.queueAria')}>

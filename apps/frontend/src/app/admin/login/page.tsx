@@ -4,12 +4,15 @@ import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminLogin, ApiError } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
+import type { AdminLocale } from '@/lib/adminI18n'
 
 export default function AdminLoginPage() {
   const router = useRouter()
   const { locale, setLocale, t } = useAdminI18n()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
+  const [totpRequired, setTotpRequired] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -18,11 +21,20 @@ export default function AdminLoginPage() {
     setError(null)
     setLoading(true)
     try {
-      await adminLogin(username, password)
+      await adminLogin(username, password, totpRequired ? totpCode : undefined)
       router.replace('/admin')
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError(t('login.error.invalidCredentials'))
+        const type = (err.body as { type?: unknown })?.type
+        if (type === 'totp-required') {
+          setTotpRequired(true)
+          setError(t('login.error.totpRequired'))
+        } else if (type === 'invalid-totp') {
+          setTotpRequired(true)
+          setError(t('login.error.invalidTotp'))
+        } else {
+          setError(t('login.error.invalidCredentials'))
+        }
       } else if (err instanceof ApiError && err.status === 429) {
         const title = (err.body as { title?: unknown })?.title
         setError(typeof title === 'string'
@@ -45,11 +57,13 @@ export default function AdminLoginPage() {
             id="admin-login-locale"
             aria-label={t('common.language')}
             value={locale}
-            onChange={(event) => setLocale(event.target.value as 'de' | 'en')}
+            onChange={(event) => setLocale(event.target.value as AdminLocale)}
             className="rounded-card border border-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
           >
             <option value="de">{t('common.language.de')}</option>
             <option value="en">{t('common.language.en')}</option>
+            <option value="es">{t('common.language.es')}</option>
+            <option value="fr">{t('common.language.fr')}</option>
           </select>
         </div>
         <h1 className="font-display text-3xl text-text-primary text-center mb-8">
@@ -86,6 +100,25 @@ export default function AdminLoginPage() {
                          focus:outline-none focus:border-accent bg-surface-card text-text-primary"
             />
           </div>
+          {totpRequired && (
+            <div>
+              <label htmlFor="totpCode" className="block text-sm font-medium text-text-primary mb-1">
+                {t('login.totpCode')}
+              </label>
+              <input
+                id="totpCode"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 rounded-card border border-border
+                         focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              />
+            </div>
+          )}
           {error && <p className="text-sm text-error">{error}</p>}
           <button
             type="submit"

@@ -48,6 +48,9 @@ describe('UploadPage', () => {
       guestNameMode: 'OPTIONAL',
       photoCount: 0,
       isActive: false,
+      isArchived: false,
+      archivedAt: null,
+      archiveSizeBytes: null,
       isUploadOpen: false,
       uploadWindows: [
         {

@@ -30,6 +30,7 @@ export default function SlideshowPage({ params }: PageProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [galleryName, setGalleryName] = useState('')
+  const [galleryClosed, setGalleryClosed] = useState(false)
 
   useEffect(() => {
     getGallery(slug, { limit: 50 })
@@ -50,6 +51,9 @@ export default function SlideshowPage({ params }: PageProps) {
         if (prev.some((p) => p.id === photo.id)) return prev
         return [...prev, photo]
       })
+    }, []),
+    onGalleryClosed: useCallback(() => {
+      setGalleryClosed(true)
     }, []),
   })
 
@@ -74,7 +78,16 @@ export default function SlideshowPage({ params }: PageProps) {
         <GuestNav gallerySlug={slug} galleryName={galleryName} />
       </div>
 
-      {photos.length === 0 ? (
+      {galleryClosed ? (
+        <div
+          className="fixed inset-0 flex flex-col items-center justify-center pt-14"
+          style={{ background: 'var(--slideshow-bg)', color: 'var(--slideshow-text)' }}
+        >
+          <p className="font-display text-3xl mb-4">{galleryName}</p>
+          <p className="text-lg opacity-80">{t('guest.slideshow.closedTitle')}</p>
+          <p className="text-base opacity-60 mt-2">{t('guest.slideshow.closedDescription')}</p>
+        </div>
+      ) : photos.length === 0 ? (
         <div
           className="fixed inset-0 flex flex-col items-center justify-center pt-14"
           style={{ background: 'var(--slideshow-bg)', color: 'var(--slideshow-text)' }}

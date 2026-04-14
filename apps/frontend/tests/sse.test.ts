@@ -78,4 +78,19 @@ describe('useSSE', () => {
     unmount()
     expect(es.readyState).toBe(2) // CLOSED
   })
+
+  it('calls onGalleryClosed and closes stream on gallery-closed event', () => {
+    vi.stubGlobal('EventSource', MockEventSource)
+
+    const onGalleryClosed = vi.fn()
+    renderHook(() => useSSE('slug', { onPhoto: vi.fn(), onGalleryClosed }))
+    const es = MockEventSource.instances[0]
+
+    act(() => {
+      es.emit('gallery-closed', { reason: 'archived' })
+    })
+
+    expect(onGalleryClosed).toHaveBeenCalledTimes(1)
+    expect(es.readyState).toBe(2)
+  })
 })
