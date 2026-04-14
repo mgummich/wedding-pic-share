@@ -22,6 +22,16 @@ export interface AppConfig {
   smtpPass: string | null
   smtpFrom: string | null
   adminEmail: string | null
+  webhookUrl: string | null
+  webhookSecret: string | null
+  ntfyTopic: string | null
+  notificationTimeoutMs: number
+  mediaProcessingMode: 'inline' | 'worker-thread' | 'bullmq'
+  mediaProcessingConcurrency: number
+  mediaProcessingJobTimeoutMs: number
+  redisUrl: string | null
+  totpEnabled: boolean
+  totpEncryptionKey: string | null
 }
 
 export function loadConfig(): AppConfig {
@@ -35,6 +45,49 @@ export function loadConfig(): AppConfig {
   const storageProvider = process.env.STORAGE_PROVIDER ?? 'local'
   if (storageProvider !== 'local' && storageProvider !== 's3') {
     throw new Error(`Invalid STORAGE_PROVIDER: "${storageProvider}". Must be "local" or "s3"`)
+  }
+
+  const defaultMediaMode = process.env.NODE_ENV === 'test' ? 'inline' : 'worker-thread'
+  const mediaProcessingMode = process.env.MEDIA_PROCESSING_MODE ?? defaultMediaMode
+  if (!['inline', 'worker-thread', 'bullmq'].includes(mediaProcessingMode)) {
+    throw new Error(
+      `Invalid MEDIA_PROCESSING_MODE: "${mediaProcessingMode}". Must be "inline", "worker-thread", or "bullmq"`
+    )
+  }
+
+  const mediaProcessingConcurrency = Number(process.env.MEDIA_PROCESSING_CONCURRENCY ?? 2)
+  if (!Number.isInteger(mediaProcessingConcurrency) || mediaProcessingConcurrency < 1 || mediaProcessingConcurrency > 32) {
+    throw new Error('MEDIA_PROCESSING_CONCURRENCY must be an integer between 1 and 32')
+  }
+
+  const mediaProcessingJobTimeoutMs = Number(process.env.MEDIA_PROCESSING_JOB_TIMEOUT_MS ?? 120000)
+  if (!Number.isInteger(mediaProcessingJobTimeoutMs) || mediaProcessingJobTimeoutMs < 1000) {
+    throw new Error('MEDIA_PROCESSING_JOB_TIMEOUT_MS must be an integer >= 1000')
+  }
+
+  const webhookUrl = process.env.WEBHOOK_URL?.trim() || null
+  if (webhookUrl && !webhookUrl.startsWith('https://')) {
+    throw new Error('WEBHOOK_URL must start with https://')
+  }
+
+  const webhookSecret = process.env.WEBHOOK_SECRET?.trim() || null
+  const ntfyTopic = process.env.NTFY_TOPIC?.trim() || null
+  const notificationTimeoutMs = Number(process.env.NOTIFICATION_TIMEOUT_MS ?? 5000)
+  if (!Number.isInteger(notificationTimeoutMs) || notificationTimeoutMs < 500 || notificationTimeoutMs > 60000) {
+    throw new Error('NOTIFICATION_TIMEOUT_MS must be an integer between 500 and 60000')
+  }
+
+  const totpEnabled = process.env.TOTP_ENABLED === 'true'
+  const totpEncryptionKey = process.env.TOTP_ENCRYPTION_KEY ?? null
+  if (totpEnabled) {
+    if (!totpEncryptionKey) {
+      throw new Error('TOTP_ENCRYPTION_KEY is required when TOTP_ENABLED=true')
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(totpEncryptionKey)) {
+      throw new Error('TOTP_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)')
+    }
+  } else if (totpEncryptionKey && !/^[0-9a-fA-F]{64}$/.test(totpEncryptionKey)) {
+    throw new Error('TOTP_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)')
   }
 
   return {
@@ -63,5 +116,15 @@ export function loadConfig(): AppConfig {
     smtpPass: process.env.SMTP_PASS ?? null,
     smtpFrom: process.env.SMTP_FROM ?? null,
     adminEmail: process.env.ADMIN_EMAIL ?? null,
+    webhookUrl,
+    webhookSecret,
+    ntfyTopic,
+    notificationTimeoutMs,
+    mediaProcessingMode: mediaProcessingMode as 'inline' | 'worker-thread' | 'bullmq',
+    mediaProcessingConcurrency,
+    mediaProcessingJobTimeoutMs,
+    redisUrl: process.env.REDIS_URL ?? null,
+    totpEnabled,
+    totpEncryptionKey: totpEncryptionKey?.toLowerCase() ?? null,
   }
 }

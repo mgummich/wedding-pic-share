@@ -59,4 +59,14 @@ describe('loadConfig', () => {
     process.env.COOKIE_SECURE = 'false'
     expect(loadConfig().cookieSecure).toBe(false)
   })
+
+  it('throws for non-https WEBHOOK_URL', () => {
+    process.env.WEBHOOK_URL = 'http://hooks.example.com/wps'
+    expect(() => loadConfig()).toThrow('WEBHOOK_URL must start with https://')
+  })
+
+  it('accepts https WEBHOOK_URL', () => {
+    process.env.WEBHOOK_URL = 'https://hooks.example.com/wps'
+    expect(loadConfig().webhookUrl).toBe('https://hooks.example.com/wps')
+  })
 })

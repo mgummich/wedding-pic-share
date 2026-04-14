@@ -6,10 +6,11 @@ import type { UploadNotifier } from '../../services/uploadNotifier.js'
 import { isUploadOpenAt } from '../../services/uploadWindows.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 import { hasGalleryAccess } from '../../services/galleryAccess.js'
+import type { MediaProcessor } from '../../services/mediaProcessor.js'
 
 export async function guestUploadRoutes(
   fastify: FastifyInstance,
-  opts: { storage: StorageService; sse: SseManager; uploadNotifier: UploadNotifier }
+  opts: { storage: StorageService; sse: SseManager; uploadNotifier: UploadNotifier; mediaProcessor: MediaProcessor }
 ): Promise<void> {
   fastify.post('/g/:slug/upload', async (req, reply) => {
     const { slug } = req.params as { slug: string }
@@ -27,6 +28,14 @@ export async function guestUploadRoutes(
         type: 'invalid-pin',
         title: 'Falscher Secret Key.',
         status: 401,
+      })
+    }
+
+    if (gallery.isArchived) {
+      return reply.code(403).send({
+        type: 'gallery-archived',
+        title: 'Galerie ist abgeschlossen',
+        status: 403,
       })
     }
 
@@ -49,6 +58,7 @@ export async function guestUploadRoutes(
         upload: await req.file(),
         storage: opts.storage,
         sse: opts.sse,
+        mediaProcessor: opts.mediaProcessor,
       })
 
       void opts.uploadNotifier.notifyGuestUpload({
@@ -57,8 +67,6 @@ export async function guestUploadRoutes(
         photoId: response.id,
         mediaType: response.mediaType,
         status: response.status,
-      }).catch((error: unknown) => {
-        fastify.log.error({ error, gallerySlug: gallery.slug, photoId: response.id }, 'smtp.notification.failed')
       })
 
       return reply.code(201).send(response)

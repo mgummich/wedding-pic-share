@@ -26,6 +26,16 @@ const baseConfig: AppConfig = {
   smtpPass: null,
   smtpFrom: null,
   adminEmail: null,
+  mediaProcessingMode: 'inline',
+  mediaProcessingConcurrency: 2,
+  mediaProcessingJobTimeoutMs: 120000,
+  redisUrl: null,
+  totpEnabled: false,
+  totpEncryptionKey: null,
+  webhookUrl: null,
+  webhookSecret: null,
+  ntfyTopic: null,
+  notificationTimeoutMs: 5000,
 }
 
 describe('createUploadNotifier', () => {
@@ -103,5 +113,66 @@ describe('createUploadNotifier', () => {
     })).resolves.toBeUndefined()
 
     expect(logger.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends a webhook event when WEBHOOK_URL is configured', async () => {
+    const sendMail = vi.fn().mockResolvedValue({})
+    const createTransport = vi.fn(() => ({ sendMail }))
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    })
+    const notifier = createUploadNotifier({
+      ...baseConfig,
+      webhookUrl: 'https://hooks.example.com/wps',
+      webhookSecret: 'test-secret',
+    }, logger, { createTransport, fetchImpl })
+
+    await notifier.notifyGuestUpload({
+      galleryName: 'Uploads',
+      gallerySlug: 'uploads',
+      photoId: 'photo_4',
+      mediaType: 'IMAGE',
+      status: 'PENDING',
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchImpl.mock.calls[0] ?? []
+    expect(url).toBe('https://hooks.example.com/wps')
+    expect(init).toEqual(expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({
+        'content-type': 'application/json',
+        'x-wps-event': 'guest-upload',
+      }),
+    }))
+  })
+
+  it('sends ntfy notification when NTFY_TOPIC is configured', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    })
+    const notifier = createUploadNotifier({
+      ...baseConfig,
+      ntfyTopic: 'wedding-updates',
+    }, logger, { fetchImpl })
+
+    await notifier.notifyGuestUpload({
+      galleryName: 'Uploads',
+      gallerySlug: 'uploads',
+      photoId: 'photo_5',
+      mediaType: 'VIDEO',
+      status: 'APPROVED',
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://ntfy.sh/wedding-updates',
+      expect.objectContaining({
+        method: 'POST',
+      })
+    )
   })
 })
