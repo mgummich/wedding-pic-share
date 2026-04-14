@@ -4,6 +4,7 @@ import type { PhotoResponse } from '@wedding/shared'
 import type { StorageService } from '../../services/storage.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 import type { MediaProcessor } from '../../services/mediaProcessor.js'
+import { isPrismaNotFoundError } from '../../services/prismaErrors.js'
 
 const ADMIN_UPLOAD_SHUTDOWN_TIMEOUT_MS = 30 * 1000
 
@@ -145,31 +146,36 @@ export async function adminPhotoRoutes(
     }
 
     const db = fastify.db
-    const gallery = await db.gallery.findUnique({ where: { id } })
+    const gallery = await db.gallery.findUnique({
+      where: { id },
+      select: {
+        slug: true,
+        photos: {
+          where: {
+            deletedAt: null,
+            ...(status ? { status } : {}),
+            ...(decodedCursor
+              ? {
+                OR: [
+                  { createdAt: { lt: decodedCursor.createdAt } },
+                  {
+                    AND: [
+                      { createdAt: decodedCursor.createdAt },
+                      { id: { lt: decodedCursor.id } },
+                    ],
+                  },
+                ],
+              }
+              : {}),
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
+        },
+      },
+    })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
 
-    const photos = await db.photo.findMany({
-      where: {
-        galleryId: id,
-        deletedAt: null,
-        ...(status ? { status } : {}),
-        ...(decodedCursor
-          ? {
-            OR: [
-              { createdAt: { lt: decodedCursor.createdAt } },
-              {
-                AND: [
-                  { createdAt: decodedCursor.createdAt },
-                  { id: { lt: decodedCursor.id } },
-                ],
-              },
-            ],
-          }
-          : {}),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-    })
+    const photos = gallery.photos
 
     const hasMore = photos.length > limit
     const items = photos.slice(0, limit)
@@ -216,11 +222,32 @@ export async function adminPhotoRoutes(
     }
 
     const db = fastify.db
-    const photo = await db.photo.update({
-      where: { id },
-      data: { status, rejectionReason: rejectionReason ?? null },
-      include: { gallery: true },
-    })
+    let photo: {
+      id: string
+      galleryId: string
+      mediaType: string
+      duration: number | null
+      guestName: string | null
+      createdAt: Date
+      status: string
+      gallery: { slug: string }
+    }
+    try {
+      photo = await db.photo.update({
+        where: { id },
+        data: { status, rejectionReason: rejectionReason ?? null },
+        include: { gallery: { select: { slug: true } } },
+      })
+    } catch (error) {
+      if (isPrismaNotFoundError(error)) {
+        return reply.code(404).send({
+          type: 'photo-not-found',
+          title: 'Photo not found',
+          status: 404,
+        })
+      }
+      throw error
+    }
 
     if (status === 'APPROVED') {
       const photoResponse: PhotoResponse = {
@@ -298,7 +325,18 @@ export async function adminPhotoRoutes(
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const db = fastify.db
-    await db.photo.update({ where: { id }, data: { deletedAt: new Date() } })
+    try {
+      await db.photo.update({ where: { id }, data: { deletedAt: new Date() } })
+    } catch (error) {
+      if (isPrismaNotFoundError(error)) {
+        return reply.code(404).send({
+          type: 'photo-not-found',
+          title: 'Photo not found',
+          status: 404,
+        })
+      }
+      throw error
+    }
     return reply.send({ ok: true })
   })
 }

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { GalleryResponse, WeddingResponse } from '@wedding/shared'
 import bcrypt from 'bcryptjs'
 import { toGalleryResponse } from '../../services/uploadWindows.js'
+import type { StorageService } from '../../services/storage.js'
 
 type UploadWindowInput = {
   start: string
@@ -57,7 +58,10 @@ function parseSecretKey(
   return { ok: true, value: normalized }
 }
 
-export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void> {
+export async function adminGalleryRoutes(
+  fastify: FastifyInstance,
+  opts: { storage: StorageService }
+): Promise<void> {
   // GET all weddings with galleries
   fastify.get('/admin/galleries', {
     preHandler: [fastify.requireAdmin],
@@ -344,8 +348,49 @@ export async function adminGalleryRoutes(fastify: FastifyInstance): Promise<void
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const db = fastify.db
-    await db.photo.deleteMany({ where: { galleryId: id } })
-    await db.gallery.delete({ where: { id } }).catch(() => {})
+
+    const gallery = await db.gallery.findUnique({
+      where: { id },
+      include: {
+        photos: {
+          select: {
+            thumbPath: true,
+            displayPath: true,
+            originalPath: true,
+            posterPath: true,
+          },
+        },
+      },
+    })
+    if (!gallery) {
+      return reply.code(404).send({
+        type: 'gallery-not-found',
+        title: 'Gallery not found',
+        status: 404,
+      })
+    }
+
+    const filePaths = new Set<string>()
+    for (const photo of gallery.photos) {
+      filePaths.add(photo.thumbPath)
+      filePaths.add(photo.displayPath)
+      filePaths.add(photo.originalPath)
+      if (photo.posterPath) {
+        filePaths.add(photo.posterPath)
+      }
+    }
+    if (gallery.archivePath) {
+      filePaths.add(gallery.archivePath)
+    }
+
+    await db.$transaction(async (tx) => {
+      await tx.photo.deleteMany({ where: { galleryId: id } })
+      await tx.gallery.delete({ where: { id } })
+    })
+
+    await Promise.allSettled(
+      Array.from(filePaths).map((filename) => opts.storage.delete(gallery.slug, filename))
+    )
     return reply.send({ ok: true })
   })
 }

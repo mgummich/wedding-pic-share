@@ -79,6 +79,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     const ip = req.ip
 
     if (await fastify.checkIpBlocked(ip)) {
+      reply.header('Retry-After', String(Math.ceil(LOCK_DURATION_MS / 1000)))
       return reply.code(429).send({
         type: 'ip-blocked',
         title: 'Zu viele Fehlversuche. Bitte versuche es in 15 Minuten erneut.',
@@ -91,16 +92,18 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     const dummyHash = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaOaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     const hashToCheck = user?.passwordHash ?? dummyHash
 
+    const valid = await bcrypt.compare(password, hashToCheck)
+
     if (user?.lockedUntil && user.lockedUntil.getTime() > now) {
       const remainingMinutes = Math.ceil((user.lockedUntil.getTime() - now) / MS_PER_MINUTE)
+      const remainingSeconds = Math.max(1, Math.ceil((user.lockedUntil.getTime() - now) / 1000))
+      reply.header('Retry-After', String(remainingSeconds))
       return reply.code(429).send({
         type: 'account-locked',
         title: `Konto gesperrt. Bitte versuche es in ${remainingMinutes} Minuten erneut.`,
         status: 429,
       })
     }
-
-    const valid = await bcrypt.compare(password, hashToCheck)
 
     if (!user || !valid) {
       await recordFailedLoginAttempt(

@@ -62,6 +62,7 @@ describe('admin login brute-force protection', () => {
     const locked = await login('WrongPassword123!')
     expect(locked.statusCode).toBe(429)
     expect(locked.json().type).toBe('account-locked')
+    expect(String(locked.headers['retry-after'] ?? '')).toMatch(/^\d+$/)
   })
 
   it('resets failedAttempts to 0 after a successful login', async () => {
@@ -102,6 +103,7 @@ describe('admin login brute-force protection', () => {
     const blocked = await login('WrongPassword123!', '10.0.0.5')
     expect(blocked.statusCode).toBe(429)
     expect(blocked.json().type).toBe('ip-blocked')
+    expect(String(blocked.headers['retry-after'] ?? '')).toMatch(/^\d+$/)
   })
 
   it('applies ip counters consistently under concurrent failed attempts', async () => {
@@ -130,5 +132,6 @@ describe('admin login brute-force protection', () => {
     })
     expect(blocked.statusCode).toBe(429)
     expect(blocked.json().type).toBe('ip-blocked')
+    expect(String(blocked.headers['retry-after'] ?? '')).toMatch(/^\d+$/)
   })
 })

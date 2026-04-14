@@ -7,6 +7,29 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 
 const execAsync = promisify(exec)
+const FFMPEG_TIMEOUT_MS = 30_000
+const FFPROBE_TIMEOUT_MS = 15_000
+const COMMAND_MAX_BUFFER = 5 * 1024 * 1024
+
+async function runCommand(command: string, timeoutMs: number): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await execAsync(command, {
+      timeout: timeoutMs,
+      maxBuffer: COMMAND_MAX_BUFFER,
+    })
+  } catch (error) {
+    const timedOut = Boolean(
+      error
+      && typeof error === 'object'
+      && 'killed' in error
+      && (error as { killed?: boolean }).killed
+    )
+    if (timedOut) {
+      throw new Error(`Command timed out after ${timeoutMs}ms`)
+    }
+    throw error
+  }
+}
 
 export interface ImageProcessingResult {
   thumb: Buffer      // 400px wide WEBP
@@ -67,8 +90,9 @@ export async function processVideo(inputBuffer: Buffer): Promise<VideoProcessing
     await writeFile(tmpIn, inputBuffer)
 
     // Extract poster frame at 1s (fallback to 0s if video is shorter)
-    await execAsync(
-      `ffmpeg -y -ss 1 -i "${tmpIn}" -vframes 1 -q:v 2 "${tmpPoster}" 2>/dev/null || ffmpeg -y -i "${tmpIn}" -vframes 1 -q:v 2 "${tmpPoster}"`
+    await runCommand(
+      `ffmpeg -y -ss 1 -i "${tmpIn}" -vframes 1 -q:v 2 "${tmpPoster}" 2>/dev/null || ffmpeg -y -i "${tmpIn}" -vframes 1 -q:v 2 "${tmpPoster}"`,
+      FFMPEG_TIMEOUT_MS
     )
 
     const posterJpeg = await readFile(tmpPoster)
@@ -80,8 +104,9 @@ export async function processVideo(inputBuffer: Buffer): Promise<VideoProcessing
     const blurDataUrl = await generateBlurDataUrl(poster)
 
     // Get duration via ffprobe
-    const { stdout } = await execAsync(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${tmpIn}"`
+    const { stdout } = await runCommand(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${tmpIn}"`,
+      FFPROBE_TIMEOUT_MS
     )
     const durationSeconds = Math.max(1, Math.round(parseFloat(stdout.trim())))
 

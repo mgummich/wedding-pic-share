@@ -112,58 +112,71 @@ export async function ingestUploadedPhoto({
 
   const photoId = `photo_${Date.now()}_${randomBytes(8).toString('hex')}`
 
-  let thumbPath: string
-  let displayPath: string
-  let blurDataUrl: string
+  let thumbPath = ''
+  let displayPath = ''
+  let blurDataUrl = ''
   let duration: number | null = null
-
-  if (!isVideo) {
-    const result = await mediaProcessor.processImage(buffer, detectedType.mime, {
-      stripExif: gallery.stripExif,
-      requestId,
-    })
-    await storage.save(gallery.slug, `${photoId}_thumb.webp`, result.thumb)
-    await storage.save(gallery.slug, `${photoId}_display.webp`, result.display)
-    await storage.save(gallery.slug, `${photoId}_original.webp`, result.original)
-    thumbPath = `${photoId}_thumb.webp`
-    displayPath = `${photoId}_display.webp`
-    blurDataUrl = result.blurDataUrl
-  } else {
-    const result = await mediaProcessor.processVideo(buffer, { requestId })
-    const ext = detectedType.mime === 'video/quicktime' ? 'mov' : 'mp4'
-    await storage.save(gallery.slug, `${photoId}_original.${ext}`, buffer)
-    await storage.save(gallery.slug, `${photoId}_poster.webp`, result.poster)
-    thumbPath = `${photoId}_poster.webp`
-    displayPath = `${photoId}_original.${ext}`
-    blurDataUrl = result.blurDataUrl
-    duration = result.durationSeconds
-  }
+  const savedFiles: string[] = []
 
   const autoApprove = gallery.moderationMode === 'AUTO'
-  if (beforePersist) {
-    await beforePersist()
-  }
+  let photo: Awaited<ReturnType<typeof db.photo.create>>
+  try {
+    if (!isVideo) {
+      const result = await mediaProcessor.processImage(buffer, detectedType.mime, {
+        stripExif: gallery.stripExif,
+        requestId,
+      })
+      thumbPath = `${photoId}_thumb.webp`
+      displayPath = `${photoId}_display.webp`
+      const originalPath = `${photoId}_original.webp`
+      await storage.save(gallery.slug, thumbPath, result.thumb)
+      savedFiles.push(thumbPath)
+      await storage.save(gallery.slug, displayPath, result.display)
+      savedFiles.push(displayPath)
+      await storage.save(gallery.slug, originalPath, result.original)
+      savedFiles.push(originalPath)
+      blurDataUrl = result.blurDataUrl
+    } else {
+      const result = await mediaProcessor.processVideo(buffer, { requestId })
+      const ext = detectedType.mime === 'video/quicktime' ? 'mov' : 'mp4'
+      displayPath = `${photoId}_original.${ext}`
+      thumbPath = `${photoId}_poster.webp`
+      await storage.save(gallery.slug, displayPath, buffer)
+      savedFiles.push(displayPath)
+      await storage.save(gallery.slug, thumbPath, result.poster)
+      savedFiles.push(thumbPath)
+      blurDataUrl = result.blurDataUrl
+      duration = result.durationSeconds
+    }
 
-  const photo = await db.photo.create({
-    data: {
-      id: photoId,
-      galleryId: gallery.id,
-      guestName,
-      fileHash,
-      mediaType: isVideo ? 'VIDEO' : 'IMAGE',
-      originalPath: isVideo
-        ? `${photoId}_original.${detectedType.mime === 'video/quicktime' ? 'mov' : 'mp4'}`
-        : `${photoId}_original.webp`,
-      thumbPath,
-      displayPath,
-      posterPath: isVideo ? `${photoId}_poster.webp` : null,
-      blurDataUrl,
-      duration,
-      mimeType: detectedType.mime,
-      exifStripped: !isVideo && gallery.stripExif,
-      status: autoApprove ? 'APPROVED' : 'PENDING',
-    },
-  })
+    if (beforePersist) {
+      await beforePersist()
+    }
+
+    photo = await db.photo.create({
+      data: {
+        id: photoId,
+        galleryId: gallery.id,
+        guestName,
+        fileHash,
+        mediaType: isVideo ? 'VIDEO' : 'IMAGE',
+        originalPath: isVideo
+          ? `${photoId}_original.${detectedType.mime === 'video/quicktime' ? 'mov' : 'mp4'}`
+          : `${photoId}_original.webp`,
+        thumbPath,
+        displayPath,
+        posterPath: isVideo ? `${photoId}_poster.webp` : null,
+        blurDataUrl,
+        duration,
+        mimeType: detectedType.mime,
+        exifStripped: !isVideo && gallery.stripExif,
+        status: autoApprove ? 'APPROVED' : 'PENDING',
+      },
+    })
+  } catch (error) {
+    await Promise.allSettled(savedFiles.map((file) => storage.delete(gallery.slug, file)))
+    throw error
+  }
 
   const thumbUrl = `/api/v1/files/${gallery.slug}/${photo.id}?v=thumb`
 

@@ -27,7 +27,7 @@ async function runArchiveJob(params: {
     return
   }
 
-  if (gallery.isArchived && gallery.archivePath && gallery.archiveSizeBytes !== null) {
+  if (gallery.isArchived) {
     await db.gallery.update({
       where: { id: gallery.id },
       data: {
@@ -117,7 +117,7 @@ export async function adminArchiveRoutes(
     })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
 
-    if (gallery.isArchived && gallery.archivePath && gallery.archiveSizeBytes !== null) {
+    if (gallery.isArchived) {
       if (gallery.archiveStatus !== 'COMPLETED') {
         await db.gallery.update({
           where: { id: gallery.id },

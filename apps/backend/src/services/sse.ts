@@ -68,12 +68,20 @@ export function createSseManager(options: SseManagerOptions): SseManager {
     const gallery = map.get(galleryId)
     if (!gallery) return
     const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-    for (const conn of gallery.values()) {
+    for (const [connectionId, conn] of gallery.entries()) {
       try {
         conn.send(payload)
       } catch {
-        // dead connection
+        try {
+          conn.close?.()
+        } catch {
+          // ignore
+        }
+        gallery.delete(connectionId)
       }
+    }
+    if (gallery.size === 0) {
+      map.delete(galleryId)
     }
   }
 

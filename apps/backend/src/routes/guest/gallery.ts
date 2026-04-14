@@ -5,6 +5,7 @@ import { toGalleryResponse } from '../../services/uploadWindows.js'
 import { hasGalleryAccess, setGalleryAccessCookie } from '../../services/galleryAccess.js'
 
 const DUMMY_PIN_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaOaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+const PIN_RETRY_AFTER_SECONDS = 15 * 60
 
 type PaginationCursor = {
   id: string
@@ -77,6 +78,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
     const ip = req.ip
 
     if (await fastify.checkPinBlocked(ip, slug)) {
+      reply.header('Retry-After', String(PIN_RETRY_AFTER_SECONDS))
       return reply.code(429).send({
         type: 'pin-attempts-exceeded',
         title: 'Zu viele PIN-Fehlversuche. Bitte versuche es spaeter erneut.',

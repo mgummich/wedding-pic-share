@@ -4,6 +4,9 @@ import { loadConfig } from '../src/config.js'
 import { closeClient, getClient } from '@wedding/db'
 import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
+import sharp from 'sharp'
+import { access } from 'node:fs/promises'
+import { join } from 'node:path'
 import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTestEnv.js'
 
 let app: FastifyInstance
@@ -439,6 +442,7 @@ describe('Gallery PIN access', () => {
     })
     expect(blocked.statusCode).toBe(429)
     expect(blocked.json().type).toBe('pin-attempts-exceeded')
+    expect(String(blocked.headers['retry-after'] ?? '')).toMatch(/^\d+$/)
   })
 
   it('does not reveal whether a slug exists on access endpoint', async () => {
@@ -484,3 +488,77 @@ describe('GET /api/v1/g/active', () => {
     expect(body.isActive).toBe(true)
   })
 })
+
+describe('DELETE /api/v1/admin/galleries/:id', () => {
+  it('removes storage files for gallery photos when deleting a gallery', async () => {
+    const reset = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: { secretKey: null, uploadWindows: [] },
+    })
+    expect(reset.statusCode).toBe(200)
+
+    const uploadBuffer = await sharp({
+      create: { width: 160, height: 120, channels: 3, background: '#223344' },
+    }).jpeg().toBuffer()
+
+    const multipart = buildMultipartPayload(uploadBuffer, 'image/jpeg', 'delete-gallery-source.jpg')
+    const upload = await app.inject({
+      method: 'POST',
+      url: '/api/v1/g/party/upload',
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(upload.statusCode).toBe(201)
+    const photoId = upload.json().id as string
+
+    const db = getClient()
+    const photo = await db.photo.findUniqueOrThrow({
+      where: { id: photoId },
+      select: { thumbPath: true, displayPath: true, originalPath: true, posterPath: true },
+    })
+
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(deleteRes.statusCode).toBe(200)
+
+    const galleryAfterDelete = await db.gallery.findUnique({ where: { id: galleryId } })
+    expect(galleryAfterDelete).toBeNull()
+
+    const filePaths = [
+      photo.thumbPath,
+      photo.displayPath,
+      photo.originalPath,
+      photo.posterPath,
+    ].filter((value): value is string => Boolean(value))
+
+    for (const relativePath of filePaths) {
+      await expect(access(join(testEnv.storagePath, 'party', relativePath))).rejects.toBeTruthy()
+    }
+  })
+
+  it('returns 404 when deleting an unknown gallery', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/admin/galleries/does-not-exist',
+      headers: { cookie: sessionCookie },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().type).toBe('gallery-not-found')
+  })
+})
+
+function buildMultipartPayload(fileBuffer: Buffer, mimeType: string, filename: string) {
+  const boundary = '----FormBoundary' + Math.random().toString(36).slice(2)
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`),
+    fileBuffer,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ])
+  return { body, contentType: `multipart/form-data; boundary=${boundary}` }
+}

@@ -275,10 +275,19 @@ class WorkerThreadMediaProcessor implements MediaProcessor {
         slot.currentJobId = null
         task?.reject(error instanceof Error ? error : new Error(String(error)))
       }
+      this.schedule()
     })
 
     worker.on('exit', () => {
       if (this.closing) return
+
+      const jobId = slot.currentJobId
+      if (jobId) {
+        const task = this.inFlight.get(jobId)
+        this.inFlight.delete(jobId)
+        slot.currentJobId = null
+        task?.reject(new Error('Media worker exited unexpectedly'))
+      }
 
       const index = this.workers.indexOf(slot)
       if (index >= 0) {

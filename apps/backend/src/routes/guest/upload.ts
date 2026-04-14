@@ -9,6 +9,7 @@ import type { MediaProcessor } from '../../services/mediaProcessor.js'
 import { createUploadDeleteToken, readUploadDeleteToken } from '../../services/uploadDeleteToken.js'
 
 const UPLOAD_SHUTDOWN_TIMEOUT_MS = 30 * 1000
+const GUEST_UPLOAD_MAX_PER_MINUTE = 30
 
 export async function guestUploadRoutes(
   fastify: FastifyInstance,
@@ -23,7 +24,14 @@ export async function guestUploadRoutes(
     ])
   })
 
-  fastify.post('/g/:slug/upload', async (req, reply) => {
+  fastify.post('/g/:slug/upload', {
+    config: {
+      rateLimit: {
+        max: GUEST_UPLOAD_MAX_PER_MINUTE,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (req, reply) => {
     const { slug } = req.params as { slug: string }
     const db = fastify.db
 

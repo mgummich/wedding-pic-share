@@ -176,6 +176,18 @@ describe('PATCH /api/v1/admin/photos/:id', () => {
       id: photoId,
     }))
   })
+
+  it('returns 404 when approving a non-existing photo', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/admin/photos/does-not-exist',
+      headers: { cookie: sessionCookie },
+      payload: { status: 'APPROVED' },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().type).toBe('photo-not-found')
+  })
 })
 
 describe('DELETE /api/v1/admin/photos/:id', () => {
@@ -217,6 +229,17 @@ describe('DELETE /api/v1/admin/photos/:id', () => {
     })
     expect(listedAfter.statusCode).toBe(200)
     expect((listedAfter.json().data as Array<{ id: string }>).some((photo) => photo.id === uploadedId)).toBe(false)
+  })
+
+  it('returns 404 when deleting a non-existing photo', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/admin/photos/does-not-exist',
+      headers: { cookie: sessionCookie },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().type).toBe('photo-not-found')
   })
 })
 

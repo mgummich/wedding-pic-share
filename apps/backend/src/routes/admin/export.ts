@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import archiver from 'archiver'
 import type { StorageService } from '../../services/storage.js'
 
+const MAX_EXPORT_ITEMS = 5000
+
 export async function adminExportRoutes(
   fastify: FastifyInstance,
   opts: { storage: StorageService }
@@ -20,10 +22,11 @@ export async function adminExportRoutes(
 
     if (gallery.isArchived && gallery.archivePath) {
       try {
-        await opts.storage.stat(gallery.slug, gallery.archivePath)
+        const archiveStat = await opts.storage.stat(gallery.slug, gallery.archivePath)
 
         reply.header('Content-Type', 'application/zip')
         reply.header('Content-Disposition', `attachment; filename="${gallery.slug}-export.zip"`)
+        reply.header('Content-Length', String(archiveStat.size))
 
         return reply.send(opts.storage.openReadStream(gallery.slug, gallery.archivePath))
       } catch {
@@ -36,6 +39,14 @@ export async function adminExportRoutes(
       where: { galleryId: id, status: 'APPROVED', deletedAt: null },
       orderBy: { createdAt: 'asc' },
     })
+    if (photos.length > MAX_EXPORT_ITEMS) {
+      return reply.code(413).send({
+        type: 'export-too-large',
+        title: 'Export contains too many files.',
+        status: 413,
+        detail: `Maximum export item count is ${MAX_EXPORT_ITEMS}.`,
+      })
+    }
 
     reply.header('Content-Type', 'application/zip')
     reply.header('Content-Disposition', `attachment; filename="${gallery.slug}-export.zip"`)

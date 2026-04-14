@@ -54,6 +54,29 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
     reply.header('x-request-id', req.id)
   })
 
+  fastify.addHook('onSend', async (_req, reply, payload) => {
+    if (reply.statusCode < 400) {
+      return payload
+    }
+
+    if (reply.statusCode === 429 && !reply.hasHeader('Retry-After')) {
+      reply.header('Retry-After', '60')
+    }
+
+    if (!payload || typeof payload !== 'object' || Buffer.isBuffer(payload)) {
+      return payload
+    }
+
+    const body = payload as Record<string, unknown>
+    const normalized: Record<string, unknown> = { ...body }
+    if (typeof normalized.type !== 'string') normalized.type = 'about:blank'
+    if (typeof normalized.title !== 'string') normalized.title = 'Request failed'
+    if (typeof normalized.status !== 'number') normalized.status = reply.statusCode
+
+    reply.header('Content-Type', 'application/problem+json; charset=utf-8')
+    return normalized
+  })
+
   await fastify.register(helmet)
 
   await fastify.register(cors, {
@@ -131,7 +154,7 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
     await instance.register(setupRoutes)
     await instance.register(adminAuthRoutes)
     await instance.register(adminCsrfRoutes)
-    await instance.register(adminGalleryRoutes)
+    await instance.register(adminGalleryRoutes, { storage })
     await instance.register(guestGalleryRoutes)
     await instance.register(guestUploadRoutes, { storage, sse, uploadNotifier, mediaProcessor })
     await instance.register(guestSlideshowRoutes, { sse })
