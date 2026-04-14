@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, use, FormEvent } from 'react'
+import { useEffect, useState, use, FormEvent, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowLeft, Trash2, QrCode, Download, FileText, Archive } from 'lucide-react'
-import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, archiveGallery, ApiError } from '@/lib/api'
+import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, archiveGallery, exportGallery, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import { AdminUploadPanel } from '@/components/AdminUploadPanel'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
@@ -26,8 +26,10 @@ function toDateTimeLocal(value: string): string {
   return localDate.toISOString().slice(0, 16)
 }
 
-function toIsoString(value: string): string {
-  return new Date(value).toISOString()
+function toIsoString(value: string): string | null {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString()
 }
 
 function formatArchiveSize(bytes: number | null): string {
@@ -71,14 +73,14 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [exporting, setExporting] = useState(false)
   const [archiving, setArchiving] = useState(false)
 
-  async function refreshApprovedPhotos() {
+  const refreshApprovedPhotos = useCallback(async () => {
     try {
       const response = await getAdminPhotos(id, { status: 'APPROVED' })
       setPhotos(response.data)
     } catch {
       // Ignore background refresh failures; the settings page can still function.
     }
-  }
+  }, [id])
 
   useEffect(() => {
     getAdminGalleries()
@@ -105,7 +107,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       })
 
     void refreshApprovedPhotos()
-  }, [id, router])
+  }, [id, refreshApprovedPhotos, router])
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
@@ -117,7 +119,16 @@ export default function GallerySettingsPage({ params }: PageProps) {
         setSaveError(t('gallerySettings.saveError.incompleteWindow'))
         return
       }
-      if (uploadWindows.some((window) => new Date(window.start) >= new Date(window.end))) {
+      const isoWindows = uploadWindows.map((window) => ({
+        start: toIsoString(window.start),
+        end: toIsoString(window.end),
+      }))
+      if (isoWindows.some((window) => window.start === null || window.end === null)) {
+        setSaveError(t('gallerySettings.saveError.invalidDateTime'))
+        return
+      }
+      const normalizedUploadWindows = isoWindows as Array<{ start: string; end: string }>
+      if (normalizedUploadWindows.some((window) => new Date(window.start) >= new Date(window.end))) {
         setSaveError(t('gallerySettings.saveError.invalidWindow'))
         return
       }
@@ -132,10 +143,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
         stripExif,
         secretKey: clearSecretKey ? null : (normalizedSecretKey.length > 0 ? normalizedSecretKey : undefined),
         isActive,
-        uploadWindows: uploadWindows.map((window) => ({
-          start: toIsoString(window.start),
-          end: toIsoString(window.end),
-        })),
+        uploadWindows: normalizedUploadWindows,
       })
       setGallery((prev) => prev ? { ...prev, ...updated } : prev)
       setStripExif(updated.stripExif)
@@ -171,12 +179,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
     if (!gallery) return
     setExporting(true)
     try {
-      const res = await fetch(`/api/v1/admin/galleries/${id}/export`, { credentials: 'include' })
-      if (!res.ok) {
-        setSaveError(t('gallerySettings.saveError.exportFailed'))
-        return
-      }
-      const blob = await res.blob()
+      const blob = await exportGallery(id)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -185,6 +188,8 @@ export default function GallerySettingsPage({ params }: PageProps) {
       a.click()
       document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 100)
+    } catch {
+      setSaveError(t('gallerySettings.saveError.exportFailed'))
     } finally {
       setExporting(false)
     }
@@ -643,6 +648,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           onClose={() => setOpenIndex(null)}
           onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
           onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
+          t={t}
         />
       )}
     </main>

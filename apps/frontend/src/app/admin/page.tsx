@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   ApiError,
   getAdminGalleries,
@@ -12,6 +13,9 @@ import {
 } from '@/lib/api'
 import { Settings } from 'lucide-react'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
+import type { AdminMessageKey } from '@/lib/adminI18n'
+
+type Translate = (key: AdminMessageKey, params?: Record<string, string | number>) => string
 
 export default function AdminDashboardPage() {
   const router = useRouter()
@@ -19,20 +23,12 @@ export default function AdminDashboardPage() {
   const [galleries, setGalleries] = useState<Awaited<ReturnType<typeof getAdminGalleries>>>([])
   const [loading, setLoading] = useState(true)
   const [twoFactor, setTwoFactor] = useState<{ enabled: boolean; configured: boolean } | null>(null)
-  const [twoFactorPassword, setTwoFactorPassword] = useState('')
-  const [twoFactorCode, setTwoFactorCode] = useState('')
-  const [twoFactorSetupToken, setTwoFactorSetupToken] = useState<string | null>(null)
-  const [twoFactorSecret, setTwoFactorSecret] = useState<string | null>(null)
-  const [twoFactorOtpAuthUrl, setTwoFactorOtpAuthUrl] = useState<string | null>(null)
-  const [twoFactorBusy, setTwoFactorBusy] = useState(false)
-  const [twoFactorError, setTwoFactorError] = useState<string | null>(null)
-  const [twoFactorMessage, setTwoFactorMessage] = useState<string | null>(null)
-  const [twoFactorQrDataUrl, setTwoFactorQrDataUrl] = useState<string | null>(null)
-  const [twoFactorCopyMessage, setTwoFactorCopyMessage] = useState<string | null>(null)
-  const sortedGalleries = [...galleries].sort((a, b) => {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const sortedGalleries = useMemo(() => [...galleries].sort((a, b) => {
     if (a.isActive === b.isActive) return a.name.localeCompare(b.name)
     return a.isActive ? -1 : 1
-  })
+  }), [galleries])
 
   useEffect(() => {
     Promise.all([
@@ -42,99 +38,14 @@ export default function AdminDashboardPage() {
       .then(([loadedGalleries, twoFactorStatus]) => {
         setGalleries(loadedGalleries)
         setTwoFactor(twoFactorStatus)
+        setLoadError(null)
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) router.replace('/admin/login')
+        else setLoadError(t('dashboard.loadError'))
       })
       .finally(() => setLoading(false))
-  }, [router])
-
-  useEffect(() => {
-    if (!twoFactorOtpAuthUrl) {
-      setTwoFactorQrDataUrl(null)
-      return
-    }
-
-    let canceled = false
-    void import('qrcode')
-      .then((qrcode) => qrcode.toDataURL(twoFactorOtpAuthUrl, { width: 192, margin: 1 }))
-      .then((dataUrl) => {
-        if (!canceled) {
-          setTwoFactorQrDataUrl(dataUrl)
-        }
-      })
-      .catch(() => {
-        if (!canceled) {
-          setTwoFactorQrDataUrl(null)
-        }
-      })
-
-    return () => {
-      canceled = true
-    }
-  }, [twoFactorOtpAuthUrl])
-
-  async function handleTwoFactorSetup() {
-    setTwoFactorError(null)
-    setTwoFactorMessage(null)
-    setTwoFactorBusy(true)
-
-    try {
-      const setup = await setupAdminTwoFactor(twoFactorPassword)
-      setTwoFactorSetupToken(setup.setupToken)
-      setTwoFactorSecret(setup.secret)
-      setTwoFactorOtpAuthUrl(setup.otpauthUrl)
-      setTwoFactorMessage(t('dashboard.2fa.setupSuccess'))
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setTwoFactorError(t('dashboard.2fa.error.invalidPassword'))
-      } else {
-        setTwoFactorError(t('dashboard.2fa.error.generic'))
-      }
-    } finally {
-      setTwoFactorBusy(false)
-    }
-  }
-
-  async function handleTwoFactorVerify() {
-    if (!twoFactorSetupToken) return
-
-    setTwoFactorError(null)
-    setTwoFactorMessage(null)
-    setTwoFactorBusy(true)
-    try {
-      await verifyAdminTwoFactor(twoFactorCode, twoFactorSetupToken)
-      setTwoFactor((current) => current ? { ...current, configured: true } : current)
-      setTwoFactorMessage(t('dashboard.2fa.verifySuccess'))
-      setTwoFactorPassword('')
-      setTwoFactorCode('')
-      setTwoFactorSetupToken(null)
-      setTwoFactorSecret(null)
-      setTwoFactorOtpAuthUrl(null)
-      setTwoFactorQrDataUrl(null)
-      setTwoFactorCopyMessage(null)
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setTwoFactorError(t('dashboard.2fa.error.invalidCode'))
-      } else {
-        setTwoFactorError(t('dashboard.2fa.error.generic'))
-      }
-    } finally {
-      setTwoFactorBusy(false)
-    }
-  }
-
-  async function handleCopy(text: string): Promise<void> {
-    try {
-      if (!navigator.clipboard) {
-        throw new Error('clipboard unavailable')
-      }
-      await navigator.clipboard.writeText(text)
-      setTwoFactorCopyMessage(t('dashboard.2fa.copySuccess'))
-    } catch {
-      setTwoFactorCopyMessage(t('dashboard.2fa.copyFailed'))
-    }
-  }
+  }, [router, t])
 
   return (
     <main className="min-h-screen bg-surface-base">
@@ -148,102 +59,18 @@ export default function AdminDashboardPage() {
       </header>
 
       <div className="px-4 py-4 space-y-3">
-        {!loading && twoFactor?.enabled && (
-          <section className="bg-surface-card border border-border rounded-card p-4 space-y-3">
-            <h2 className="font-medium text-text-primary">{t('dashboard.2fa.title')}</h2>
-            {twoFactor.configured ? (
-              <p className="text-sm text-text-muted">{t('dashboard.2fa.enabled')}</p>
-            ) : (
-              <>
-                <p className="text-sm text-text-muted">{t('dashboard.2fa.notConfigured')}</p>
-                <div className="space-y-2">
-                  <p className="text-xs text-text-muted">{t('dashboard.2fa.step1')}</p>
-                  <label htmlFor="two-factor-password" className="block text-sm font-medium text-text-primary">
-                    {t('dashboard.2fa.password')}
-                  </label>
-                  <input
-                    id="two-factor-password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={twoFactorPassword}
-                    onChange={(event) => setTwoFactorPassword(event.target.value)}
-                    className="w-full px-4 py-2.5 rounded-card border border-border
-                               focus:outline-none focus:border-accent bg-surface-card text-text-primary"
-                  />
-                  <button
-                    type="button"
-                    disabled={twoFactorBusy || twoFactorPassword.length === 0}
-                    onClick={handleTwoFactorSetup}
-                    className="px-4 py-2 rounded-full bg-accent text-white hover:bg-accent-hover
-                               disabled:opacity-50 transition-colors"
-                  >
-                    {twoFactorBusy ? t('dashboard.2fa.saving') : t('dashboard.2fa.start')}
-                  </button>
-                </div>
+        {loadError && (
+          <div className="rounded-card border border-error/40 bg-error/5 px-3 py-2">
+            <p className="text-sm text-error">{loadError}</p>
+          </div>
+        )}
 
-                {twoFactorSetupToken && twoFactorSecret && twoFactorOtpAuthUrl && (
-                  <div className="space-y-2 rounded-card border border-border/70 p-3">
-                    <p className="text-xs text-text-muted">{t('dashboard.2fa.step2')}</p>
-                    {twoFactorQrDataUrl && (
-                      <img
-                        src={twoFactorQrDataUrl}
-                        alt={t('dashboard.2fa.qrAlt')}
-                        className="h-48 w-48 rounded-card border border-border bg-white p-2"
-                      />
-                    )}
-                    <p className="text-xs text-text-muted">
-                      {t('dashboard.2fa.secret')}: <span className="font-mono break-all">{twoFactorSecret}</span>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(twoFactorSecret)}
-                      className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
-                    >
-                      {t('dashboard.2fa.copySecret')}
-                    </button>
-                    <p className="text-xs text-text-muted break-all">
-                      {t('dashboard.2fa.otpauth')}: <span className="font-mono">{twoFactorOtpAuthUrl}</span>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(twoFactorOtpAuthUrl)}
-                      className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
-                    >
-                      {t('dashboard.2fa.copyOtpAuth')}
-                    </button>
-                    {twoFactorCopyMessage && (
-                      <p className="text-xs text-text-muted">{twoFactorCopyMessage}</p>
-                    )}
-                    <label htmlFor="two-factor-code" className="block text-sm font-medium text-text-primary">
-                      {t('dashboard.2fa.code')}
-                    </label>
-                    <input
-                      id="two-factor-code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      pattern="[0-9]*"
-                      value={twoFactorCode}
-                      onChange={(event) => setTwoFactorCode(event.target.value)}
-                      className="w-full px-4 py-2.5 rounded-card border border-border
-                                 focus:outline-none focus:border-accent bg-surface-card text-text-primary"
-                    />
-                    <button
-                      type="button"
-                      disabled={twoFactorBusy || twoFactorCode.length === 0}
-                      onClick={handleTwoFactorVerify}
-                      className="px-4 py-2 rounded-full bg-accent text-white hover:bg-accent-hover
-                                 disabled:opacity-50 transition-colors"
-                    >
-                      {twoFactorBusy ? t('dashboard.2fa.saving') : t('dashboard.2fa.verify')}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-            {twoFactorMessage && <p className="text-xs text-accent">{twoFactorMessage}</p>}
-            {twoFactorError && <p className="text-xs text-error">{twoFactorError}</p>}
-          </section>
+        {!loading && twoFactor?.enabled && (
+          <TwoFactorSetupPanel
+            configured={twoFactor.configured}
+            onConfigured={() => setTwoFactor((current) => current ? { ...current, configured: true } : current)}
+            t={t}
+          />
         )}
 
         {loading && (
@@ -306,5 +133,214 @@ export default function AdminDashboardPage() {
         ))}
       </div>
     </main>
+  )
+}
+
+function TwoFactorSetupPanel({
+  configured,
+  onConfigured,
+  t,
+}: {
+  configured: boolean
+  onConfigured: () => void
+  t: Translate
+}) {
+  const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const [setupToken, setSetupToken] = useState<string | null>(null)
+  const [secret, setSecret] = useState<string | null>(null)
+  const [otpAuthUrl, setOtpAuthUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [copyMessage, setCopyMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!otpAuthUrl) {
+      setQrDataUrl(null)
+      return
+    }
+
+    let canceled = false
+    void import('qrcode')
+      .then((qrcode) => qrcode.toDataURL(otpAuthUrl, { width: 192, margin: 1 }))
+      .then((dataUrl) => {
+        if (!canceled) {
+          setQrDataUrl(dataUrl)
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setQrDataUrl(null)
+        }
+      })
+
+    return () => {
+      canceled = true
+    }
+  }, [otpAuthUrl])
+
+  async function handleSetup() {
+    setError(null)
+    setMessage(null)
+    setBusy(true)
+
+    try {
+      const setup = await setupAdminTwoFactor(password)
+      setSetupToken(setup.setupToken)
+      setSecret(setup.secret)
+      setOtpAuthUrl(setup.otpauthUrl)
+      setMessage(t('dashboard.2fa.setupSuccess'))
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError(t('dashboard.2fa.error.invalidPassword'))
+      } else {
+        setError(t('dashboard.2fa.error.generic'))
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleVerify() {
+    if (!setupToken) return
+
+    setError(null)
+    setMessage(null)
+    setBusy(true)
+    try {
+      await verifyAdminTwoFactor(code, setupToken)
+      onConfigured()
+      setMessage(t('dashboard.2fa.verifySuccess'))
+      setPassword('')
+      setCode('')
+      setSetupToken(null)
+      setSecret(null)
+      setOtpAuthUrl(null)
+      setQrDataUrl(null)
+      setCopyMessage(null)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError(t('dashboard.2fa.error.invalidCode'))
+      } else {
+        setError(t('dashboard.2fa.error.generic'))
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCopy(text: string): Promise<void> {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error('clipboard unavailable')
+      }
+      await navigator.clipboard.writeText(text)
+      setCopyMessage(t('dashboard.2fa.copySuccess'))
+    } catch {
+      setCopyMessage(t('dashboard.2fa.copyFailed'))
+    }
+  }
+
+  return (
+    <section className="bg-surface-card border border-border rounded-card p-4 space-y-3">
+      <h2 className="font-medium text-text-primary">{t('dashboard.2fa.title')}</h2>
+      {configured ? (
+        <p className="text-sm text-text-muted">{t('dashboard.2fa.enabled')}</p>
+      ) : (
+        <>
+          <p className="text-sm text-text-muted">{t('dashboard.2fa.notConfigured')}</p>
+          <div className="space-y-2">
+            <p className="text-xs text-text-muted">{t('dashboard.2fa.step1')}</p>
+            <label htmlFor="two-factor-password" className="block text-sm font-medium text-text-primary">
+              {t('dashboard.2fa.password')}
+            </label>
+            <input
+              id="two-factor-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full px-4 py-2.5 rounded-card border border-border
+                         focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+            />
+            <button
+              type="button"
+              disabled={busy || password.length === 0}
+              onClick={handleSetup}
+              className="px-4 py-2 rounded-full bg-accent text-white hover:bg-accent-hover
+                         disabled:opacity-50 transition-colors"
+            >
+              {busy ? t('dashboard.2fa.saving') : t('dashboard.2fa.start')}
+            </button>
+          </div>
+
+          {setupToken && secret && otpAuthUrl && (
+            <div className="space-y-2 rounded-card border border-border/70 p-3">
+              <p className="text-xs text-text-muted">{t('dashboard.2fa.step2')}</p>
+              {qrDataUrl && (
+                <Image
+                  src={qrDataUrl}
+                  alt={t('dashboard.2fa.qrAlt')}
+                  width={192}
+                  height={192}
+                  className="h-48 w-48 rounded-card border border-border bg-white p-2"
+                  unoptimized
+                />
+              )}
+              <p className="text-xs text-text-muted">
+                {t('dashboard.2fa.secret')}: <span className="font-mono break-all">{secret}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => handleCopy(secret)}
+                className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+              >
+                {t('dashboard.2fa.copySecret')}
+              </button>
+              <p className="text-xs text-text-muted break-all">
+                {t('dashboard.2fa.otpauth')}: <span className="font-mono">{otpAuthUrl}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => handleCopy(otpAuthUrl)}
+                className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+              >
+                {t('dashboard.2fa.copyOtpAuth')}
+              </button>
+              {copyMessage && (
+                <p className="text-xs text-text-muted">{copyMessage}</p>
+              )}
+              <label htmlFor="two-factor-code" className="block text-sm font-medium text-text-primary">
+                {t('dashboard.2fa.code')}
+              </label>
+              <input
+                id="two-factor-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                className="w-full px-4 py-2.5 rounded-card border border-border
+                           focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              />
+              <button
+                type="button"
+                disabled={busy || code.length === 0}
+                onClick={handleVerify}
+                className="px-4 py-2 rounded-full bg-accent text-white hover:bg-accent-hover
+                           disabled:opacity-50 transition-colors"
+              >
+                {busy ? t('dashboard.2fa.saving') : t('dashboard.2fa.verify')}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      {message && <p className="text-xs text-accent">{message}</p>}
+      {error && <p className="text-xs text-error">{error}</p>}
+    </section>
   )
 }

@@ -94,6 +94,34 @@ async function apiFetch<T>(path: string, init?: RequestInit, retryCsrf = true): 
   return res.json()
 }
 
+async function apiFetchBlob(path: string, init?: RequestInit, retryCsrf = true): Promise<Blob> {
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const requiresCsrf = isAdminMutation(path, method)
+  const csrfHeaders: Record<string, string> = {}
+  if (requiresCsrf) {
+    const token = await fetchAdminCsrfToken()
+    csrfHeaders['x-csrf-token'] = token
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...csrfHeaders,
+      ...init?.headers,
+    },
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    if (requiresCsrf && retryCsrf && res.status === 403) {
+      await fetchAdminCsrfToken(true)
+      return apiFetchBlob(path, init, false)
+    }
+    throw new ApiError(res.status, body, `${res.status}`)
+  }
+  return res.blob()
+}
+
 // ─── Gallery ────────────────────────────────────────────────────────────────
 
 export type GalleryPageResponse = GalleryResponse & {
@@ -302,6 +330,10 @@ export async function deleteGallery(id: string): Promise<void> {
 
 export async function archiveGallery(id: string): Promise<GalleryResponse> {
   return apiFetch(`/api/v1/admin/galleries/${id}/archive`, { method: 'POST' })
+}
+
+export async function exportGallery(id: string): Promise<Blob> {
+  return apiFetchBlob(`/api/v1/admin/galleries/${id}/export`)
 }
 
 // ─── Admin Photos ────────────────────────────────────────────────────────────

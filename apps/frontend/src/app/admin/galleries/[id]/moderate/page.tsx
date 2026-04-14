@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { CheckCircle, XCircle } from 'lucide-react'
 import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api'
@@ -9,12 +9,9 @@ import { Lightbox } from '@/components/Lightbox'
 import type { AdminPhotoResponse } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
 
-interface PageProps {
-  params: Promise<{ id: string }>
-}
-
-export default function ModerationPage({ params }: PageProps) {
-  const { id } = use(params)
+export default function ModerationPage() {
+  const params = useParams<{ id: string }>()
+  const id = params.id ?? ''
   const router = useRouter()
   const { t } = useAdminI18n()
   const [photos, setPhotos] = useState<AdminPhotoResponse[]>([])
@@ -23,36 +20,73 @@ export default function ModerationPage({ params }: PageProps) {
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
+    if (!id) return
+    let active = true
     getAdminPhotos(id, { status: 'PENDING' })
       .then((r) => {
+        if (!active) return
         setPhotos(r.data)
         setNextCursor(r.pagination.nextCursor)
         setHasMore(r.pagination.hasMore)
       })
       .catch((err) => {
+        if (!active) return
         if (err instanceof ApiError && err.status === 401) router.replace('/admin/login')
+        else setLoadError(true)
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
   }, [id, router])
 
   async function handleModerate(photoId: string, action: 'APPROVED' | 'REJECTED') {
-    await moderatePhoto(photoId, { status: action })
-    setPhotos((prev) => prev.filter((p) => p.id !== photoId))
-    setOpenIndex(null)
+    setActionError(null)
+    setIsSubmitting(true)
+    try {
+      await moderatePhoto(photoId, { status: action })
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId))
+      setOpenIndex(null)
+    } catch {
+      setActionError(t('moderation.error.moderateFailed'))
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   async function handleApproveAll() {
     const ids = photos.map((p) => p.id)
     if (ids.length === 0) return
-    await batchModerate({ action: 'approve', photoIds: ids })
-    setPhotos([])
-    setOpenIndex(null)
+    setActionError(null)
+    setIsSubmitting(true)
+    try {
+      const result = await batchModerate({ action: 'approve', photoIds: ids })
+      if (result.failed.length > 0) {
+        const failedIds = new Set(result.failed)
+        setPhotos((prev) => prev.filter((photo) => failedIds.has(photo.id)))
+        setActionError(t('moderation.error.partialApprove', { count: result.failed.length }))
+      } else {
+        setPhotos([])
+      }
+      setOpenIndex(null)
+    } catch {
+      setActionError(t('moderation.error.approveAllFailed'))
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   async function handleLoadMore() {
     if (!hasMore || !nextCursor || loadingMore) return
+    setActionError(null)
     setLoadingMore(true)
     try {
       const result = await getAdminPhotos(id, { status: 'PENDING', cursor: nextCursor })
@@ -63,6 +97,8 @@ export default function ModerationPage({ params }: PageProps) {
       })
       setNextCursor(result.pagination.nextCursor)
       setHasMore(result.pagination.hasMore)
+    } catch {
+      setActionError(t('moderation.error.loadMoreFailed'))
     } finally {
       setLoadingMore(false)
     }
@@ -80,7 +116,7 @@ export default function ModerationPage({ params }: PageProps) {
     )
   }
 
-  if (photos.length === 0 && !hasMore) {
+  if (!loadError && photos.length === 0 && !hasMore) {
     return (
       <main className="min-h-screen bg-surface-base flex flex-col items-center justify-center px-4">
         <p className="font-display text-2xl text-text-primary mb-2">{t('moderation.doneTitle')}</p>
@@ -97,11 +133,24 @@ export default function ModerationPage({ params }: PageProps) {
         </div>
         <button
           onClick={handleApproveAll}
+          disabled={isSubmitting}
           className="text-sm px-4 py-2 rounded-full bg-success text-white hover:opacity-90 transition-opacity"
         >
           {t('moderation.approveAll')}
         </button>
       </header>
+
+      {loadError && (
+        <div className="px-4 py-3">
+          <p className="text-sm text-error">{t('moderation.error.loadFailed')}</p>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="px-4 py-3">
+          <p className="text-sm text-error">{actionError}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 p-2">
         {photos.map((photo, index) => (
@@ -128,6 +177,7 @@ export default function ModerationPage({ params }: PageProps) {
             <div className="absolute bottom-0 left-0 right-0 flex">
               <button
                 onClick={() => handleModerate(photo.id, 'REJECTED')}
+                disabled={isSubmitting}
                 className="flex-1 py-3 bg-error/80 hover:bg-error flex items-center justify-center transition-colors"
                 aria-label={t('moderation.rejectAria')}
               >
@@ -135,6 +185,7 @@ export default function ModerationPage({ params }: PageProps) {
               </button>
               <button
                 onClick={() => handleModerate(photo.id, 'APPROVED')}
+                disabled={isSubmitting}
                 className="flex-1 py-3 bg-success/80 hover:bg-success flex items-center justify-center transition-colors"
                 aria-label={t('moderation.approveAria')}
               >
@@ -165,6 +216,7 @@ export default function ModerationPage({ params }: PageProps) {
           onClose={() => setOpenIndex(null)}
           onNext={() => setOpenIndex((i) => (i !== null ? Math.min(i + 1, photos.length - 1) : null))}
           onPrev={() => setOpenIndex((i) => (i !== null ? Math.max(i - 1, 0) : null))}
+          t={t}
         />
       )}
     </main>

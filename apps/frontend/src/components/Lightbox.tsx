@@ -4,7 +4,10 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
-import { useAdminI18n } from './AdminLocaleContext'
+import type { AdminMessageKey } from '@/lib/adminI18n'
+import { useGuestI18n } from '@/lib/guestI18n'
+
+type TranslateFn = (key: AdminMessageKey, params?: Record<string, string | number>) => string
 
 interface LightboxProps {
   photos: PhotoResponse[]
@@ -13,25 +16,45 @@ interface LightboxProps {
   onNext: () => void
   onPrev: () => void
   allowDownload?: boolean
+  t?: TranslateFn
 }
 
-export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload }: LightboxProps) {
-  const { t } = useAdminI18n()
+export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload, t: translate }: LightboxProps) {
+  const { t: guestT } = useGuestI18n()
+  const t = translate ?? guestT
   const photo = photos[index]
   const hasPrev = index > 0
   const hasNext = index < photos.length - 1
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
+  const keyboardHandlersRef = useRef({
+    onClose,
+    onNext,
+    onPrev,
+    hasPrev,
+    hasNext,
+  })
 
-  // Keyboard navigation
+  useEffect(() => {
+    keyboardHandlersRef.current = {
+      onClose,
+      onNext,
+      onPrev,
+      hasPrev,
+      hasNext,
+    }
+  }, [onClose, onNext, onPrev, hasPrev, hasNext])
+
+  // Keep one listener and read latest handlers from a ref.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-      if (e.key === 'ArrowRight' && hasNext) onNext()
-      if (e.key === 'ArrowLeft' && hasPrev) onPrev()
+      const handlers = keyboardHandlersRef.current
+      if (e.key === 'Escape') handlers.onClose()
+      if (e.key === 'ArrowRight' && handlers.hasNext) handlers.onNext()
+      if (e.key === 'ArrowLeft' && handlers.hasPrev) handlers.onPrev()
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [onClose, onNext, onPrev, hasPrev, hasNext])
+  }, [])
 
   // Scroll lock
   // NOTE: If two Lightbox instances are ever open simultaneously (currently impossible
