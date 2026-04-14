@@ -48,6 +48,35 @@ describe('runWithRetry', () => {
     expect(attempts).toBe(3)
   })
 
+  it('waits for the configured backoff before retrying', async () => {
+    vi.useFakeTimers()
+
+    let attempts = 0
+    const resultPromise = runWithRetry({
+      operation: async () => {
+        attempts += 1
+        if (attempts < 2) {
+          throw new Error('temporary failure')
+        }
+        return 'ok'
+      },
+      shouldRetry: isTransientUploadError,
+      maxAttempts: 2,
+      backoffMs: 50,
+    })
+
+    await vi.advanceTimersByTimeAsync(49)
+    expect(attempts).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(resultPromise).resolves.toEqual({
+      ok: true,
+      value: 'ok',
+      attempts: 2,
+    })
+    expect(attempts).toBe(2)
+  })
+
   it('stops after max attempts for transient failures', async () => {
     vi.useFakeTimers()
 

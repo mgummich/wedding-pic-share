@@ -22,7 +22,7 @@ type RetryOptions<T> = {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return new Promise((resolve) => globalThis.setTimeout(resolve, Math.max(0, ms)))
 }
 
 function isTransientUploadError(error: unknown): boolean {
