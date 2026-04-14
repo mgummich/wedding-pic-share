@@ -97,6 +97,8 @@ describe('POST /api/v1/g/:slug/upload', () => {
     expect(body2.status).toBe('PENDING')
     expect(body2.mediaType).toBe('IMAGE')
     expect(body2.thumbUrl).toBeTruthy()
+    expect(typeof body2.deleteToken).toBe('string')
+    expect((body2.deleteToken as string).length).toBeGreaterThan(20)
     expect(notifyGuestUpload).toHaveBeenCalledTimes(1)
     expect(notifyGuestUpload).toHaveBeenCalledWith(expect.objectContaining({
       gallerySlug,
@@ -260,6 +262,95 @@ describe('POST /api/v1/g/:slug/upload', () => {
       headers: { cookie: sessionCookie },
     })
     expect(allowed.statusCode).toBe(200)
+  })
+
+  it('requires admin auth for non-approved media access and allows admins to access pending files', async () => {
+    const reset = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        secretKey: null,
+        uploadWindows: [],
+      },
+    })
+    expect(reset.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 120, height: 120, channels: 3, background: '#225577' },
+    }).jpeg().toBuffer()
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'pending-access.jpg')
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(upload.statusCode).toBe(201)
+    expect(upload.json().status).toBe('PENDING')
+    const photoId = upload.json().id as string
+
+    const guestBlocked = await app.inject({
+      method: 'GET',
+      url: `/api/v1/files/${gallerySlug}/${photoId}?v=display`,
+    })
+    expect(guestBlocked.statusCode).toBe(401)
+    expect(guestBlocked.json().type).toBe('unauthorized')
+
+    const adminAllowed = await app.inject({
+      method: 'GET',
+      url: `/api/v1/files/${gallerySlug}/${photoId}?v=display`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(adminAllowed.statusCode).toBe(200)
+  })
+
+  it('allows deleting pending uploads with a valid delete token', async () => {
+    const reset = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/galleries/${galleryId}`,
+      headers: { cookie: sessionCookie },
+      payload: {
+        secretKey: null,
+        uploadWindows: [],
+      },
+    })
+    expect(reset.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 120, height: 120, channels: 3, background: '#4488aa' },
+    }).jpeg().toBuffer()
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'pending-delete.jpg')
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/v1/g/${gallerySlug}/upload`,
+      headers: { 'content-type': multipart.contentType },
+      payload: multipart.body,
+    })
+    expect(upload.statusCode).toBe(201)
+
+    const uploadBody = upload.json() as {
+      id: string
+      status: 'PENDING' | 'APPROVED'
+      deleteToken?: string
+    }
+    expect(uploadBody.status).toBe('PENDING')
+    expect(typeof uploadBody.deleteToken).toBe('string')
+
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/g/${gallerySlug}/uploads/${uploadBody.id}`,
+      payload: { deleteToken: uploadBody.deleteToken },
+    })
+    expect(deleteRes.statusCode).toBe(200)
+    expect(deleteRes.json()).toEqual({ ok: true })
+
+    const fileAfterDelete = await app.inject({
+      method: 'GET',
+      url: `/api/v1/files/${gallerySlug}/${uploadBody.id}?v=display`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(fileAfterDelete.statusCode).toBe(404)
   })
 })
 

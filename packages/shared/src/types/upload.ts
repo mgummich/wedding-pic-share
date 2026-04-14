@@ -4,4 +4,5 @@ export interface UploadResponse {
   mediaType: 'IMAGE' | 'VIDEO'
   thumbUrl: string
   duration: number | null
+  deleteToken?: string
 }

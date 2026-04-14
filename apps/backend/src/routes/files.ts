@@ -41,12 +41,28 @@ export async function fileRoutes(
     })
 
     if (!photo) return reply.code(404).send({ type: 'not-found', status: 404 })
-    if (!hasGalleryAccess(req, photo.gallery, fastify.config.sessionSecret)) {
-      return reply.code(401).send({
-        type: 'invalid-pin',
-        title: 'Falscher Secret Key.',
-        status: 401,
-      })
+
+    const requestHasGalleryAccess = hasGalleryAccess(req, photo.gallery, fastify.config.sessionSecret)
+    const requireAdminIfNeeded = async (): Promise<boolean> => {
+      await fastify.requireAdmin(req, reply)
+      return !reply.sent
+    }
+
+    if (!requestHasGalleryAccess) {
+      if (typeof req.cookies['session'] !== 'string') {
+        return reply.code(401).send({
+          type: 'invalid-pin',
+          title: 'Falscher Secret Key.',
+          status: 401,
+        })
+      }
+      const isAdmin = await requireAdminIfNeeded()
+      if (!isAdmin) return
+    }
+
+    if (photo.status !== 'APPROVED') {
+      const isAdmin = await requireAdminIfNeeded()
+      if (!isAdmin) return
     }
 
     let filename: string
@@ -67,8 +83,8 @@ export async function fileRoutes(
     }
 
     if (v === 'original' && !photo.gallery.allowGuestDownload) {
-      await fastify.requireAdmin(req, reply)
-      if (reply.sent) return
+      const isAdmin = await requireAdminIfNeeded()
+      if (!isAdmin) return
     }
 
     const filePath = opts.storage.filePath(gallerySlug, filename)

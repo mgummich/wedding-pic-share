@@ -256,6 +256,33 @@ describe('POST /api/v1/admin/galleries/:id/upload', () => {
 
     expect(res2.statusCode).toBe(409)
   })
+
+  it('rejects admin uploads when gallery is archived', async () => {
+    const archive = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/galleries/${manualGalleryId}/archive`,
+      headers: { cookie: sessionCookie },
+    })
+    expect(archive.statusCode).toBe(200)
+
+    const jpegBuf = await sharp({
+      create: { width: 140, height: 140, channels: 3, background: '#123456' },
+    }).jpeg().toBuffer()
+
+    const multipart = buildMultipartPayload(jpegBuf, 'image/jpeg', 'archived-admin-upload.jpg')
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/galleries/${manualGalleryId}/upload`,
+      headers: {
+        cookie: sessionCookie,
+        'content-type': multipart.contentType,
+      },
+      payload: multipart.body,
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().type).toBe('gallery-archived')
+  })
 })
 
 async function createGallery(input: {

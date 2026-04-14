@@ -7,6 +7,7 @@ import { isUploadOpenAt } from '../../services/uploadWindows.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 import { hasGalleryAccess } from '../../services/galleryAccess.js'
 import type { MediaProcessor } from '../../services/mediaProcessor.js'
+import { createUploadDeleteToken, readUploadDeleteToken } from '../../services/uploadDeleteToken.js'
 
 export async function guestUploadRoutes(
   fastify: FastifyInstance,
@@ -69,6 +70,16 @@ export async function guestUploadRoutes(
         status: response.status,
       })
 
+      if (response.status === 'PENDING') {
+        return reply.code(201).send({
+          ...response,
+          deleteToken: createUploadDeleteToken(
+            { photoId: response.id, gallerySlug: gallery.slug },
+            fastify.config.sessionSecret
+          ),
+        })
+      }
+
       return reply.code(201).send(response)
     } catch (error) {
       if (error instanceof PhotoIngestError) {
@@ -76,5 +87,84 @@ export async function guestUploadRoutes(
       }
       throw error
     }
+  })
+
+  fastify.delete('/g/:slug/uploads/:photoId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['slug', 'photoId'],
+        properties: {
+          slug: { type: 'string', pattern: '^[a-z0-9-]+$' },
+          photoId: { type: 'string', minLength: 3, maxLength: 128 },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['deleteToken'],
+        properties: {
+          deleteToken: { type: 'string', minLength: 20, maxLength: 4096 },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { slug, photoId } = req.params as { slug: string; photoId: string }
+    const { deleteToken } = req.body as { deleteToken: string }
+
+    const tokenPayload = readUploadDeleteToken(deleteToken, fastify.config.sessionSecret)
+    if (!tokenPayload || tokenPayload.photoId !== photoId || tokenPayload.gallerySlug !== slug) {
+      return reply.code(401).send({
+        type: 'invalid-delete-token',
+        title: 'Ungueltiger Upload-Loesch-Token.',
+        status: 401,
+      })
+    }
+
+    const db = getClient()
+    const photo = await db.photo.findFirst({
+      where: { id: photoId, gallery: { slug }, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        gallery: { select: { slug: true } },
+        thumbPath: true,
+        displayPath: true,
+        originalPath: true,
+        posterPath: true,
+      },
+    })
+    if (!photo) {
+      return reply.code(404).send({
+        type: 'upload-not-found',
+        title: 'Upload nicht gefunden.',
+        status: 404,
+      })
+    }
+
+    if (photo.status !== 'PENDING') {
+      return reply.code(409).send({
+        type: 'upload-not-pending',
+        title: 'Upload kann nicht mehr geloescht werden.',
+        status: 409,
+      })
+    }
+
+    await db.photo.update({
+      where: { id: photo.id },
+      data: { deletedAt: new Date() },
+    })
+
+    const filePaths = [
+      photo.thumbPath,
+      photo.displayPath,
+      photo.originalPath,
+      photo.posterPath,
+    ].filter((value): value is string => Boolean(value))
+
+    await Promise.allSettled(
+      filePaths.map((filename) => opts.storage.delete(photo.gallery.slug, filename))
+    )
+
+    return reply.send({ ok: true })
   })
 }

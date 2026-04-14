@@ -27,11 +27,14 @@ export async function adminPhotoRoutes(
     const db = getClient()
     const gallery = await db.gallery.findUnique({
       where: { id },
-      select: { id: true, slug: true, moderationMode: true, stripExif: true },
+      select: { id: true, slug: true, moderationMode: true, stripExif: true, isArchived: true },
     })
 
     if (!gallery) {
       return reply.code(404).send({ type: 'gallery-not-found', title: 'Gallery Not Found', status: 404 })
+    }
+    if (gallery.isArchived) {
+      return reply.code(409).send({ type: 'gallery-archived', title: 'Gallery Archived', status: 409 })
     }
 
     const effectiveModerationMode = mode === 'photographer'
