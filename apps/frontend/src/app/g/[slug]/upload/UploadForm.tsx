@@ -4,16 +4,7 @@ import { useState, useRef } from 'react'
 import { Upload, Camera } from 'lucide-react'
 import { uploadFile, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
-
-const MAX_FILE_SIZE_MB = 50
-const MAX_VIDEO_SIZE_MB = 200
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'video/mp4', 'video/quicktime']
-const ERROR_MESSAGES: Record<number, string> = {
-  409: 'Dieses Foto wurde bereits hochgeladen.',
-  415: 'Dieser Dateityp wird nicht unterstützt. Erlaubt: JPEG, PNG, WEBP, HEIC, MP4, MOV.',
-  413: `Diese Datei ist zu groß. Maximal erlaubt: ${MAX_FILE_SIZE_MB} MB.`,
-  404: 'Diese Galerie existiert nicht oder wurde deaktiviert.',
-}
+import { validateUploadFile, UPLOAD_ERROR_MESSAGES } from '@/lib/uploadValidation'
 
 interface UploadFormProps {
   gallerySlug: string
@@ -32,12 +23,9 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
     const validated = selected.map((f): FileStatus => {
-      if (!ALLOWED_TYPES.includes(f.type)) {
-        return { file: f, status: 'error', error: ERROR_MESSAGES[415] }
-      }
-      const limitMb = f.type.startsWith('video/') ? MAX_VIDEO_SIZE_MB : MAX_FILE_SIZE_MB
-      if (f.size > limitMb * 1024 * 1024) {
-        return { file: f, status: 'error', error: ERROR_MESSAGES[413] }
+      const validationError = validateUploadFile(f)
+      if (validationError) {
+        return { file: f, status: 'error', error: validationError }
       }
       return { file: f, status: 'pending' }
     })
@@ -72,7 +60,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         allSucceeded = false
         const message =
           err instanceof ApiError
-            ? (ERROR_MESSAGES[err.status] ?? 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
+            ? (UPLOAD_ERROR_MESSAGES[err.status] ?? 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.')
             : 'Netzwerkfehler. Bitte versuche es erneut.'
         setFiles((prev) =>
           prev.map((f) => f.file === item.file ? { ...f, status: 'error', error: message } : f)
