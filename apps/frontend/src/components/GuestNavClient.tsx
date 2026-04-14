@@ -26,6 +26,7 @@ export function GuestNavClient({ gallerySlug }: GuestNavClientProps) {
           <Link
             key={label}
             href={href}
+            aria-label={label}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors
               ${active ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-primary'}`}
           >

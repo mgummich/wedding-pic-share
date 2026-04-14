@@ -17,11 +17,12 @@ function uniquePng() {
 function tinyMp4() {
   const dir = mkdtempSync(join(tmpdir(), 'wps-e2e-video-'))
   const file = join(dir, 'tiny.mp4')
+  const color = `0x${randomBytes(3).toString('hex')}`
 
   try {
     execFileSync('ffmpeg', [
       '-f', 'lavfi',
-      '-i', 'color=c=black:s=16x16:d=1',
+      '-i', `color=c=${color}:s=16x16:d=1`,
       '-an',
       '-c:v', 'libx264',
       '-pix_fmt', 'yuv420p',
