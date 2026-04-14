@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../src/server.js'
 import { loadConfig } from '../src/config.js'
 import { closeClient } from '@wedding/db'
@@ -8,6 +8,7 @@ import { execSync } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import type { UploadNotifier } from '../src/services/uploadNotifier.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = '/tmp/wps-upload-test.db'
@@ -16,6 +17,7 @@ let app: FastifyInstance
 let sessionCookie: string
 let gallerySlug: string
 let galleryId: string
+const notifyGuestUpload = vi.fn<UploadNotifier['notifyGuestUpload']>().mockResolvedValue(undefined)
 
 beforeAll(async () => {
   if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
@@ -34,7 +36,9 @@ beforeAll(async () => {
   })
 
   const config = loadConfig()
-  app = await buildApp(config)
+  app = await buildApp(config, {
+    uploadNotifier: { notifyGuestUpload },
+  })
   await app.ready()
 
   const { seedAdmin } = await import('../src/seed.js')
@@ -70,6 +74,10 @@ afterAll(async () => {
   if (fs.existsSync(`${DB_PATH}-wal`)) fs.unlinkSync(`${DB_PATH}-wal`)
 })
 
+beforeEach(() => {
+  notifyGuestUpload.mockClear()
+})
+
 describe('POST /api/v1/g/:slug/upload', () => {
   it('accepts a valid JPEG and returns PENDING status', async () => {
     const jpegBuf = await sharp({
@@ -89,6 +97,13 @@ describe('POST /api/v1/g/:slug/upload', () => {
     expect(body2.status).toBe('PENDING')
     expect(body2.mediaType).toBe('IMAGE')
     expect(body2.thumbUrl).toBeTruthy()
+    expect(notifyGuestUpload).toHaveBeenCalledTimes(1)
+    expect(notifyGuestUpload).toHaveBeenCalledWith(expect.objectContaining({
+      gallerySlug,
+      mediaType: 'IMAGE',
+      status: 'PENDING',
+      photoId: body2.id,
+    }))
   })
 
   it('returns 409 on duplicate upload (same file)', async () => {

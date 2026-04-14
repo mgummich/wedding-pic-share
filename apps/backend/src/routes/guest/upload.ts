@@ -2,12 +2,13 @@ import type { FastifyInstance } from 'fastify'
 import { getClient } from '@wedding/db'
 import type { StorageService } from '../../services/storage.js'
 import type { SseManager } from '../../services/sse.js'
+import type { UploadNotifier } from '../../services/uploadNotifier.js'
 import { isUploadOpenAt } from '../../services/uploadWindows.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 
 export async function guestUploadRoutes(
   fastify: FastifyInstance,
-  opts: { storage: StorageService; sse: SseManager }
+  opts: { storage: StorageService; sse: SseManager; uploadNotifier: UploadNotifier }
 ): Promise<void> {
   fastify.post('/g/:slug/upload', async (req, reply) => {
     const { slug } = req.params as { slug: string }
@@ -39,6 +40,16 @@ export async function guestUploadRoutes(
         upload: await req.file(),
         storage: opts.storage,
         sse: opts.sse,
+      })
+
+      void opts.uploadNotifier.notifyGuestUpload({
+        galleryName: gallery.name,
+        gallerySlug: gallery.slug,
+        photoId: response.id,
+        mediaType: response.mediaType,
+        status: response.status,
+      }).catch((error: unknown) => {
+        fastify.log.error({ error, gallerySlug: gallery.slug, photoId: response.id }, 'smtp.notification.failed')
       })
 
       return reply.code(201).send(response)

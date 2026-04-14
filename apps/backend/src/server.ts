@@ -21,9 +21,18 @@ import { adminExportRoutes } from './routes/admin/export.js'
 import { fileRoutes } from './routes/files.js'
 import { createStorage } from './services/storage.js'
 import { createSseManager } from './services/sse.js'
+import type { StorageService } from './services/storage.js'
+import type { SseManager } from './services/sse.js'
+import { createUploadNotifier, type UploadNotifier } from './services/uploadNotifier.js'
 import { loadConfig, type AppConfig } from './config.js'
 
-export async function buildApp(config?: AppConfig) {
+type BuildAppDeps = {
+  storage?: StorageService
+  sse?: SseManager
+  uploadNotifier?: UploadNotifier
+}
+
+export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
   const resolvedConfig = config ?? loadConfig()
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
@@ -61,11 +70,12 @@ export async function buildApp(config?: AppConfig) {
     },
   })
 
-  const storage = createStorage({
+  const storage = deps.storage ?? createStorage({
     provider: resolvedConfig.storageProvider,
     localPath: resolvedConfig.storageLocalPath,
   })
-  const sse = createSseManager()
+  const sse = deps.sse ?? createSseManager()
+  const uploadNotifier = deps.uploadNotifier ?? createUploadNotifier(resolvedConfig, fastify.log)
 
   fastify.decorate('config', resolvedConfig)
   fastify.decorate('storage', storage)
@@ -81,7 +91,7 @@ export async function buildApp(config?: AppConfig) {
     await instance.register(adminAuthRoutes)
     await instance.register(adminGalleryRoutes)
     await instance.register(guestGalleryRoutes)
-    await instance.register(guestUploadRoutes, { storage, sse })
+    await instance.register(guestUploadRoutes, { storage, sse, uploadNotifier })
     await instance.register(guestSlideshowRoutes, { sse })
     await instance.register(guestQrRoutes)
     await instance.register(guestDownloadRoutes, { storage })
