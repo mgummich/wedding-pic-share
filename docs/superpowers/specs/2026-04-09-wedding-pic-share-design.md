@@ -1516,8 +1516,7 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 6. Multi-Galerie-Mode UI
 7. E-Mail-Benachrichtigungen (SMTP)
 8. Upload-Zeitfenster (inkl. mehrtägige Events)
-9. S3-Speicher-Backend
-10. Retry-Mechanismus für fehlgeschlagene Uploads
+9. Retry-Mechanismus für fehlgeschlagene Uploads
 
 ### Phase 3
 
@@ -1530,6 +1529,10 @@ Für PostgreSQL: `pg_dump` via Cron oder Managed-DB-Backup-Feature.
 7. Worker Threads / BullMQ für Sharp-Processing
 8. Galerie-Abschluss und Archivierungs-Flow
 9. Fotograf-Modus (direkter Bulk-Upload mit Auto-Approval)
+
+### Phase 4
+
+1. S3-Speicher-Backend
 
 ---
 
@@ -1566,7 +1569,7 @@ Drei Ebenen: Unit → Integration → E2E. Kein Over-Testing von Implementierung
 | Szenario | Risiko | Test-Ebene |
 |---|---|---|
 | Sharp wirft bei korruptem Bild | Unkontrollierter 500er, Upload blockiert | Unit: graceful error, HTTP 422 |
-| S3-Upload schlägt fehl nach DB-Eintrag | Foto in DB, nicht im Storage — Inkonsistenz | Integration: Transaktion-Rollback |
+| S3-Upload schlägt fehl nach DB-Eintrag (Phase 4) | Foto in DB, nicht im Storage — Inkonsistenz | Integration: Transaktion-Rollback |
 | Gleichzeitige Uploads (Race Condition) | Doppelter SHA-256 übersteht DB-Unique-Check | Integration: concurrent requests, DB-Constraint als letzter Schutz |
 | SSE-Connection nie geschlossen | Memory Leak in In-Memory-Map | Integration: disconnect → Map-Größe = 0 |
 | Galerie-Slug mit Sonderzeichen | URL-Routing bricht | Unit: slug validation regex |
