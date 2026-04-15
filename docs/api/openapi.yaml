@@ -1,0 +1,717 @@
+openapi: 3.1.0
+info:
+  title: Wedding Pic Share API
+  version: 1.0.0
+  description: |
+    HTTP API for guest uploads, gallery viewing, moderation, archive/export, and admin authentication.
+    All routes are served under `/api/v1`.
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local development
+tags:
+  - name: Health
+  - name: Setup
+  - name: Admin Auth
+  - name: Admin Galleries
+  - name: Admin Photos
+  - name: Admin 2FA
+  - name: Admin Archive/Export
+  - name: Admin Webhooks
+  - name: Guest Gallery
+  - name: Guest Uploads
+  - name: Guest Download/QR/Slideshow
+  - name: Files
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Healthy
+        '503':
+          description: Degraded
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      responses:
+        '200':
+          description: Ready
+  /setup/status:
+    get:
+      tags: [Setup]
+      summary: Returns whether first-time setup is required
+      responses:
+        '200':
+          description: Setup status
+  /setup:
+    post:
+      tags: [Setup]
+      summary: Create initial admin account (one-time)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 1, maxLength: 64 }
+                password: { type: string, minLength: 12, maxLength: 128 }
+                weddingName: { type: string, minLength: 1, maxLength: 100 }
+                galleryName: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '201':
+          description: Setup created
+        '409':
+          description: Setup already completed
+  /admin/login:
+    post:
+      tags: [Admin Auth]
+      summary: Login admin user and set session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+                totpCode: { type: string }
+      responses:
+        '200':
+          description: Login success
+        '401':
+          description: Invalid credentials or TOTP
+        '429':
+          description: Rate-limited or locked
+  /admin/logout:
+    post:
+      tags: [Admin Auth]
+      summary: Logout current session
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        '200':
+          description: Logged out
+  /admin/session:
+    get:
+      tags: [Admin Auth]
+      summary: Validate admin session
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Session valid
+        '401':
+          description: Unauthorized
+  /admin/sessions/revoke-all:
+    post:
+      tags: [Admin Auth]
+      summary: Revoke all sessions of current admin
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        '200':
+          description: Sessions revoked
+  /admin/csrf:
+    get:
+      tags: [Admin Auth]
+      summary: Get CSRF token for admin mutations
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: CSRF token
+  /admin/2fa/status:
+    get:
+      tags: [Admin 2FA]
+      summary: 2FA feature/configuration status
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 2FA status
+  /admin/2fa/setup:
+    post:
+      tags: [Admin 2FA]
+      summary: Start 2FA setup and return setup token + OTPAuth URL
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '200':
+          description: Setup payload
+  /admin/2fa/verify:
+    post:
+      tags: [Admin 2FA]
+      summary: Verify code and persist encrypted TOTP secret
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, setupToken]
+              properties:
+                code: { type: string }
+                setupToken: { type: string }
+      responses:
+        '200':
+          description: 2FA enabled
+  /admin/galleries:
+    get:
+      tags: [Admin Galleries]
+      summary: List weddings with galleries
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Weddings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeddingResponse'
+    post:
+      tags: [Admin Galleries]
+      summary: Create gallery (upsert wedding by slug)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weddingName, weddingSlug, galleryName, gallerySlug]
+              properties:
+                weddingName: { type: string }
+                weddingSlug: { type: string, pattern: '^[a-z0-9-]+$' }
+                galleryName: { type: string }
+                gallerySlug: { type: string, pattern: '^[a-z0-9-]+$' }
+                description: { type: string, nullable: true }
+                layout: { type: string, enum: [MASONRY, GRID] }
+                allowGuestDownload: { type: boolean }
+                guestNameMode: { type: string, enum: [OPTIONAL, REQUIRED, HIDDEN] }
+                moderationMode: { type: string, enum: [MANUAL, AUTO] }
+                stripExif: { type: boolean }
+                secretKey: { type: string, nullable: true }
+      responses:
+        '201':
+          description: Gallery created
+  /admin/galleries/{id}:
+    patch:
+      tags: [Admin Galleries]
+      summary: Update gallery settings
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string }
+                description: { type: string, nullable: true }
+                layout: { type: string, enum: [MASONRY, GRID] }
+                allowGuestDownload: { type: boolean }
+                guestNameMode: { type: string, enum: [OPTIONAL, REQUIRED, HIDDEN] }
+                moderationMode: { type: string, enum: [MANUAL, AUTO] }
+                stripExif: { type: boolean }
+                secretKey:
+                  anyOf:
+                    - { type: string, minLength: 4, maxLength: 32 }
+                    - { type: 'null' }
+                isActive: { type: boolean }
+                uploadWindowsVersion: { type: string }
+                uploadWindows:
+                  type: array
+                  items:
+                    type: object
+                    required: [start, end]
+                    properties:
+                      start: { type: string, format: date-time }
+                      end: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Gallery updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryResponse'
+        '409':
+          description: Upload windows conflict
+    delete:
+      tags: [Admin Galleries]
+      summary: Delete gallery and soft-delete dependent entities
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          description: Gallery not found
+  /admin/galleries/{id}/upload:
+    post:
+      tags: [Admin Photos]
+      summary: Admin upload to gallery
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: [default, photographer]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+  /admin/galleries/{id}/photos:
+    get:
+      tags: [Admin Photos]
+      summary: List photos by gallery with pagination/status filter
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED]
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Page of photos
+  /admin/photos/{id}:
+    patch:
+      tags: [Admin Photos]
+      summary: Moderate single photo
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PhotoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [APPROVED, REJECTED]
+                rejectionReason:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Admin Photos]
+      summary: Soft-delete photo
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PhotoId'
+      responses:
+        '200':
+          description: Deleted
+  /admin/photos/batch:
+    post:
+      tags: [Admin Photos]
+      summary: Batch moderation action
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, photoIds]
+              properties:
+                action:
+                  type: string
+                  enum: [approve, reject]
+                photoIds:
+                  type: array
+                  items: { type: string }
+                rejectionReason:
+                  type: string
+      responses:
+        '200':
+          description: Batch result
+  /admin/galleries/{id}/archive:
+    post:
+      tags: [Admin Archive/Export]
+      summary: Start archive workflow for gallery
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Already archived
+        '202':
+          description: Archive running or accepted
+  /admin/galleries/{id}/export:
+    get:
+      tags: [Admin Archive/Export]
+      summary: Stream ZIP export of approved photos
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: ZIP stream
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+  /admin/webhooks/test:
+    post:
+      tags: [Admin Webhooks]
+      summary: Trigger test notifications (SMTP/Webhook/ntfy)
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        '202':
+          description: Accepted
+  /g/active:
+    get:
+      tags: [Guest Gallery]
+      summary: Get active gallery
+      responses:
+        '200':
+          description: Active gallery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryResponse'
+        '404':
+          description: No active gallery
+  /g/{slug}/access:
+    post:
+      tags: [Guest Gallery]
+      summary: Validate PIN and set gallery access cookie
+      parameters:
+        - $ref: '#/components/parameters/GallerySlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secretKey]
+              properties:
+                secretKey: { type: string }
+      responses:
+        '200':
+          description: Access granted
+        '401':
+          description: Invalid PIN
+        '429':
+          description: PIN attempts exceeded
+  /g/{slug}:
+    get:
+      tags: [Guest Gallery]
+      summary: Get gallery payload + paginated approved photos
+      parameters:
+        - $ref: '#/components/parameters/GallerySlug'
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Gallery page
+        '401':
+          description: Access required/invalid PIN
+  /g/{slug}/upload:
+    post:
+      tags: [Guest Uploads]
+      summary: Guest upload photo/video
+      parameters:
+        - $ref: '#/components/parameters/GallerySlug'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                guestName:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '403':
+          description: Archive closed or upload-window closed
+        '409':
+          description: Duplicate
+  /g/{slug}/uploads/{photoId}:
+    delete:
+      tags: [Guest Uploads]
+      summary: Delete pending guest upload via delete token
+      parameters:
+        - $ref: '#/components/parameters/GallerySlug'
+        - $ref: '#/components/parameters/PhotoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deleteToken]
+              properties:
+                deleteToken: { type: string }
+      responses:
+        '200':
+          description: Deleted
+        '409':
+          description: Upload no longer pending
+  /g/{slug}/download:
+    get:
+      tags: [Guest Download/QR/Slideshow]
+      summary: Download gallery ZIP (if allowed)
+      parameters:
+        - $ref: '#/components/parameters/GallerySlug'
+      responses:
+        '200':
+          description: ZIP stream
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+  /g/{slug}/qr:
+    get:
+      tags: [Guest Download/QR/Slideshow]
+      summary: Generate QR in PNG/SVG/PDF
+      parameters:
+        - $ref: '#/components/parameters/GallerySlug'
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [png, svg, pdf]
+        - in: query
+          name: locale
+          schema:
+            type: string
+            enum: [de, en]
+      responses:
+        '200':
+          description: Generated output
+  /g/{slug}/slideshow/stream:
+    get:
+      tags: [Guest Download/QR/Slideshow]
+      summary: Server-Sent Events stream for live slideshow updates
+      parameters:
+        - $ref: '#/components/parameters/GallerySlug'
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /files/{gallerySlug}/{photoId}:
+    get:
+      tags: [Files]
+      summary: Serve thumb/display/original/poster binary
+      parameters:
+        - in: path
+          name: gallerySlug
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]+$'
+        - $ref: '#/components/parameters/PhotoId'
+        - in: query
+          name: v
+          schema:
+            type: string
+            enum: [thumb, display, original, poster]
+        - in: query
+          name: download
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Binary stream
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: x-csrf-token
+  parameters:
+    GalleryId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+    GallerySlug:
+      in: path
+      name: slug
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z0-9-]+$'
+    PhotoId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  schemas:
+    UploadWindowResponse:
+      type: object
+      properties:
+        id: { type: string }
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+      required: [id, start, end, createdAt]
+    GalleryResponse:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: [string, 'null'] }
+        layout: { type: string, enum: [MASONRY, GRID] }
+        allowGuestDownload: { type: boolean }
+        guestNameMode: { type: string, enum: [OPTIONAL, REQUIRED, HIDDEN] }
+        stripExif: { type: boolean }
+        photoCount: { type: integer }
+        isActive: { type: boolean }
+        isArchived: { type: boolean }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        archiveSizeBytes: { type: [integer, 'null'] }
+        archiveStatus:
+          type: [string, 'null']
+          enum: [IDLE, IN_PROGRESS, COMPLETED, FAILED, null]
+        archiveError: { type: [string, 'null'] }
+        archiveRequestedAt: { type: [string, 'null'], format: date-time }
+        isUploadOpen: { type: boolean }
+        uploadWindowsVersion: { type: string }
+        uploadWindows:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadWindowResponse'
+      required:
+        - id
+        - name
+        - slug
+        - layout
+        - allowGuestDownload
+        - guestNameMode
+        - stripExif
+        - photoCount
+        - isActive
+        - isArchived
+        - isUploadOpen
+        - uploadWindowsVersion
+        - uploadWindows
+    WeddingResponse:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        createdAt: { type: string, format: date-time }
+        galleries:
+          type: array
+          items:
+            $ref: '#/components/schemas/GalleryResponse'
+      required: [id, name, slug, createdAt, galleries]
+    UploadResponse:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING, APPROVED] }
+        mediaType: { type: string, enum: [IMAGE, VIDEO] }
+        thumbUrl: { type: string }
+        duration: { type: [number, 'null'] }
+        deleteToken: { type: string }
+      required: [id, status, mediaType, thumbUrl, duration]
