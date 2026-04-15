@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 import { Suspense } from 'react'
+import { cookies } from 'next/headers'
 import './globals.css'
 import { AdminLocaleProvider } from '@/components/AdminLocaleContext'
 import { ToastProvider } from '@/components/ToastProvider'
+import { resolveHtmlLang } from '@/lib/htmlLang'
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -20,9 +22,17 @@ export const metadata: Metadata = {
   description: 'Share your wedding moments',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  let htmlLang = 'de'
+  try {
+    const cookieStore = await cookies()
+    htmlLang = resolveHtmlLang(cookieStore.get('NEXT_LOCALE')?.value)
+  } catch {
+    htmlLang = 'de'
+  }
+
   return (
-    <html lang="de">
+    <html lang={htmlLang}>
       <body className={`${dmSans.variable} ${playfairDisplay.variable} font-sans antialiased`}>
         <a
           href="#main-content"

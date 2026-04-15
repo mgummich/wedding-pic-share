@@ -10,6 +10,7 @@ export const adminMessages = {
     'common.optional': '(optional)',
     'common.loading': 'Lädt…',
     'common.cancel': 'Abbrechen',
+    'toast.dismiss': 'Benachrichtigung schließen',
 
     'sidebar.toggle.open': 'Seitenleiste öffnen',
     'sidebar.toggle.close': 'Seitenleiste schließen',
@@ -331,6 +332,7 @@ export const adminMessages = {
     'common.optional': '(optional)',
     'common.loading': 'Loading…',
     'common.cancel': 'Cancel',
+    'toast.dismiss': 'Dismiss notification',
 
     'sidebar.toggle.open': 'Open sidebar',
     'sidebar.toggle.close': 'Close sidebar',

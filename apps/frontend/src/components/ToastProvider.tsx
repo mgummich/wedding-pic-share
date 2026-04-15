@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { CheckCircle2, AlertCircle, X } from 'lucide-react'
+import { useAdminI18n } from './AdminLocaleContext'
 
 type ToastTone = 'success' | 'error' | 'info'
 
@@ -22,6 +23,7 @@ const ToastContext = createContext<ToastContextValue>({
 const TOAST_DURATION_MS = 5000
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useAdminI18n()
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const removeToast = useCallback((id: string) => {
@@ -64,7 +66,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 type="button"
                 onClick={() => removeToast(toast.id)}
                 className="rounded p-0.5 text-text-muted hover:text-text-primary"
-                aria-label="Dismiss notification"
+                aria-label={t('toast.dismiss')}
               >
                 <X className="h-4 w-4" />
               </button>

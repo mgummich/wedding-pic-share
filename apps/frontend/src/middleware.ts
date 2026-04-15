@@ -29,7 +29,9 @@ export async function middleware(req: NextRequest) {
         return redirect
       }
     } catch {
-      // Fail open to avoid redirect loops during transient backend failures.
+      const redirect = NextResponse.redirect(new URL('/admin/login', req.url))
+      redirect.cookies.delete('session')
+      return redirect
     }
   }
 
