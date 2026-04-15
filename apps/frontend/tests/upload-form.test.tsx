@@ -4,6 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { UploadForm } from '../src/app/g/[slug]/upload/UploadForm.js'
 import { uploadFile, deletePendingUpload, ApiError } from '../src/lib/api.js'
 
+const { replace } = vi.hoisted(() => ({
+  replace: vi.fn(),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace }),
+}))
+
 vi.mock('../src/lib/api.js', () => ({
   ApiError: class ApiError extends Error {
     constructor(
@@ -57,6 +65,7 @@ describe('UploadForm', () => {
     vi.mocked(deletePendingUpload).mockReset()
     vi.mocked(uploadFile).mockResolvedValue(createUploadResponse('photo-1'))
     vi.mocked(deletePendingUpload).mockResolvedValue(undefined)
+    replace.mockReset()
   })
 
   it('renders file input and submit button', () => {
