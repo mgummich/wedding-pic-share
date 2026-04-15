@@ -14,12 +14,12 @@
     "lint": "echo 'lint ok'"
   },
   "dependencies": {
-    "@prisma/client": "^6.0.0"
+    "@prisma/client": "^7.7.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "prisma": "^6.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^2.0.0"
+    "@types/node": "^25.6.0",
+    "prisma": "^7.7.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
   }
 }
