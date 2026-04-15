@@ -81,7 +81,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     if (!fastify.config.totpEnabled || !fastify.config.totpEncryptionKey) {
       return reply.code(409).send({
         type: 'totp-disabled',
-        title: '2FA ist deaktiviert.',
+        title: '2FA is disabled.',
         status: 409,
       })
     }
@@ -104,7 +104,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     if (!validPassword) {
       return reply.code(401).send({
         type: 'invalid-credentials',
-        title: 'Ungültige Anmeldedaten.',
+        title: 'Invalid credentials.',
         status: 401,
       })
     }
@@ -139,7 +139,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     if (!fastify.config.totpEnabled || !fastify.config.totpEncryptionKey) {
       return reply.code(409).send({
         type: 'totp-disabled',
-        title: '2FA ist deaktiviert.',
+        title: '2FA is disabled.',
         status: 409,
       })
     }
@@ -152,7 +152,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     if (checkVerifyRateLimit(verifyAttemptKey, now)) {
       return reply.code(429).send({
         type: 'totp-verify-rate-limited',
-        title: 'Zu viele 2FA-Fehlversuche. Bitte warte kurz und versuche es erneut.',
+        title: 'Too many invalid 2FA attempts. Please wait and try again.',
         status: 429,
       })
     }
@@ -163,7 +163,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     } catch {
       return reply.code(400).send({
         type: 'invalid-setup-token',
-        title: 'Ungültiger oder abgelaufener Setup-Token.',
+        title: 'Invalid or expired setup token.',
         status: 400,
       })
     }
@@ -171,7 +171,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     if (tokenPayload.userId !== req.adminUserId) {
       return reply.code(400).send({
         type: 'invalid-setup-token',
-        title: 'Ungültiger oder abgelaufener Setup-Token.',
+        title: 'Invalid or expired setup token.',
         status: 400,
       })
     }
@@ -179,7 +179,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
     if (usedSetupNonces.has(tokenPayload.nonce)) {
       return reply.code(400).send({
         type: 'setup-token-used',
-        title: 'Dieser Setup-Token wurde bereits verwendet.',
+        title: 'This setup token has already been used.',
         status: 400,
       })
     }
@@ -188,7 +188,7 @@ export async function adminTwoFactorRoutes(fastify: FastifyInstance): Promise<vo
       recordVerifyFailure(verifyAttemptKey, now)
       return reply.code(401).send({
         type: 'invalid-totp',
-        title: 'Ungültiger 2FA-Code.',
+        title: 'Invalid 2FA code.',
         status: 401,
       })
     }

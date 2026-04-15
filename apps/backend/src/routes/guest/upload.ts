@@ -45,7 +45,7 @@ export async function guestUploadRoutes(
     if (!hasGalleryAccess(req, gallery, fastify.config.sessionSecret)) {
       return reply.code(401).send({
         type: 'invalid-pin',
-        title: 'Falscher Secret Key.',
+        title: 'Invalid secret key.',
         status: 401,
       })
     }
@@ -53,7 +53,7 @@ export async function guestUploadRoutes(
     if (gallery.isArchived) {
       return reply.code(403).send({
         type: 'gallery-archived',
-        title: 'Galerie ist abgeschlossen',
+        title: 'Gallery is archived.',
         status: 403,
       })
     }
@@ -61,7 +61,7 @@ export async function guestUploadRoutes(
     if (!isUploadOpenAt(gallery.uploadWindows)) {
       return reply.code(403).send({
         type: 'upload-window-closed',
-        title: 'Upload-Zeitfenster abgelaufen',
+        title: 'Upload window is closed.',
         status: 403,
       })
     }
@@ -99,14 +99,14 @@ export async function guestUploadRoutes(
           if (latestGallery.isArchived) {
             throw new PhotoIngestError(403, {
               type: 'gallery-archived',
-              title: 'Galerie ist abgeschlossen',
+              title: 'Gallery is archived.',
               status: 403,
             })
           }
           if (!isUploadOpenAt(latestGallery.uploadWindows)) {
             throw new PhotoIngestError(403, {
               type: 'upload-window-closed',
-              title: 'Upload-Zeitfenster abgelaufen',
+              title: 'Upload window is closed.',
               status: 403,
             })
           }
@@ -173,7 +173,7 @@ export async function guestUploadRoutes(
     if (!tokenPayload || tokenPayload.photoId !== photoId || tokenPayload.gallerySlug !== slug) {
       return reply.code(401).send({
         type: 'invalid-delete-token',
-        title: 'Ungueltiger Upload-Loesch-Token.',
+        title: 'Invalid upload delete token.',
         status: 401,
       })
     }
@@ -194,7 +194,7 @@ export async function guestUploadRoutes(
     if (!photo) {
       return reply.code(404).send({
         type: 'upload-not-found',
-        title: 'Upload nicht gefunden.',
+        title: 'Upload not found.',
         status: 404,
       })
     }
@@ -202,7 +202,7 @@ export async function guestUploadRoutes(
     if (photo.status !== 'PENDING') {
       return reply.code(409).send({
         type: 'upload-not-pending',
-        title: 'Upload kann nicht mehr geloescht werden.',
+        title: 'Upload can no longer be deleted.',
         status: 409,
       })
     }

@@ -20,7 +20,7 @@ export async function guestDownloadRoutes(
     if (!hasGalleryAccess(req, gallery, fastify.config.sessionSecret)) {
       return reply.code(401).send({
         type: 'invalid-pin',
-        title: 'Falscher Secret Key.',
+        title: 'Invalid secret key.',
         status: 401,
       })
     }

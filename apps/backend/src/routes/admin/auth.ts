@@ -82,7 +82,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       reply.header('Retry-After', String(Math.ceil(LOCK_DURATION_MS / 1000)))
       return reply.code(429).send({
         type: 'ip-blocked',
-        title: 'Zu viele Fehlversuche. Bitte versuche es in 15 Minuten erneut.',
+        title: 'Too many failed attempts. Please try again in 15 minutes.',
         status: 429,
       })
     }
@@ -100,7 +100,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       reply.header('Retry-After', String(remainingSeconds))
       return reply.code(429).send({
         type: 'account-locked',
-        title: `Konto gesperrt. Bitte versuche es in ${remainingMinutes} Minuten erneut.`,
+        title: `Account locked. Please try again in ${remainingMinutes} minutes.`,
         status: 429,
       })
     }
@@ -114,7 +114,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       )
       return reply.code(401).send({
         type: 'invalid-credentials',
-        title: 'Ungültige Anmeldedaten.',
+        title: 'Invalid credentials.',
         status: 401,
       })
     }
@@ -123,7 +123,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     if (hasTotpConfigured && !fastify.config.totpEnabled) {
       return reply.code(503).send({
         type: 'totp-misconfigured',
-        title: '2FA ist konfiguriert, aber serverseitig deaktiviert.',
+        title: '2FA is configured but disabled on the server.',
         status: 503,
       })
     }
@@ -133,7 +133,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       if (!totpCode) {
         return reply.code(401).send({
           type: 'totp-required',
-          title: '2FA-Code erforderlich.',
+          title: '2FA code required.',
           status: 401,
         })
       }
@@ -141,7 +141,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       if (!fastify.config.totpEncryptionKey) {
         return reply.code(500).send({
           type: 'server-error',
-          title: '2FA ist nicht korrekt konfiguriert.',
+          title: '2FA is not configured correctly.',
           status: 500,
         })
       }
@@ -153,7 +153,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.log.error({ err: error }, 'failed to decrypt totp secret')
         return reply.code(500).send({
           type: 'server-error',
-          title: '2FA ist nicht korrekt konfiguriert.',
+          title: '2FA is not configured correctly.',
           status: 500,
         })
       }
@@ -167,7 +167,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
         )
         return reply.code(401).send({
           type: 'invalid-totp',
-          title: 'Ungültiger 2FA-Code.',
+          title: 'Invalid 2FA code.',
           status: 401,
         })
       }

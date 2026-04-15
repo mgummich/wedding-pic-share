@@ -45,7 +45,7 @@ export async function fileRoutes(
       if (typeof req.cookies['session'] !== 'string') {
         return reply.code(401).send({
           type: 'invalid-pin',
-          title: 'Falscher Secret Key.',
+          title: 'Invalid secret key.',
           status: 401,
         })
       }

@@ -113,9 +113,7 @@ export function loadConfig(): AppConfig {
     throw new Error('TOTP_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)')
   }
 
-  const seedAdminOnBoot = process.env.SEED_ADMIN_ON_BOOT !== undefined
-    ? process.env.SEED_ADMIN_ON_BOOT === 'true'
-    : process.env.NODE_ENV !== 'production'
+  const seedAdminOnBoot = process.env.SEED_ADMIN_ON_BOOT === 'true'
 
   return {
     port: Number(process.env.PORT ?? 4000),

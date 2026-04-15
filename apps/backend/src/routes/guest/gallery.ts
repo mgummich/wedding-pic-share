@@ -81,7 +81,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
       reply.header('Retry-After', String(PIN_RETRY_AFTER_SECONDS))
       return reply.code(429).send({
         type: 'pin-attempts-exceeded',
-        title: 'Zu viele PIN-Fehlversuche. Bitte versuche es spaeter erneut.',
+        title: 'Too many invalid PIN attempts. Please try again later.',
         status: 429,
       })
     }
@@ -102,7 +102,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
       await fastify.recordPinFailure(ip, slug)
       return reply.code(401).send({
         type: 'invalid-pin',
-        title: 'Falscher Secret Key.',
+        title: 'Invalid secret key.',
         status: 401,
       })
     }
@@ -111,7 +111,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
       await fastify.recordPinFailure(ip, slug)
       return reply.code(401).send({
         type: 'invalid-pin',
-        title: 'Falscher Secret Key.',
+        title: 'Invalid secret key.',
         status: 401,
       })
     }
@@ -143,7 +143,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
     if (cursor && !decodedCursor) {
       return reply.code(400).send({
         type: 'invalid-cursor',
-        title: 'Ungueltiger Cursor.',
+        title: 'Invalid cursor.',
         status: 400,
       })
     }
@@ -164,7 +164,7 @@ export async function guestGalleryRoutes(fastify: FastifyInstance): Promise<void
     if (!hasGalleryAccess(req, gallery, fastify.config.sessionSecret)) {
       return reply.code(401).send({
         type: 'invalid-pin',
-        title: 'Falscher Secret Key.',
+        title: 'Invalid secret key.',
         status: 401,
       })
     }
