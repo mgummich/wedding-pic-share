@@ -54,22 +54,41 @@ async function login(password: string, ip = '127.0.0.1') {
 
 describe('admin login brute-force protection', () => {
   it('locks the account after 5 failed attempts and returns 429 on the next attempt', async () => {
+    const ip = '127.0.0.11'
     for (let i = 0; i < 5; i += 1) {
-      const res = await login('WrongPassword123!')
+      const res = await login('WrongPassword123!', ip)
       expect(res.statusCode).toBe(401)
     }
 
-    const locked = await login('WrongPassword123!')
+    const locked = await login('WrongPassword123!', ip)
     expect(locked.statusCode).toBe(429)
     expect(locked.json().type).toBe('account-locked')
     expect(String(locked.headers['retry-after'] ?? '')).toMatch(/^\d+$/)
   })
 
-  it('resets failedAttempts to 0 after a successful login', async () => {
-    await login('WrongPassword123!')
-    await login('WrongPassword123!')
+  it('locks account state correctly under concurrent invalid-password attempts', async () => {
+    const ip = '127.0.0.12'
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, () => login('WrongPassword123!', ip))
+    )
+    expect(responses.every((res) => res.statusCode === 401 || res.statusCode === 429)).toBe(true)
 
-    const success = await login('TestPassword123!')
+    const db = getClient()
+    const user = await db.adminUser.findUniqueOrThrow({ where: { username: 'testadmin' } })
+    expect(user.failedAttempts).toBeGreaterThanOrEqual(5)
+    expect(user.lockedUntil).not.toBeNull()
+
+    const locked = await login('WrongPassword123!', ip)
+    expect(locked.statusCode).toBe(429)
+    expect(locked.json().type).toBe('account-locked')
+  })
+
+  it('resets failedAttempts to 0 after a successful login', async () => {
+    const ip = '127.0.0.13'
+    await login('WrongPassword123!', ip)
+    await login('WrongPassword123!', ip)
+
+    const success = await login('TestPassword123!', ip)
     expect(success.statusCode).toBe(200)
 
     const db = getClient()
@@ -79,13 +98,14 @@ describe('admin login brute-force protection', () => {
   })
 
   it('allows login again after the account lock expires', async () => {
+    const ip = '127.0.0.14'
     for (let i = 0; i < 5; i += 1) {
-      await login('WrongPassword123!')
+      await login('WrongPassword123!', ip)
     }
 
     nowMs = Date.parse('2026-04-12T09:16:00.000Z')
 
-    const success = await login('TestPassword123!')
+    const success = await login('TestPassword123!', ip)
     expect(success.statusCode).toBe(200)
   })
 

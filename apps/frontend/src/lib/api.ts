@@ -356,12 +356,17 @@ export async function getSetupStatus(): Promise<SetupStatusResponse> {
 export async function submitSetup(data: {
   username: string
   password: string
+  setupToken: string
   weddingName?: string
   galleryName?: string
 }): Promise<void> {
+  const { setupToken, ...body } = data
   await apiFetch('/api/v1/setup', {
     method: 'POST',
-    body: JSON.stringify(data),
+    headers: {
+      'x-setup-token': setupToken,
+    },
+    body: JSON.stringify(body),
   })
 }
 

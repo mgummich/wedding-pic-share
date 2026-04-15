@@ -33,6 +33,7 @@ describe('SetupPage', () => {
 
     expect(await screen.findByRole('heading', { name: /admin-zugangsdaten/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/benutzername/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/setup-token/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/^passwort$/i)).toBeInTheDocument()
   })
 
@@ -53,6 +54,7 @@ describe('SetupPage', () => {
     await screen.findByRole('heading', { name: /admin-zugangsdaten/i })
 
     await user.type(screen.getByLabelText(/benutzername/i), 'setup-admin')
+    await user.type(screen.getByLabelText(/setup-token/i), 'setup-token-1234567890')
     await user.type(screen.getByLabelText(/^passwort$/i), 'Password123!')
     await user.click(screen.getByRole('button', { name: /weiter/i }))
 
@@ -62,6 +64,7 @@ describe('SetupPage', () => {
     expect(submitSetup).toHaveBeenCalledWith({
       username: 'setup-admin',
       password: 'Password123!',
+      setupToken: 'setup-token-1234567890',
     })
     await waitFor(() => {
       expect(replace).toHaveBeenCalledWith('/admin/login')
@@ -75,6 +78,7 @@ describe('SetupPage', () => {
     await screen.findByRole('heading', { name: /admin-zugangsdaten/i })
 
     await user.type(screen.getByLabelText(/benutzername/i), 'setup-admin')
+    await user.type(screen.getByLabelText(/setup-token/i), 'setup-token-1234567890')
     await user.type(screen.getByLabelText(/^passwort$/i), 'short')
     await user.click(screen.getByRole('button', { name: /weiter/i }))
 

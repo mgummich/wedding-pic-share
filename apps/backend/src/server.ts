@@ -156,8 +156,7 @@ export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
       const pathname = req.raw.url?.split('?')[0] ?? ''
       const isAdminPath = pathname.startsWith('/api/v1/admin/')
       const isCsrfExempt = pathname === '/api/v1/admin/login' || pathname === '/api/v1/admin/csrf'
-      const hasOriginHeader = typeof req.headers.origin === 'string'
-      if (!isAdminPath || isCsrfExempt || !hasOriginHeader) {
+      if (!isAdminPath || isCsrfExempt) {
         done()
         return
       }

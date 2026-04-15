@@ -5,6 +5,11 @@ Related docs:
 - `docs/architecture-decisions.md`
 - `docs/api/openapi.yaml`
 
+## Security-Critical Environment Variables
+
+- `SETUP_TOKEN`: required to bootstrap the first admin via `/api/v1/setup`
+- `REDIS_URL`: required in production for distributed brute-force throttling and SSE fan-out
+
 ## Image Artifacts
 
 CI builds and publishes versioned images to GHCR on `main`/`master` pushes and version tags:

@@ -37,7 +37,7 @@ describe('admin csrf protection', () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it('rejects admin mutating requests with origin header when csrf token is missing', async () => {
+  it('rejects admin mutating requests when csrf token is missing (with or without origin header)', async () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/v1/admin/login',
@@ -60,6 +60,21 @@ describe('admin csrf protection', () => {
       },
     })
     expect(createWithoutToken.statusCode).toBe(403)
+
+    const createWithoutTokenAndOrigin = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/galleries',
+      headers: {
+        cookie: sessionCookie,
+      },
+      payload: {
+        weddingName: 'CSRF Wedding B',
+        weddingSlug: 'csrf-wedding-b',
+        galleryName: 'CSRF Gallery B',
+        gallerySlug: 'csrf-gallery-b',
+      },
+    })
+    expect(createWithoutTokenAndOrigin.statusCode).toBe(403)
 
     const csrf = await app.inject({
       method: 'GET',

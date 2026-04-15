@@ -301,6 +301,7 @@ export const adminMessages = {
 
     'setup.error.generic': 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.',
     'setup.error.passwordTooShort': 'Das Passwort muss mindestens 12 Zeichen lang sein.',
+    'setup.error.setupTokenRequired': 'Bitte gib den Setup-Token ein.',
     'setup.loading': 'Setup wird geladen…',
     'setup.titleLabel': 'Ersteinrichtung',
     'setup.title': 'Wedding Pics Setup',
@@ -310,6 +311,8 @@ export const adminMessages = {
     'setup.step2Title': 'Erste Galerie',
     'setup.step2Description': 'Optional: Erstelle direkt die erste Hochzeit und Galerie.',
     'setup.username': 'Benutzername',
+    'setup.setupToken': 'Setup-Token',
+    'setup.setupTokenHint': 'Wird über SETUP_TOKEN auf dem Server konfiguriert.',
     'setup.password': 'Passwort',
     'setup.passwordHint': 'Mindestens 12 Zeichen',
     'setup.next': 'Weiter',
@@ -619,6 +622,7 @@ export const adminMessages = {
 
     'setup.error.generic': 'Something went wrong. Please try again.',
     'setup.error.passwordTooShort': 'Password must be at least 12 characters.',
+    'setup.error.setupTokenRequired': 'Please enter the setup token.',
     'setup.loading': 'Loading setup…',
     'setup.titleLabel': 'Initial setup',
     'setup.title': 'Wedding Pics Setup',
@@ -628,6 +632,8 @@ export const adminMessages = {
     'setup.step2Title': 'First gallery',
     'setup.step2Description': 'Optional: Create the first wedding and gallery right away.',
     'setup.username': 'Username',
+    'setup.setupToken': 'Setup token',
+    'setup.setupTokenHint': 'Configured on the server via SETUP_TOKEN.',
     'setup.password': 'Password',
     'setup.passwordHint': 'At least 12 characters',
     'setup.next': 'Continue',

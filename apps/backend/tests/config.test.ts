@@ -24,6 +24,7 @@ describe('loadConfig', () => {
     expect(config.trustProxy).toBe('loopback, linklocal, uniquelocal')
     expect(config.logLevel).toBe('info')
     expect(config.seedAdminOnBoot).toBe(false)
+    expect(config.setupToken).toBeNull()
   })
 
   it('throws when SESSION_SECRET is missing', () => {
@@ -54,6 +55,7 @@ describe('loadConfig', () => {
   it('cookieSecure defaults to true when NODE_ENV is production', () => {
     process.env.NODE_ENV = 'production'
     process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
+    process.env.REDIS_URL = 'redis://localhost:6379'
     delete process.env.COOKIE_SECURE
     expect(loadConfig().cookieSecure).toBe(true)
   })
@@ -61,6 +63,7 @@ describe('loadConfig', () => {
   it('COOKIE_SECURE=false overrides production NODE_ENV', () => {
     process.env.NODE_ENV = 'production'
     process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
+    process.env.REDIS_URL = 'redis://localhost:6379'
     process.env.COOKIE_SECURE = 'false'
     expect(loadConfig().cookieSecure).toBe(false)
   })
@@ -83,6 +86,7 @@ describe('loadConfig', () => {
   it('throws for SQLite in production unless explicitly acknowledged', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL = 'file:/tmp/prod.db'
+    process.env.REDIS_URL = 'redis://localhost:6379'
     delete process.env.ALLOW_SQLITE_IN_PRODUCTION
     expect(() => loadConfig()).toThrow('SQLite is not recommended for production multi-instance deployments')
   })
@@ -91,7 +95,25 @@ describe('loadConfig', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL = 'file:/tmp/prod.db'
     process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
+    process.env.REDIS_URL = 'redis://localhost:6379'
     expect(loadConfig().databaseUrl).toBe('file:/tmp/prod.db')
+  })
+
+  it('throws in production when REDIS_URL is missing', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.ALLOW_SQLITE_IN_PRODUCTION = 'true'
+    delete process.env.REDIS_URL
+    expect(() => loadConfig()).toThrow('REDIS_URL is required in production')
+  })
+
+  it('reads setup token from env', () => {
+    process.env.SETUP_TOKEN = '0123456789abcdef'
+    expect(loadConfig().setupToken).toBe('0123456789abcdef')
+  })
+
+  it('throws when SETUP_TOKEN is shorter than 16 characters', () => {
+    process.env.SETUP_TOKEN = 'short-token'
+    expect(() => loadConfig()).toThrow('SETUP_TOKEN must be at least 16 characters')
   })
 
   it('supports TRUST_PROXY override', () => {

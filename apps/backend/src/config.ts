@@ -35,6 +35,7 @@ export interface AppConfig {
   redisUrl: string | null
   totpEnabled: boolean
   totpEncryptionKey: string | null
+  setupToken: string | null
 }
 
 export function loadConfig(): AppConfig {
@@ -102,9 +103,14 @@ export function loadConfig(): AppConfig {
 
   const webhookSecret = process.env.WEBHOOK_SECRET?.trim() || null
   const ntfyTopic = process.env.NTFY_TOPIC?.trim() || null
+  const redisUrl = process.env.REDIS_URL?.trim() || null
   const notificationTimeoutMs = Number(process.env.NOTIFICATION_TIMEOUT_MS ?? 5000)
   if (!Number.isInteger(notificationTimeoutMs) || notificationTimeoutMs < 500 || notificationTimeoutMs > 60000) {
     throw new Error('NOTIFICATION_TIMEOUT_MS must be an integer between 500 and 60000')
+  }
+
+  if (process.env.NODE_ENV === 'production' && !redisUrl) {
+    throw new Error('REDIS_URL is required in production for distributed rate limiting and SSE fan-out')
   }
 
   const totpEnabled = process.env.TOTP_ENABLED === 'true'
@@ -121,6 +127,10 @@ export function loadConfig(): AppConfig {
   }
 
   const seedAdminOnBoot = process.env.SEED_ADMIN_ON_BOOT === 'true'
+  const setupToken = process.env.SETUP_TOKEN?.trim() || null
+  if (setupToken && setupToken.length < 16) {
+    throw new Error('SETUP_TOKEN must be at least 16 characters')
+  }
 
   return {
     port: Number(process.env.PORT ?? 4000),
@@ -158,8 +168,9 @@ export function loadConfig(): AppConfig {
     mediaProcessingMode: mediaProcessingMode as 'inline' | 'worker-thread' | 'bullmq',
     mediaProcessingConcurrency,
     mediaProcessingJobTimeoutMs,
-    redisUrl: process.env.REDIS_URL ?? null,
+    redisUrl,
     totpEnabled,
     totpEncryptionKey: totpEncryptionKey?.toLowerCase() ?? null,
+    setupToken,
   }
 }

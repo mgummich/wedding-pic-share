@@ -17,7 +17,7 @@ type LoginBody = {
 
 async function recordFailedLoginAttempt(
   fastify: FastifyInstance,
-  user: { id: string; failedAttempts: number } | null,
+  user: { id: string } | null,
   ip: string,
   now: number
 ): Promise<void> {
@@ -26,13 +26,24 @@ async function recordFailedLoginAttempt(
 
   if (!user) return
 
-  const newAttempts = user.failedAttempts + 1
-  const lockedUntil = newAttempts >= LOCK_THRESHOLD
-    ? new Date(now + LOCK_DURATION_MS)
-    : null
-  await db.adminUser.update({
-    where: { id: user.id },
-    data: { failedAttempts: newAttempts, lockedUntil },
+  await db.$transaction(async (tx) => {
+    const updated = await tx.adminUser.update({
+      where: { id: user.id },
+      data: {
+        failedAttempts: { increment: 1 },
+      },
+      select: {
+        failedAttempts: true,
+        lockedUntil: true,
+      },
+    })
+
+    if (updated.failedAttempts >= LOCK_THRESHOLD && !updated.lockedUntil) {
+      await tx.adminUser.update({
+        where: { id: user.id },
+        data: { lockedUntil: new Date(now + LOCK_DURATION_MS) },
+      })
+    }
   })
 }
 
@@ -108,7 +119,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
     if (!user || !valid) {
       await recordFailedLoginAttempt(
         fastify,
-        user ? { id: user.id, failedAttempts: user.failedAttempts } : null,
+        user ? { id: user.id } : null,
         ip,
         now
       )
@@ -161,7 +172,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
       if (!verifyTotpCode(totpSecret, totpCode)) {
         await recordFailedLoginAttempt(
           fastify,
-          { id: user.id, failedAttempts: user.failedAttempts },
+          { id: user.id },
           ip,
           now
         )

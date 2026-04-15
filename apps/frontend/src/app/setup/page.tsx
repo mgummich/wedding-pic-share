@@ -17,6 +17,7 @@ export default function SetupPage() {
   const [step, setStep] = useState<Step>(1)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [setupToken, setSetupToken] = useState('')
   const [weddingName, setWeddingName] = useState('')
   const [galleryName, setGalleryName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -59,6 +60,10 @@ export default function SetupPage() {
       setError(t('setup.error.passwordTooShort'))
       return
     }
+    if (setupToken.trim().length === 0) {
+      setError(t('setup.error.setupTokenRequired'))
+      return
+    }
 
     setStep(2)
   }
@@ -71,6 +76,7 @@ export default function SetupPage() {
       await submitSetup({
         username: username.trim(),
         password,
+        setupToken: setupToken.trim(),
         weddingName: includeGallery && weddingName.trim() ? weddingName.trim() : undefined,
         galleryName: includeGallery && galleryName.trim() ? galleryName.trim() : undefined,
       })
@@ -124,6 +130,24 @@ export default function SetupPage() {
                   autoComplete="username"
                   className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-base text-text-primary"
                 />
+              </div>
+
+              <div>
+                <label htmlFor="setup-token" className="block text-sm font-medium text-text-primary mb-1">
+                  {t('setup.setupToken')}
+                </label>
+                <input
+                  id="setup-token"
+                  type="password"
+                  value={setupToken}
+                  onChange={(event) => setSetupToken(event.target.value)}
+                  required
+                  minLength={16}
+                  maxLength={256}
+                  autoComplete="off"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-base text-text-primary"
+                />
+                <p className="text-xs text-text-muted mt-1">{t('setup.setupTokenHint')}</p>
               </div>
 
               <div>

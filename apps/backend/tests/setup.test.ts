@@ -7,9 +7,14 @@ import { createBackendTestEnv, type BackendTestEnv } from './helpers/backendTest
 
 let app: FastifyInstance
 let testEnv: BackendTestEnv
+const SETUP_TOKEN = 'test-setup-token-1234567890'
 
 beforeAll(async () => {
-  testEnv = await createBackendTestEnv('setup')
+  testEnv = await createBackendTestEnv('setup', {
+    extraEnv: {
+      SETUP_TOKEN,
+    },
+  })
 
   app = await buildApp(loadConfig())
   await app.ready()
@@ -63,10 +68,15 @@ describe('GET /api/v1/setup/status', () => {
 })
 
 describe('POST /api/v1/setup', () => {
+  function withSetupTokenHeader() {
+    return { 'x-setup-token': SETUP_TOKEN }
+  }
+
   it('creates an admin user and returns 201', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/setup',
+      headers: withSetupTokenHeader(),
       payload: {
         username: 'setup-admin',
         password: 'Password123!',
@@ -84,6 +94,7 @@ describe('POST /api/v1/setup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/setup',
+      headers: withSetupTokenHeader(),
       payload: {
         username: 'setup-admin',
         password: 'Password123!',
@@ -108,6 +119,7 @@ describe('POST /api/v1/setup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/setup',
+      headers: withSetupTokenHeader(),
       payload: {
         username: 'setup-admin',
         password: 'Password123!',
@@ -132,6 +144,7 @@ describe('POST /api/v1/setup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/setup',
+      headers: withSetupTokenHeader(),
       payload: {
         username: 'setup-admin',
         password: 'Password123!',
@@ -145,6 +158,7 @@ describe('POST /api/v1/setup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/setup',
+      headers: withSetupTokenHeader(),
       payload: {
         username: 'setup-admin',
         password: 'short',
@@ -158,6 +172,7 @@ describe('POST /api/v1/setup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/setup',
+      headers: withSetupTokenHeader(),
       payload: {
         username: '',
         password: 'Password123!',
@@ -165,5 +180,63 @@ describe('POST /api/v1/setup', () => {
     })
 
     expect(res.statusCode).toBe(400)
+  })
+
+  it('returns 401 when setup token is missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/setup',
+      payload: {
+        username: 'setup-admin',
+        password: 'Password123!',
+      },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.json().type).toBe('invalid-setup-token')
+  })
+
+  it('returns 401 when setup token is invalid', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/setup',
+      headers: { 'x-setup-token': 'wrong-token' },
+      payload: {
+        username: 'setup-admin',
+        password: 'Password123!',
+      },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.json().type).toBe('invalid-setup-token')
+  })
+
+  it('allows only one concurrent successful setup request', async () => {
+    const [first, second] = await Promise.all([
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/setup',
+        headers: withSetupTokenHeader(),
+        payload: {
+          username: 'setup-admin-a',
+          password: 'Password123!',
+        },
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/setup',
+        headers: withSetupTokenHeader(),
+        payload: {
+          username: 'setup-admin-b',
+          password: 'Password123!',
+        },
+      }),
+    ])
+
+    const statusCodes = [first.statusCode, second.statusCode].sort()
+    expect(statusCodes).toEqual([201, 409])
+
+    const db = getClient()
+    expect(await db.adminUser.count()).toBe(1)
   })
 })
