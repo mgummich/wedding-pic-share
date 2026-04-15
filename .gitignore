@@ -13,6 +13,7 @@ test-results/
 apps/frontend/public/sw.js
 apps/frontend/public/workbox-*.js
 data/
+backups/
 coverage/
 .env
 .env.local

@@ -26,12 +26,14 @@ export function hasGalleryAccess(
   gallery: GalleryAccessTarget,
   sessionSecret: string
 ): boolean {
+  // Public galleries bypass cookie-based access checks.
   if (!gallery.secretKey) return true
   const cookieValue = req.cookies[galleryAccessCookieName(gallery.slug)]
   if (!cookieValue) return false
   const [encodedPayload, encodedSignature] = cookieValue.split('.')
   if (!encodedPayload || !encodedSignature) return false
 
+  // HMAC binds payload integrity to server-side secret and prevents tampering.
   const expectedSignature = createHmac('sha256', sessionSecret)
     .update(encodedPayload)
     .digest('base64url')
@@ -51,6 +53,7 @@ export function hasGalleryAccess(
   if (!payload || payload.slug !== gallery.slug) return false
   if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) return false
 
+  // Hash of the current gallery key revokes old cookies after PIN rotation.
   const currentDigest = createHash('sha256')
     .update(gallery.secretKey)
     .digest('base64url')
@@ -64,6 +67,7 @@ export function setGalleryAccessCookie(
   sessionSecret: string
 ): void {
   if (!gallery.secretKey) return
+  // Key digest allows stateless invalidation when gallery.secretKey changes.
   const payload = {
     slug: gallery.slug,
     exp: Date.now() + ACCESS_TOKEN_TTL_MS,

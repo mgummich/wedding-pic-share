@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
 import { ApiError, getSetupStatus, submitSetup } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
 
@@ -121,7 +122,7 @@ export default function SetupPage() {
                   required
                   maxLength={64}
                   autoComplete="username"
-                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-base text-text-primary"
                 />
               </div>
 
@@ -138,7 +139,7 @@ export default function SetupPage() {
                   minLength={MIN_PASSWORD_LENGTH}
                   maxLength={128}
                   autoComplete="new-password"
-                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-base text-text-primary"
                 />
                 <p className="text-xs text-text-muted mt-1">{t('setup.passwordHint')}</p>
               </div>
@@ -172,7 +173,7 @@ export default function SetupPage() {
                   value={weddingName}
                   onChange={(event) => setWeddingName(event.target.value)}
                   maxLength={100}
-                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-base text-text-primary"
                 />
               </div>
 
@@ -186,7 +187,7 @@ export default function SetupPage() {
                   value={galleryName}
                   onChange={(event) => setGalleryName(event.target.value)}
                   maxLength={100}
-                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-base text-text-primary"
                 />
               </div>
 
@@ -205,9 +206,14 @@ export default function SetupPage() {
                   type="button"
                   onClick={() => void handleSetupSubmission(true)}
                   disabled={loading}
+                  aria-busy={loading}
                   className="flex-1 py-3 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors disabled:opacity-50"
                 >
-                  {loading ? t('setup.saving') : t('setup.createGallery')}
+                  <span className="inline-flex items-center">
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                    <span>{t('setup.createGallery')}</span>
+                    {loading && <span className="sr-only"> {t('setup.saving')}</span>}
+                  </span>
                 </button>
               </div>
             </div>

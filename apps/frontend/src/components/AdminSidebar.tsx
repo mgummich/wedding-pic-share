@@ -115,7 +115,7 @@ export function AdminSidebar() {
             aria-label={t('common.language')}
             value={locale}
             onChange={(event) => setLocale(event.target.value as AdminLocale)}
-            className="mb-4 w-full rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+            className="mb-4 w-full rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
           >
             <option value="de">{t('common.language.de')}</option>
             <option value="en">{t('common.language.en')}</option>

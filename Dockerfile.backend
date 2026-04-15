@@ -1,7 +1,7 @@
 # Stage 1: Install dependencies
 FROM node:20.19-alpine3.21 AS deps
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/shared/package.json ./packages/shared/
@@ -11,11 +11,13 @@ RUN pnpm install --frozen-lockfile
 # Stage 2: Build
 FROM node:20.19-alpine3.21 AS builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
-COPY . .
+COPY apps/backend ./apps/backend
+COPY packages/db ./packages/db
+COPY packages/shared ./packages/shared
 RUN pnpm --filter @wedding/shared build
 RUN pnpm --filter @wedding/db build
 RUN pnpm --filter @wedding/backend build
@@ -23,6 +25,7 @@ RUN pnpm --filter @wedding/backend build
 # Stage 3: Runtime
 FROM node:20.19-alpine3.21 AS runner
 WORKDIR /app
+ENV NODE_ENV=production
 # su-exec: lightweight privilege-drop tool (Alpine main repo)
 RUN apk add --no-cache vips-heif ffmpeg curl su-exec
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -48,7 +51,7 @@ RUN mkdir -p /app/data/uploads && chown -R appuser:appgroup /app/data
 
 EXPOSE 4000
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
   CMD curl -fs http://localhost:4000/health || exit 1
 
 ENTRYPOINT ["docker-entrypoint.sh"]

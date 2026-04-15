@@ -1,6 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import { authenticator } from 'otplib'
 
+// Secrets and setup tokens are encrypted at rest/in transit using AES-256-GCM.
+// Format: version:iv:authTag:ciphertext (hex-encoded parts).
 const AES_ALGO = 'aes-256-gcm'
 const IV_BYTES = 12
 const AUTH_TAG_BYTES = 16
@@ -28,6 +30,7 @@ function getKeyBuffer(keyHex: string): Buffer {
 
 function encryptRaw(plain: string, keyHex: string): string {
   const key = getKeyBuffer(keyHex)
+  // 96-bit IV per message is required for safe GCM usage.
   const iv = randomBytes(IV_BYTES)
   const cipher = createCipheriv(AES_ALGO, key, iv)
   const encrypted = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()])
@@ -55,6 +58,7 @@ function decryptRaw(token: string, keyHex: string): string {
 }
 
 export function encryptTotpSecret(secret: string, keyHex: string): string {
+  // Stored in AdminUser.totpSecretEncrypted.
   return `v1:${encryptRaw(secret, keyHex)}`
 }
 
@@ -70,6 +74,7 @@ export function createTotpSetupToken(
   keyHex: string,
   ttlMs = 10 * 60 * 1000
 ): string {
+  // Nonce prevents setup-token replay after successful verification.
   const fullPayload: TotpSetupTokenPayload = {
     secret: payload.secret,
     userId: payload.userId,
@@ -86,6 +91,7 @@ export function createTotpSetupToken(
 }
 
 export function readTotpSetupToken(token: string, keyHex: string): TotpSetupTokenPayload {
+  // Decrypt + structural validation + expiry validation.
   if (!token.startsWith('setup-v1:')) {
     throw new Error('invalid-2fa-setup-token-version')
   }

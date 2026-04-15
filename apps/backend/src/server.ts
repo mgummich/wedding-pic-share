@@ -42,8 +42,11 @@ type BuildAppDeps = {
 
 export async function buildApp(config?: AppConfig, deps: BuildAppDeps = {}) {
   const resolvedConfig = config ?? loadConfig()
+  const loggerConfig = resolvedConfig.logLevel === 'silent'
+    ? false
+    : { level: resolvedConfig.logLevel }
   const fastify = Fastify({
-    logger: process.env.NODE_ENV !== 'test',
+    logger: loggerConfig,
     trustProxy: resolvedConfig.trustProxy,
   })
 

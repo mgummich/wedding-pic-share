@@ -70,6 +70,10 @@ export function createUploadNotifier(
   logger: Pick<FastifyBaseLogger, 'error' | 'info'>,
   deps: UploadNotifierDeps = {}
 ): UploadNotifier {
+  // Fan-out notifier:
+  // - SMTP email for admins
+  // - signed webhook callbacks
+  // - ntfy push topic
   const createTransport = deps.createTransport ?? ((options: {
     host: string
     port: number
@@ -157,6 +161,7 @@ export function createUploadNotifier(
             'x-wps-event': 'guest-upload',
           }
           if (config.webhookSecret) {
+            // Shared-secret HMAC lets receivers verify payload authenticity.
             const signature = createHmac('sha256', config.webhookSecret)
               .update(body)
               .digest('hex')

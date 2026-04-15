@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
+import { CheckCircle, XCircle, ArrowLeft, Loader2 } from 'lucide-react'
 import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import type { AdminPhotoResponse } from '@/lib/api'
@@ -192,7 +192,7 @@ export default function ModerationPage() {
             type="button"
             onClick={handleBack}
             aria-label={t('moderation.backAria')}
-            className="p-1.5 text-text-muted hover:text-text-primary transition-colors"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-card text-text-muted transition-colors hover:text-text-primary"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -201,9 +201,13 @@ export default function ModerationPage() {
         <button
           onClick={handleApproveAll}
           disabled={isSubmitting || pendingApproveAllIds !== null}
+          aria-busy={isSubmitting}
           className="text-sm px-4 py-2 rounded-full bg-success text-white hover:opacity-90 transition-opacity"
         >
-          {t('moderation.approveAll')}
+          <span className="inline-flex items-center">
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            <span>{t('moderation.approveAll')}</span>
+          </span>
         </button>
         </div>
       </header>

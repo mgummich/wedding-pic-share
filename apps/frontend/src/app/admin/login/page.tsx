@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { adminLogin, ApiError } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
 import { useToast } from '@/components/ToastProvider'
@@ -69,7 +69,7 @@ export default function AdminLoginPage() {
             aria-label={t('common.language')}
             value={locale}
             onChange={(event) => setLocale(event.target.value as AdminLocale)}
-            className="rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+            className="rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
           >
             <option value="de">{t('common.language.de')}</option>
             <option value="en">{t('common.language.en')}</option>
@@ -93,14 +93,14 @@ export default function AdminLoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
               className="w-full px-4 py-2.5 rounded-card border border-ui-border
-                         focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                         focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
             />
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-text-primary mb-1">
               {t('login.password')}
             </label>
-            <div className="relative">
+            <div className="relative rounded-card focus-within-ring">
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
@@ -109,7 +109,7 @@ export default function AdminLoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="w-full px-4 py-2.5 pr-11 rounded-card border border-ui-border
-                           focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                           focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
               />
               <button
                 type="button"
@@ -136,7 +136,7 @@ export default function AdminLoginPage() {
                 onChange={(e) => setTotpCode(e.target.value)}
                 required
                 className="w-full px-4 py-2.5 rounded-card border border-ui-border
-                         focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                         focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
               />
             </div>
           )}
@@ -144,10 +144,15 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
+            aria-busy={loading}
             className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white
                        font-medium transition-colors disabled:opacity-50"
           >
-            {loading ? t('login.submitting') : t('login.submit')}
+            <span className="inline-flex items-center">
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              <span>{t('login.submit')}</span>
+              {loading && <span className="sr-only"> {t('login.submitting')}</span>}
+            </span>
           </button>
         </form>
       </div>

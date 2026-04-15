@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --font-dm-sans:        "DM Sans", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-playfair:       "Playfair Display", "Iowan Old Style", Baskerville, "Times New Roman", serif;
+  --font-dm-sans-fallback: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-playfair-fallback: "Iowan Old Style", Baskerville, "Times New Roman", serif;
   --color-surface-base:   #FAF7F4;
   --color-surface-card:   #FFFFFF;
   --color-ui-border:      #E8E2DC;
@@ -29,6 +29,10 @@
   --transition-base:  250ms;
   --transition-slow:  400ms;
   --transition-ease:  ease;
+}
+
+html {
+  color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -71,10 +75,27 @@ body {
   color: var(--color-text-primary);
 }
 
+:where(a, button, [role='button']) {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgb(196 149 106 / 0.2);
+}
+
 :where(a, button, input, select, textarea, [role='button'], [tabindex]):focus-visible {
   outline: 2px solid var(--color-accent) !important;
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgb(196 149 106 / 0.25);
+}
+
+.focus-within-ring:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(196 149 106 / 0.2);
+}
+
+@media (max-width: 640px) {
+  :where(input, select, textarea) {
+    font-size: 16px;
+  }
 }
 
 :where(a, button, input, select, textarea, [role='button']) {

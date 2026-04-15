@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Upload, Camera, CheckCircle2 } from 'lucide-react'
+import { Upload, Camera, CheckCircle2, Loader2 } from 'lucide-react'
 import { uploadFile, deletePendingUpload, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
 import { validateUploadFile, getUploadErrorMessage, validateGuestName } from '@/lib/uploadValidation'
@@ -278,7 +278,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
           role="button"
           tabIndex={0}
           className={[
-            'border-2 border-dashed rounded-card p-8 flex flex-col items-center gap-3 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30',
+            'border-2 border-dashed rounded-card p-8 flex flex-col items-center gap-3 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
             isDragActive ? 'border-accent bg-accent/5' : 'border-ui-border hover:border-accent',
           ].join(' ')}
         >
@@ -370,7 +370,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
             placeholder={t('guest.uploadForm.namePlaceholder')}
             maxLength={80}
             className="w-full px-4 py-2.5 rounded-card border border-ui-border
-                       focus:outline-none focus:border-accent text-text-primary
+                       focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 text-text-primary
                        bg-surface-card"
           />
         </div>
@@ -381,11 +381,21 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       <button
         type="submit"
         disabled={hasUploadInFlight}
+        aria-busy={hasUploadInFlight}
         className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white
                    font-medium transition-colors disabled:opacity-50"
       >
-        <Upload className="w-4 h-4 inline mr-2" />
-        {t('guest.uploadForm.submit')}
+        <span className="inline-flex items-center">
+          {hasUploadInFlight ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
+          )}
+          <span>{t('guest.uploadForm.submit')}</span>
+          {hasUploadInFlight && (
+            <span className="sr-only"> {t('guest.uploadForm.status.uploading')}</span>
+          )}
+        </span>
       </button>
     </form>
   )

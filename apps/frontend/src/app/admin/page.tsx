@@ -11,7 +11,7 @@ import {
   setupAdminTwoFactor,
   verifyAdminTwoFactor,
 } from '@/lib/api'
-import { Settings, Eye, EyeOff } from 'lucide-react'
+import { Settings, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
 import type { AdminMessageKey } from '@/lib/adminI18n'
 
@@ -277,7 +277,7 @@ function TwoFactorSetupPanel({
             <label htmlFor="two-factor-password" className="block text-sm font-medium text-text-primary">
               {t('dashboard.2fa.password')}
             </label>
-            <div className="relative">
+            <div className="relative rounded-card focus-within-ring">
               <input
                 id="two-factor-password"
                 type={showPassword ? 'text' : 'password'}
@@ -285,7 +285,7 @@ function TwoFactorSetupPanel({
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="w-full px-4 py-2.5 pr-11 rounded-card border border-ui-border
-                           focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                           focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
               />
               <button
                 type="button"
@@ -303,7 +303,11 @@ function TwoFactorSetupPanel({
               className="px-4 py-2 rounded-full bg-accent text-white hover:bg-accent-hover
                          disabled:opacity-50 transition-colors"
             >
-              {busy ? t('dashboard.2fa.saving') : t('dashboard.2fa.start')}
+              <span className="inline-flex items-center">
+                {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                <span>{t('dashboard.2fa.start')}</span>
+                {busy && <span className="sr-only"> {t('dashboard.2fa.saving')}</span>}
+              </span>
             </button>
           </div>
 
@@ -354,7 +358,7 @@ function TwoFactorSetupPanel({
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
                 className="w-full px-4 py-2.5 rounded-card border border-ui-border
-                           focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                           focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
               />
               <button
                 type="button"
@@ -363,7 +367,11 @@ function TwoFactorSetupPanel({
                 className="px-4 py-2 rounded-full bg-accent text-white hover:bg-accent-hover
                            disabled:opacity-50 transition-colors"
               >
-                {busy ? t('dashboard.2fa.saving') : t('dashboard.2fa.verify')}
+                <span className="inline-flex items-center">
+                  {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                  <span>{t('dashboard.2fa.verify')}</span>
+                  {busy && <span className="sr-only"> {t('dashboard.2fa.saving')}</span>}
+                </span>
               </button>
             </div>
           )}

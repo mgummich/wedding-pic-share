@@ -22,6 +22,7 @@ describe('loadConfig', () => {
     expect(config.storageProvider).toBe('local')
     expect(config.slideshowIntervalSeconds).toBe(8)
     expect(config.trustProxy).toBe('loopback, linklocal, uniquelocal')
+    expect(config.logLevel).toBe('info')
     expect(config.seedAdminOnBoot).toBe(false)
   })
 
@@ -108,5 +109,15 @@ describe('loadConfig', () => {
 
     process.env.SEED_ADMIN_ON_BOOT = 'true'
     expect(loadConfig().seedAdminOnBoot).toBe(true)
+  })
+
+  it('supports LOG_LEVEL override', () => {
+    process.env.LOG_LEVEL = 'debug'
+    expect(loadConfig().logLevel).toBe('debug')
+  })
+
+  it('throws for invalid LOG_LEVEL', () => {
+    process.env.LOG_LEVEL = 'verbose'
+    expect(() => loadConfig()).toThrow('LOG_LEVEL must be one of')
   })
 })

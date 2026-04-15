@@ -163,17 +163,16 @@ export async function adminArchiveRoutes(
     })
 
     if (started.count > 0) {
-      let job: Promise<void>
-      job = runArchiveJob({
+      const job = runArchiveJob({
         galleryId: gallery.id,
         storage: opts.storage,
         sse: opts.sse,
         fastify,
-      }).finally(() => {
-        activeJobs.delete(job)
       })
       activeJobs.add(job)
-      void job
+      void job.finally(() => {
+        activeJobs.delete(job)
+      })
     }
 
     const latest = await db.gallery.findUnique({

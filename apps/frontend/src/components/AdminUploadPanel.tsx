@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Camera, RefreshCw, Upload } from 'lucide-react'
+import { Camera, RefreshCw, Upload, Loader2 } from 'lucide-react'
 import { adminUploadFile, ApiError } from '@/lib/api'
 import { getUploadErrorMessage, validateGuestName, validateUploadFile } from '@/lib/uploadValidation'
 import { isTransientUploadError, runWithRetry } from '@/lib/uploadRetry'
@@ -227,7 +227,7 @@ export function AdminUploadPanel({
               role="button"
               tabIndex={0}
               className={[
-                'border-2 border-dashed rounded-card p-6 flex cursor-pointer flex-col items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30',
+                'border-2 border-dashed rounded-card p-6 flex cursor-pointer flex-col items-center gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
                 isDragActive ? 'border-accent bg-accent/5' : 'border-ui-border hover:border-accent',
               ].join(' ')}
             >
@@ -260,7 +260,7 @@ export function AdminUploadPanel({
                 onChange={(event) => setGuestName(event.target.value)}
                 placeholder={t('adminUpload.namePlaceholder')}
                 maxLength={80}
-                className="w-full rounded-card border border-ui-border bg-surface-base px-4 py-2.5 text-text-primary focus:border-accent focus:outline-none"
+                className="w-full rounded-card border border-ui-border bg-surface-base px-4 py-2.5 text-text-primary focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
               />
             </div>
           )}
@@ -326,10 +326,20 @@ export function AdminUploadPanel({
           <button
             type="submit"
             disabled={isUploading}
+            aria-busy={isUploading}
             className="w-full rounded-full bg-accent py-3 font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
-            <Upload className="mr-2 inline h-4 w-4" />
-            {isUploading ? t('adminUpload.submitting') : t('adminUpload.submit')}
+            <span className="inline-flex items-center">
+              {isUploading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              <span>{t('adminUpload.submit')}</span>
+              {isUploading && (
+                <span className="sr-only"> {t('adminUpload.submitting')}</span>
+              )}
+            </span>
           </button>
         </form>
       </div>

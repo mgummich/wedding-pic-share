@@ -33,6 +33,8 @@ type IngestUploadInput = {
     maxFileSizeMb: number
     maxVideoSizeMb: number
   }
+  // Optional guard executed after files are processed but before DB persistence.
+  // Used for race-sensitive checks (e.g. upload window closed while processing).
   beforePersist?: () => Promise<void>
 }
 
@@ -150,6 +152,7 @@ export async function ingestUploadedPhoto({
     }
 
     if (beforePersist) {
+      // Contract: throw to abort DB write; saved files are cleaned up in catch block.
       await beforePersist()
     }
 

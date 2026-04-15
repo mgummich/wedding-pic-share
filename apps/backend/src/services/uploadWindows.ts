@@ -26,6 +26,7 @@ type GalleryWithWindows = Pick<
 export function computeUploadWindowsVersion(
   windows: Array<Pick<UploadWindow, 'id' | 'start' | 'end' | 'createdAt'>>
 ): string {
+  // Deterministic hash used as optimistic-lock token for PATCH /admin/galleries/:id.
   const canonical = windows
     .slice()
     .sort((a, b) => a.id.localeCompare(b.id))
@@ -35,6 +36,7 @@ export function computeUploadWindowsVersion(
 }
 
 export function isUploadOpenAt(windows: Array<Pick<UploadWindow, 'start' | 'end'>>, now = new Date()): boolean {
+  // Intentional default: no configured windows means uploads are open.
   if (windows.length === 0) return true
   const time = now.getTime()
   return windows.some((window) => window.start.getTime() <= time && window.end.getTime() >= time)

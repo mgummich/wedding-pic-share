@@ -2,6 +2,7 @@ export interface AppConfig {
   port: number
   databaseUrl: string
   trustProxy: boolean | string
+  logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent'
   frontendUrl: string
   sessionSecret: string
   cookieSecure: boolean
@@ -70,6 +71,12 @@ export function loadConfig(): AppConfig {
         : trustProxyEnv
     : 'loopback, linklocal, uniquelocal'
 
+  const logLevel = process.env.LOG_LEVEL?.trim() || 'info'
+  const validLogLevels = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']
+  if (!validLogLevels.includes(logLevel)) {
+    throw new Error(`LOG_LEVEL must be one of: ${validLogLevels.join(', ')}`)
+  }
+
   const defaultMediaMode = process.env.NODE_ENV === 'test' ? 'inline' : 'worker-thread'
   const mediaProcessingMode = process.env.MEDIA_PROCESSING_MODE ?? defaultMediaMode
   if (!['inline', 'worker-thread', 'bullmq'].includes(mediaProcessingMode)) {
@@ -119,6 +126,7 @@ export function loadConfig(): AppConfig {
     port: Number(process.env.PORT ?? 4000),
     databaseUrl,
     trustProxy,
+    logLevel: logLevel as AppConfig['logLevel'],
     frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
     sessionSecret,
     cookieSecure: process.env.COOKIE_SECURE !== undefined

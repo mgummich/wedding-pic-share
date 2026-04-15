@@ -3,7 +3,7 @@
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { createGallery, ApiError } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
 
@@ -88,7 +88,7 @@ export default function NewGalleryPage() {
           type="button"
           onClick={handleBack}
           aria-label={t('newGallery.backAria')}
-          className="p-1.5 text-text-muted hover:text-text-primary transition-colors"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-card text-text-muted transition-colors hover:text-text-primary"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -112,7 +112,7 @@ export default function NewGalleryPage() {
               value={weddingName}
               onChange={(e) => handleWeddingNameChange(e.target.value)}
               placeholder={t('newGallery.wedding.namePlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
             />
           </div>
 
@@ -129,7 +129,7 @@ export default function NewGalleryPage() {
               value={weddingSlug}
               onChange={(e) => setWeddingSlug(e.target.value)}
               placeholder={t('newGallery.wedding.slugPlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary font-mono text-sm"
             />
             <p className="text-xs text-text-muted mt-1">{t('newGallery.slugHint')}</p>
           </div>
@@ -150,7 +150,7 @@ export default function NewGalleryPage() {
               value={galleryName}
               onChange={(e) => handleGalleryNameChange(e.target.value)}
               placeholder={t('newGallery.gallery.namePlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
             />
           </div>
 
@@ -167,7 +167,7 @@ export default function NewGalleryPage() {
               value={gallerySlug}
               onChange={(e) => setGallerySlug(e.target.value)}
               placeholder={t('newGallery.gallery.slugPlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary font-mono text-sm"
             />
           </div>
 
@@ -182,7 +182,7 @@ export default function NewGalleryPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('newGallery.descriptionPlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary resize-none"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary resize-none"
             />
           </div>
 
@@ -261,9 +261,14 @@ export default function NewGalleryPage() {
         <button
           type="submit"
           disabled={loading}
+          aria-busy={loading}
           className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors disabled:opacity-50"
         >
-          {loading ? t('newGallery.submit.loading') : t('newGallery.submit.create')}
+          <span className="inline-flex items-center">
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            <span>{t('newGallery.submit.create')}</span>
+            {loading && <span className="sr-only"> {t('newGallery.submit.loading')}</span>}
+          </span>
         </button>
       </form>
     </main>

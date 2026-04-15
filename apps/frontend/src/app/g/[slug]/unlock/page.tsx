@@ -3,6 +3,7 @@
 import { FormEvent, use, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Loader2 } from 'lucide-react'
 import { ApiError, verifyGalleryAccess } from '@/lib/api'
 import { useGuestI18n } from '@/lib/guestI18n'
 
@@ -71,15 +72,20 @@ export default function GalleryUnlockPage({ params }: PageProps) {
             autoComplete="off"
             value={secretKey}
             onChange={(event) => setSecretKey(event.target.value)}
-            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
           />
           {error && <p className="text-sm text-error">{error}</p>}
           <button
             type="submit"
             disabled={submitting}
+            aria-busy={submitting}
             className="w-full py-2.5 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors disabled:opacity-50"
           >
-            {submitting ? t('guest.unlock.submitting') : t('guest.unlock.submit')}
+            <span className="inline-flex items-center">
+              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              <span>{t('guest.unlock.submit')}</span>
+              {submitting && <span className="sr-only"> {t('guest.unlock.submitting')}</span>}
+            </span>
           </button>
         </form>
 

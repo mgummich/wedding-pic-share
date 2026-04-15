@@ -1,4 +1,20 @@
 services:
+  backend-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    entrypoint: ["sh", "-c", "packages/db/node_modules/.bin/prisma migrate deploy --schema /app/prisma/schema.prisma"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/db.sqlite}
+    volumes:
+      - wps_data:/app/data
+    restart: "no"
+    logging: &json-file-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   backend:
     build:
       context: .
@@ -6,35 +22,41 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - DATABASE_URL=${DATABASE_URL:-file:/app/data/db.sqlite}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
-      - STORAGE_LOCAL_PATH=/app/data/uploads
-      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
-      - MAX_VIDEO_SIZE_MB=${MAX_VIDEO_SIZE_MB:-200}
-      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
-      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
-      - WEBHOOK_URL=${WEBHOOK_URL:-}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
-      - NTFY_TOPIC=${NTFY_TOPIC:-}
-      - NOTIFICATION_TIMEOUT_MS=${NOTIFICATION_TIMEOUT_MS:-5000}
-      - COOKIE_SECURE=${COOKIE_SECURE:-true}
-      - NODE_ENV=production
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/db.sqlite}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      STORAGE_LOCAL_PATH: /app/data/uploads
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+      MAX_VIDEO_SIZE_MB: ${MAX_VIDEO_SIZE_MB:-200}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      NOTIFICATION_TIMEOUT_MS: ${NOTIFICATION_TIMEOUT_MS:-5000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-loopback, linklocal, uniquelocal}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
     volumes:
-      - ./data:/app/data
+      - wps_data:/app/data
+    depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:4000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 10s
+    logging: *json-file-logging
     deploy:
       resources:
         limits:
           memory: 1g
-          cpus: '1.0'
+          cpus: "1.0"
 
   frontend:
     build:
@@ -49,8 +71,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - BACKEND_URL=http://backend:4000
+      NODE_ENV: production
+      BACKEND_URL: http://backend:4000
     depends_on:
       backend:
         condition: service_healthy
@@ -60,9 +82,34 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 10s
+    logging: *json-file-logging
     deploy:
       resources:
         limits:
           memory: 512m
-          cpus: '0.5'
+          cpus: "0.5"
+
+  backup:
+    image: alpine:3.21
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      set -eu
+      interval="$${BACKUP_INTERVAL_SECONDS:-86400}"
+      retention="$${BACKUP_RETENTION_DAYS:-14}"
+      mkdir -p /backups
+      while true; do
+        ts="$$(date +%Y%m%d-%H%M%S)"
+        tar -czf "/backups/wps-$${ts}.tar.gz" -C /data .
+        find /backups -type f -name 'wps-*.tar.gz' -mtime +"$${retention}" -delete
+        sleep "$${interval}"
+      done
+    volumes:
+      - wps_data:/data:ro
+      - wps_backups:/backups
+    restart: unless-stopped
+    logging: *json-file-logging
+
+volumes:
+  wps_data:
+  wps_backups:

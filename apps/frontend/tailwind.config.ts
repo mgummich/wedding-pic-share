@@ -21,8 +21,8 @@ const config: Config = {
         thumb: 'var(--radius-thumb)',
       },
       fontFamily: {
-        sans: ['var(--font-dm-sans)', 'sans-serif'],
-        display: ['var(--font-playfair)', 'serif'],
+        sans: ['var(--font-dm-sans)', 'var(--font-dm-sans-fallback)', 'sans-serif'],
+        display: ['var(--font-playfair)', 'var(--font-playfair-fallback)', 'serif'],
       },
     },
   },

@@ -28,12 +28,13 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
 
     const db = fastify.db
     const tokenHash = hashSessionToken(token)
+    // Primary lookup uses hashed token storage (default since security hardening).
     let session = await db.session.findUnique({
       where: { token: tokenHash },
       include: { admin: true },
     })
 
-    // Backward compatibility for older plaintext session rows.
+    // Backward compatibility: migrate legacy plaintext session rows on first use.
     if (!session) {
       const legacySession = await db.session.findUnique({
         where: { token },

@@ -34,6 +34,9 @@ type WorkerRequest =
       requestId?: string
     }
 
+// Worker-thread mode passes raw bytes via transferable ArrayBuffers to avoid
+// base64 inflation and extra JSON parsing overhead in hot upload paths.
+
 type WorkerResponse =
   | {
       jobId: string
@@ -76,6 +79,9 @@ type BullJobData =
       stripExif: boolean
       requestId?: string
     }
+
+// BullMQ mode passes file paths (not raw/base64 payloads) to keep Redis job
+// payloads small and bounded even for large video uploads.
   | {
       kind: 'video'
       inputPath: string
@@ -118,10 +124,7 @@ class InlineMediaProcessor implements MediaProcessor {
     return processImage(inputBuffer, mimeType, options)
   }
 
-  async processVideo(
-    inputBuffer: Buffer,
-    _options: { requestId?: string } = {}
-  ): Promise<VideoProcessingResult> {
+  async processVideo(inputBuffer: Buffer): Promise<VideoProcessingResult> {
     return processVideo(inputBuffer)
   }
 

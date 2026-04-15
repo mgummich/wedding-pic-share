@@ -4,7 +4,7 @@ import { useEffect, useState, use, FormEvent, useCallback, useMemo } from 'react
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Trash2, QrCode, Download, FileText, Archive, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Trash2, QrCode, Download, FileText, Archive, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, archiveGallery, exportGallery, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import { AdminUploadPanel } from '@/components/AdminUploadPanel'
@@ -334,7 +334,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           type="button"
           onClick={handleBack}
           aria-label={t('gallerySettings.backAria')}
-          className="p-1.5 text-text-muted hover:text-text-primary transition-colors"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-card text-text-muted transition-colors hover:text-text-primary"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -363,7 +363,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             maxLength={100}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
           />
         </div>
 
@@ -377,7 +377,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             maxLength={500}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary resize-none"
+            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary resize-none"
           />
         </div>
 
@@ -461,7 +461,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           <label htmlFor="secretKey" className="block text-sm text-text-primary">
             {t('gallerySettings.pin.new')}
           </label>
-          <div className="relative">
+          <div className="relative rounded-card focus-within-ring">
             <input
               id="secretKey"
               type={showSecretKeyInput ? 'text' : 'password'}
@@ -476,7 +476,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                 }
               }}
               placeholder={t('gallerySettings.pin.placeholder')}
-              className="w-full px-4 py-2.5 pr-11 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              className="w-full px-4 py-2.5 pr-11 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
             />
             <button
               type="button"
@@ -554,7 +554,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                           setSaved(false)
                         }}
                         aria-invalid={uploadWindowValidationErrors[index] !== null}
-                        className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                        className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
                       />
                     </label>
                     <label className="text-sm text-text-primary">
@@ -569,7 +569,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                           setSaved(false)
                         }}
                         aria-invalid={uploadWindowValidationErrors[index] !== null}
-                        className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                        className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 bg-surface-card text-text-primary"
                       />
                     </label>
                   </div>
@@ -617,9 +617,14 @@ export default function GallerySettingsPage({ params }: PageProps) {
         <button
           type="submit"
           disabled={saving}
+          aria-busy={saving}
           className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white font-medium transition-colors disabled:opacity-50"
         >
-          {saving ? t('gallerySettings.submit.saving') : t('gallerySettings.submit.save')}
+          <span className="inline-flex items-center">
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            <span>{t('gallerySettings.submit.save')}</span>
+            {saving && <span className="sr-only"> {t('gallerySettings.submit.saving')}</span>}
+          </span>
         </button>
       </form>
 
@@ -754,7 +759,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                 type="text"
                 value={deleteConfirmText}
                 onChange={(event) => setDeleteConfirmText(event.target.value)}
-                className="w-full rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-error focus:outline-none"
+                className="w-full rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/40"
                 aria-label={t('gallerySettings.danger.typeConfirmAria')}
               />
               <div className="flex items-center gap-3">
