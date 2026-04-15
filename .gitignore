@@ -18,3 +18,4 @@ coverage/
 .env
 .env.local
 .worktrees/
+packages/db/generated/

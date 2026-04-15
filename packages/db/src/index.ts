@@ -1,5 +1,5 @@
 export { getClient, closeClient } from './client.js'
-export { PrismaClient } from '@prisma/client'
+export { PrismaClient } from '../generated/client/index.js'
 export type {
   Wedding,
   Gallery,
@@ -12,4 +12,4 @@ export type {
   GalleryLayout,
   GuestNameMode,
   ModerationMode,
-} from '@prisma/client'
+} from '../generated/client/index.js'

@@ -1,11 +1,17 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { PrismaClient } from '../generated/client/index.js'
 
 let _client: PrismaClient | null = null
 
 export function getClient(): PrismaClient {
   if (!_client) {
-    _client = new PrismaClient()
-    const url = process.env.DATABASE_URL ?? ''
+    const url = process.env.DATABASE_URL ?? 'file:./data/db.sqlite'
+    const adapter = new PrismaBetterSqlite3(
+      { url },
+      // Keep compatibility with existing SQLite data format.
+      { timestampFormat: 'unixepoch-ms' }
+    )
+    _client = new PrismaClient({ adapter })
     if (url.startsWith('file:') || url.startsWith('sqlite:')) {
       _client.$connect().then(() => {
         _client!.$executeRaw`PRAGMA journal_mode=WAL`.catch(() => {})

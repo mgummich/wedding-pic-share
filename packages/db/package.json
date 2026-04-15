@@ -9,16 +9,20 @@
     "db:generate": "XDG_CACHE_HOME=../../.cache prisma generate",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "XDG_CACHE_HOME=../../.cache prisma generate && tsc --noEmit",
     "test": "vitest run",
     "lint": "echo 'lint ok'"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3"
+    "@prisma/adapter-better-sqlite3": "^7.7.0",
+    "@prisma/client": "^7.7.0",
+    "@prisma/client-runtime-utils": "^7.7.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
-    "prisma": "^6.19.3",
+    "dotenv": "^17.2.3",
+    "prisma": "^7.7.0",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
   }
