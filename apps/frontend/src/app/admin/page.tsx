@@ -49,7 +49,7 @@ export default function AdminDashboardPage() {
 
   return (
     <main className="min-h-screen bg-surface-base">
-      <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-border">
+      <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-ui-border">
         <div>
           <h1 className="font-display text-2xl text-text-primary">{t('dashboard.title')}</h1>
           <p className="text-xs text-text-muted mt-1">
@@ -76,7 +76,11 @@ export default function AdminDashboardPage() {
         {loading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 rounded-card bg-border animate-pulse" />
+              <div key={i} className="rounded-card border border-ui-border bg-surface-card p-4 animate-pulse">
+                <div className="h-4 w-44 rounded-card bg-ui-border" />
+                <div className="mt-2 h-3 w-28 rounded-card bg-ui-border" />
+                <div className="mt-3 h-3 w-20 rounded-card bg-ui-border" />
+              </div>
             ))}
           </div>
         )}
@@ -96,7 +100,7 @@ export default function AdminDashboardPage() {
         {sortedGalleries.map((gallery) => (
           <div
             key={gallery.id}
-            className="bg-surface-card border border-border rounded-card p-4"
+            className="bg-surface-card border border-ui-border rounded-card p-4"
           >
             <div className="flex items-start justify-between">
               <div>
@@ -116,7 +120,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-2">
                 <Link
                   href={`/admin/galleries/${gallery.id}/moderate`}
-                  className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+                  className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-ui-border text-text-muted hover:border-accent hover:text-accent transition-colors"
                 >
                   {t('dashboard.moderate')}
                 </Link>
@@ -245,19 +249,19 @@ function TwoFactorSetupPanel({
   }
 
   return (
-    <section className="bg-surface-card border border-border rounded-card p-4 space-y-3">
+    <section className="bg-surface-card border border-ui-border rounded-card p-4 space-y-3">
       <h2 className="font-medium text-text-primary">{t('dashboard.2fa.title')}</h2>
       {!configured && (
         <ol className="grid grid-cols-2 gap-2" aria-label={t('dashboard.2fa.progressAria')}>
           <li className={[
             'rounded-card border px-3 py-2 text-xs',
-            setupToken ? 'border-border text-text-muted' : 'border-accent text-accent',
+            setupToken ? 'border-ui-border text-text-muted' : 'border-accent text-accent',
           ].join(' ')}>
             {t('dashboard.2fa.step1')}
           </li>
           <li className={[
             'rounded-card border px-3 py-2 text-xs',
-            setupToken ? 'border-accent text-accent' : 'border-border text-text-muted',
+            setupToken ? 'border-accent text-accent' : 'border-ui-border text-text-muted',
           ].join(' ')}>
             {t('dashboard.2fa.step2')}
           </li>
@@ -280,7 +284,7 @@ function TwoFactorSetupPanel({
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="w-full px-4 py-2.5 pr-11 rounded-card border border-border
+                className="w-full px-4 py-2.5 pr-11 rounded-card border border-ui-border
                            focus:outline-none focus:border-accent bg-surface-card text-text-primary"
               />
               <button
@@ -304,7 +308,7 @@ function TwoFactorSetupPanel({
           </div>
 
           {setupToken && secret && otpAuthUrl && (
-            <div className="space-y-2 rounded-card border border-border/70 p-3">
+            <div className="space-y-2 rounded-card border border-ui-border/70 p-3">
               <p className="text-xs text-text-muted">{t('dashboard.2fa.step2')}</p>
               {qrDataUrl && (
                 <Image
@@ -312,7 +316,7 @@ function TwoFactorSetupPanel({
                   alt={t('dashboard.2fa.qrAlt')}
                   width={192}
                   height={192}
-                  className="h-48 w-48 rounded-card border border-border bg-white p-2"
+                  className="h-48 w-48 rounded-card border border-ui-border bg-white p-2"
                 />
               )}
               <p className="text-xs text-text-muted">
@@ -321,7 +325,7 @@ function TwoFactorSetupPanel({
               <button
                 type="button"
                 onClick={() => handleCopy(secret)}
-                className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+                className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-ui-border text-text-muted hover:border-accent hover:text-accent transition-colors"
               >
                 {t('dashboard.2fa.copySecret')}
               </button>
@@ -331,7 +335,7 @@ function TwoFactorSetupPanel({
               <button
                 type="button"
                 onClick={() => handleCopy(otpAuthUrl)}
-                className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+                className="text-xs px-3 py-1.5 rounded-full bg-surface-base border border-ui-border text-text-muted hover:border-accent hover:text-accent transition-colors"
               >
                 {t('dashboard.2fa.copyOtpAuth')}
               </button>
@@ -349,7 +353,7 @@ function TwoFactorSetupPanel({
                 pattern="[0-9]*"
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
-                className="w-full px-4 py-2.5 rounded-card border border-border
+                className="w-full px-4 py-2.5 rounded-card border border-ui-border
                            focus:outline-none focus:border-accent bg-surface-card text-text-primary"
               />
               <button

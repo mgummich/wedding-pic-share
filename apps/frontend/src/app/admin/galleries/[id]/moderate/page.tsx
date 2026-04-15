@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Image from 'next/image'
 import { CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
 import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api'
@@ -158,9 +159,10 @@ export default function ModerationPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-surface-base px-4 py-6">
+        <div className="mb-4 h-10 w-56 rounded-card bg-ui-border animate-pulse" />
         <div className="grid grid-cols-2 gap-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="aspect-square rounded-card bg-border animate-pulse" />
+            <div key={i} className="aspect-square rounded-card bg-ui-border animate-pulse" />
           ))}
         </div>
       </main>
@@ -178,7 +180,13 @@ export default function ModerationPage() {
 
   return (
     <main className="min-h-screen bg-surface-base">
-      <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-border sticky top-0 bg-surface-base z-10">
+      <header className="sticky top-0 z-10 border-b border-ui-border bg-surface-base px-4 pt-4 pb-4">
+        <nav className="mb-2 text-xs text-text-muted">
+          <Link href="/admin" className="hover:text-accent transition-colors">{t('dashboard.title')}</Link>
+          <span className="mx-1">/</span>
+          <span>{t('moderation.approveAll')}</span>
+        </nav>
+        <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -197,15 +205,16 @@ export default function ModerationPage() {
         >
           {t('moderation.approveAll')}
         </button>
+        </div>
       </header>
 
       {pendingApproveAllIds && (
-        <div className="px-4 py-3 border-b border-border bg-accent/10 flex items-center justify-between gap-3" role="status" aria-live="polite">
+        <div className="px-4 py-3 border-b border-ui-border bg-accent/10 flex items-center justify-between gap-3" role="status" aria-live="polite">
           <p className="text-sm text-text-primary">{t('moderation.undo.message')}</p>
           <button
             type="button"
             onClick={handleUndoApproveAll}
-            className="text-sm px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+            className="text-sm px-3 py-1.5 rounded-full border border-ui-border text-text-muted hover:border-accent hover:text-accent transition-colors"
           >
             {t('moderation.undo.action')}
           </button>
@@ -275,7 +284,7 @@ export default function ModerationPage() {
             type="button"
             onClick={handleLoadMore}
             disabled={loadingMore}
-            className="text-sm px-4 py-2 rounded-full border border-border text-text-muted hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+            className="text-sm px-4 py-2 rounded-full border border-ui-border text-text-muted hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
           >
             {loadingMore ? t('moderation.loadingMore') : t('moderation.loadMore')}
           </button>

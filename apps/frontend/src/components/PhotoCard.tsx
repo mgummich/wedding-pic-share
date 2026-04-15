@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Expand } from 'lucide-react'
+import { Expand, Play } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
 import { useGuestI18n } from '@/lib/guestI18n'
 
@@ -19,14 +19,21 @@ export function PhotoCard({ photo, onClick, priority = false }: PhotoCardProps) 
     <div
       className={[
         'relative overflow-hidden rounded-thumb shadow-sm group',
-        isVideo ? '' : 'cursor-pointer transition-transform duration-[--transition-fast] hover:scale-[1.02]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        isVideo ? 'cursor-pointer transition-transform duration-[--transition-fast] hover:scale-[1.01]' : 'cursor-pointer transition-transform duration-[--transition-fast] hover:scale-[1.02]',
       ].join(' ')}
-      onClick={isVideo ? undefined : () => onClick?.(photo)}
-      role={isVideo ? undefined : 'button'}
-      tabIndex={isVideo ? undefined : 0}
-      onKeyDown={isVideo ? undefined : (e) => e.key === 'Enter' && onClick?.(photo)}
+      onClick={() => onClick?.(photo)}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!onClick) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick?.(photo)
+        }
+      }}
       aria-label={isVideo
-        ? undefined
+        ? t('photoCard.openVideo')
         : (
             photo.guestName
               ? t('photoCard.openPhotoByGuest', { guest: photo.guestName })
@@ -51,29 +58,27 @@ export function PhotoCard({ photo, onClick, priority = false }: PhotoCardProps) 
 
       {isVideo && (
         <>
-          <video
-            src={photo.displayUrl}
-            poster={photo.thumbUrl}
-            controls
-            playsInline
-            preload="metadata"
+          <Image
+            src={photo.thumbUrl}
+            alt={photo.guestName
+              ? t('photoCard.imageAltByGuest', { guest: photo.guestName })
+              : t('photoCard.imageAltDefault')}
+            width={400}
+            height={300}
             className="w-full h-auto object-cover bg-black"
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
+            placeholder={photo.blurDataUrl ? 'blur' : 'empty'}
+            blurDataURL={photo.blurDataUrl ?? undefined}
+            priority={priority}
+            unoptimized
           />
-          {onClick && (
-            <button
-              type="button"
-              aria-label={t('photoCard.openVideo')}
-              onClick={(e) => {
-                e.stopPropagation()
-                onClick(photo)
-              }}
-              className="absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white transition-colors hover:bg-black/75"
-            >
-              <Expand className="h-4 w-4" />
-            </button>
-          )}
+          <span className="pointer-events-none absolute inset-0 bg-black/20" />
+          <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-card bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
+            <Play className="h-3 w-3 fill-current" />
+            Video
+          </span>
+          <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white">
+            <Expand className="h-4 w-4" />
+          </span>
           {photo.duration && (
             <span className="pointer-events-none absolute bottom-2 right-2 text-xs text-white bg-black/60 px-1.5 py-0.5 rounded">
               {formatDuration(photo.duration)}

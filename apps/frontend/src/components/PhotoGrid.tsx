@@ -31,7 +31,7 @@ export function PhotoGrid({ photos, layout, onPhotoClick }: PhotoGridProps) {
       {photos.map((photo, i) => (
         <div
           key={photo.id}
-          className="mb-2 break-inside-avoid"
+          className="mb-2 break-inside-avoid opacity-0 animate-fade-up"
           style={{ animationDelay: i < 20 ? `${i * 60}ms` : '0ms' }}
         >
           <PhotoCard photo={photo} onClick={onPhotoClick} priority={i < 4} />

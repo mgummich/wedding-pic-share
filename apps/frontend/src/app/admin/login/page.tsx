@@ -69,7 +69,7 @@ export default function AdminLoginPage() {
             aria-label={t('common.language')}
             value={locale}
             onChange={(event) => setLocale(event.target.value as AdminLocale)}
-            className="rounded-card border border-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+            className="rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
           >
             <option value="de">{t('common.language.de')}</option>
             <option value="en">{t('common.language.en')}</option>
@@ -92,7 +92,7 @@ export default function AdminLoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
-              className="w-full px-4 py-2.5 rounded-card border border-border
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border
                          focus:outline-none focus:border-accent bg-surface-card text-text-primary"
             />
           </div>
@@ -108,7 +108,7 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 pr-11 rounded-card border border-border
+                className="w-full px-4 py-2.5 pr-11 rounded-card border border-ui-border
                            focus:outline-none focus:border-accent bg-surface-card text-text-primary"
               />
               <button
@@ -135,7 +135,7 @@ export default function AdminLoginPage() {
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 rounded-card border border-border
+                className="w-full px-4 py-2.5 rounded-card border border-ui-border
                          focus:outline-none focus:border-accent bg-surface-card text-text-primary"
               />
             </div>

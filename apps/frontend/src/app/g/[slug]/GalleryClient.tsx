@@ -90,7 +90,7 @@ export function GalleryClient({
     <>
       <p className="sr-only" aria-live="polite">{liveAnnouncement}</p>
       {liveStatus === 'reconnecting' && (
-        <div className="mb-3 rounded-card border border-border bg-surface-card px-3 py-2">
+        <div className="mb-3 rounded-card border border-ui-border bg-surface-card px-3 py-2">
           <p className="text-xs text-text-muted" aria-live="polite">
             {t('guest.gallery.live.reconnecting')}
           </p>
@@ -109,7 +109,7 @@ export function GalleryClient({
             <button
               onClick={loadMore}
               disabled={loading}
-              className="px-6 py-2.5 rounded-full border border-border text-text-muted
+              className="px-6 py-2.5 rounded-full border border-ui-border text-text-muted
                        hover:border-accent hover:text-accent transition-colors
                        disabled:opacity-50"
             >
@@ -119,7 +119,7 @@ export function GalleryClient({
             {loading && (
               <div className="grid grid-cols-2 gap-2 pt-2">
                 {[1, 2, 3, 4].map((item) => (
-                  <div key={item} className="aspect-square rounded-card bg-border animate-pulse" />
+                  <div key={item} className="aspect-square rounded-card bg-ui-border animate-pulse" />
                 ))}
               </div>
             )}
@@ -134,7 +134,7 @@ export function GalleryClient({
           <a
             href={`/api/v1/g/${gallery.slug}/download`}
             download
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-border
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-ui-border
                        text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
           >
             {t('guest.gallery.downloadAll')}

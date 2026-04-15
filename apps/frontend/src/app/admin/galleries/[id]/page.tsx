@@ -305,10 +305,17 @@ export default function GallerySettingsPage({ params }: PageProps) {
   if (!gallery) {
     return (
       <main className="min-h-screen bg-surface-base px-4 py-6">
-        <div className="space-y-3 max-w-4xl">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-12 rounded-card bg-border animate-pulse" />
-          ))}
+        <div className="max-w-4xl space-y-5 animate-pulse">
+          <div className="h-6 w-48 rounded-card bg-ui-border" />
+          <div className="space-y-2">
+            <div className="h-4 w-24 rounded-card bg-ui-border" />
+            <div className="h-11 w-full rounded-card bg-ui-border" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-4 w-32 rounded-card bg-ui-border" />
+            <div className="h-24 w-full rounded-card bg-ui-border" />
+          </div>
+          <div className="h-11 w-36 rounded-card bg-ui-border" />
         </div>
       </main>
     )
@@ -316,7 +323,13 @@ export default function GallerySettingsPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-surface-base">
-      <header className="flex items-center gap-3 px-4 pt-6 pb-4 border-b border-border">
+      <header className="border-b border-ui-border px-4 pt-4 pb-4">
+        <nav className="mb-2 text-xs text-text-muted">
+          <Link href="/admin" className="hover:text-accent transition-colors">{t('dashboard.title')}</Link>
+          <span className="mx-1">/</span>
+          <span>{t('gallerySettings.field.name')}</span>
+        </nav>
+        <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={handleBack}
@@ -328,6 +341,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-2xl text-text-primary truncate">{gallery.name}</h1>
           <p className="text-xs text-text-muted font-mono mt-0.5">/g/{gallery.slug}</p>
+        </div>
         </div>
       </header>
 
@@ -349,7 +363,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             maxLength={100}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
           />
         </div>
 
@@ -363,7 +377,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             maxLength={500}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary resize-none"
+            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary resize-none"
           />
         </div>
 
@@ -421,7 +435,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           <span className="text-sm text-text-primary">{t('gallerySettings.allowDownload')}</span>
         </label>
 
-        <section className="space-y-2 rounded-card border border-border p-4">
+        <section className="space-y-2 rounded-card border border-ui-border p-4">
           <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.exif.title')}</h2>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -437,7 +451,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           </p>
         </section>
 
-        <section className="space-y-3 rounded-card border border-border p-4">
+        <section className="space-y-3 rounded-card border border-ui-border p-4">
           <div>
             <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.pin.title')}</h2>
             <p className="text-xs text-text-muted mt-1">
@@ -462,7 +476,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                 }
               }}
               placeholder={t('gallerySettings.pin.placeholder')}
-              className="w-full px-4 py-2.5 pr-11 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              className="w-full px-4 py-2.5 pr-11 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
             />
             <button
               type="button"
@@ -484,7 +498,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           </label>
         </section>
 
-        <section className="space-y-3 rounded-card border border-border p-4">
+        <section className="space-y-3 rounded-card border border-ui-border p-4">
           <div>
             <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.root.title')}</h2>
             <p className="text-xs text-text-muted mt-1">
@@ -513,7 +527,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           )}
         </section>
 
-        <section className="space-y-3 rounded-card border border-border p-4">
+        <section className="space-y-3 rounded-card border border-ui-border p-4">
           <div>
             <h2 className="text-sm font-medium text-text-primary">{t('gallerySettings.windows.title')}</h2>
             <p className="text-xs text-text-muted mt-1">
@@ -526,7 +540,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
           ) : (
             <div className="space-y-3">
               {uploadWindows.map((window, index) => (
-                <div key={window.id} className="rounded-card border border-border p-3 space-y-3">
+                <div key={window.id} className="rounded-card border border-ui-border p-3 space-y-3">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <label className="text-sm text-text-primary">
                       <span className="block mb-1">{t('gallerySettings.windows.start')}</span>
@@ -540,7 +554,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                           setSaved(false)
                         }}
                         aria-invalid={uploadWindowValidationErrors[index] !== null}
-                        className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                        className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
                       />
                     </label>
                     <label className="text-sm text-text-primary">
@@ -555,7 +569,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                           setSaved(false)
                         }}
                         aria-invalid={uploadWindowValidationErrors[index] !== null}
-                        className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+                        className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
                       />
                     </label>
                   </div>
@@ -592,7 +606,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
               ])
               setSaved(false)
             }}
-            className="px-4 py-2 rounded-full border border-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
+            className="px-4 py-2 rounded-full border border-ui-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
           >
             {t('gallerySettings.windows.add')}
           </button>
@@ -619,7 +633,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             <a
               href={`/api/v1/g/${gallery.slug}/qr?format=png`}
               download={`${gallery.slug}-qr.png`}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-ui-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
               aria-label={t('gallerySettings.actions.qrPngAria')}
             >
@@ -629,7 +643,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             <a
               href={`/api/v1/g/${gallery.slug}/qr?format=svg`}
               download={`${gallery.slug}-qr.svg`}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-ui-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
               aria-label={t('gallerySettings.actions.qrSvgAria')}
             >
@@ -639,7 +653,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             <a
               href={`/api/v1/g/${gallery.slug}/qr?format=pdf&locale=${locale}`}
               download={`${gallery.slug}-table-card.pdf`}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-ui-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm"
               aria-label={t('gallerySettings.actions.tableCardPdfAria')}
             >
@@ -649,7 +663,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             <button
               onClick={handleArchive}
               disabled={archiving || gallery.isArchived}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-ui-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm
                          disabled:opacity-50"
               aria-label={t('gallerySettings.actions.archiveAria')}
@@ -662,7 +676,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
             <button
               onClick={handleExport}
               disabled={exporting}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-ui-border
                          text-text-muted hover:border-accent hover:text-accent transition-colors text-sm
                          disabled:opacity-50"
               aria-label={t('gallerySettings.actions.exportZipAria')}
@@ -740,7 +754,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                 type="text"
                 value={deleteConfirmText}
                 onChange={(event) => setDeleteConfirmText(event.target.value)}
-                className="w-full rounded-card border border-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-error focus:outline-none"
+                className="w-full rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-error focus:outline-none"
                 aria-label={t('gallerySettings.danger.typeConfirmAria')}
               />
               <div className="flex items-center gap-3">
@@ -756,7 +770,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                   setConfirmDelete(false)
                   setDeleteConfirmText('')
                 }}
-                className="px-4 py-2 rounded-full border border-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
+                className="px-4 py-2 rounded-full border border-ui-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
               >
                 {t('common.cancel')}
               </button>

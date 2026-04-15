@@ -33,7 +33,7 @@ export function AdminSidebar() {
   return (
     <>
       <button
-        className="fixed top-3 left-3 z-50 rounded-full border border-border bg-surface-card p-2 text-text-muted shadow-sm md:hidden"
+        className="fixed top-3 left-3 z-50 rounded-full border border-ui-border bg-surface-card p-2 text-text-muted shadow-sm md:hidden"
         onClick={() => setOpen((current) => !current)}
         aria-label={open ? t('sidebar.toggle.close') : t('sidebar.toggle.open')}
       >
@@ -49,12 +49,12 @@ export function AdminSidebar() {
 
       <aside
         className={[
-          'fixed left-0 top-0 z-40 flex h-full w-60 flex-col border-r border-border bg-surface-card transition-transform duration-200',
+          'fixed left-0 top-0 z-40 flex h-full w-60 flex-col border-r border-ui-border bg-surface-card transition-transform duration-200',
           open ? 'translate-x-0' : '-translate-x-full',
           'md:translate-x-0',
         ].join(' ')}
       >
-        <div className="shrink-0 border-b border-border px-5 pb-4 pt-6">
+        <div className="shrink-0 border-b border-ui-border px-5 pb-4 pt-6">
           <p className="font-display text-xl text-text-primary">Wedding Pics</p>
         </div>
 
@@ -106,7 +106,7 @@ export function AdminSidebar() {
           )}
         </nav>
 
-        <div className="shrink-0 border-t border-border px-4 py-4">
+        <div className="shrink-0 border-t border-ui-border px-4 py-4">
           <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-text-muted" htmlFor="admin-locale">
             {t('common.language')}
           </label>
@@ -115,7 +115,7 @@ export function AdminSidebar() {
             aria-label={t('common.language')}
             value={locale}
             onChange={(event) => setLocale(event.target.value as AdminLocale)}
-            className="mb-4 w-full rounded-card border border-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+            className="mb-4 w-full rounded-card border border-ui-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
           >
             <option value="de">{t('common.language.de')}</option>
             <option value="en">{t('common.language.en')}</option>

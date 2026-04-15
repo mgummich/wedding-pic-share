@@ -156,7 +156,7 @@ export const adminMessages = {
     'gallerySettings.saveError.deleteFailed': 'Löschen fehlgeschlagen.',
     'gallerySettings.saveError.exportFailed': 'Export fehlgeschlagen. Bitte versuche es erneut.',
     'gallerySettings.saveError.archiveFailed': 'Archivierung fehlgeschlagen. Bitte versuche es erneut.',
-    'gallerySettings.saveSuccess': 'Gespeichert ✓',
+    'gallerySettings.saveSuccess': 'Gespeichert.',
     'gallerySettings.submit.saving': 'Wird gespeichert…',
     'gallerySettings.submit.save': 'Speichern',
 
@@ -289,6 +289,7 @@ export const adminMessages = {
     'lightbox.download': 'Foto herunterladen',
     'lightbox.prev': 'Vorheriges Foto',
     'lightbox.next': 'Nächstes Foto',
+    'lightbox.counter': '{current} von {total}',
     'lightbox.photoAltByGuest': 'Foto von {guest}',
     'lightbox.photoAltDefault': 'Hochzeitsfoto',
 
@@ -473,7 +474,7 @@ export const adminMessages = {
     'gallerySettings.saveError.deleteFailed': 'Delete failed.',
     'gallerySettings.saveError.exportFailed': 'Export failed. Please try again.',
     'gallerySettings.saveError.archiveFailed': 'Archiving failed. Please try again.',
-    'gallerySettings.saveSuccess': 'Saved ✓',
+    'gallerySettings.saveSuccess': 'Saved.',
     'gallerySettings.submit.saving': 'Saving…',
     'gallerySettings.submit.save': 'Save',
 
@@ -606,6 +607,7 @@ export const adminMessages = {
     'lightbox.download': 'Download photo',
     'lightbox.prev': 'Previous photo',
     'lightbox.next': 'Next photo',
+    'lightbox.counter': '{current} of {total}',
     'lightbox.photoAltByGuest': 'Photo by {guest}',
     'lightbox.photoAltDefault': 'Wedding photo',
 

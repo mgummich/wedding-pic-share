@@ -51,7 +51,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               'pointer-events-auto rounded-card border px-3 py-2 shadow-lg',
               toast.tone === 'success' && 'border-success/40 bg-success/10 text-text-primary',
               toast.tone === 'error' && 'border-error/40 bg-error/10 text-text-primary',
-              toast.tone === 'info' && 'border-border bg-surface-card text-text-primary',
+              toast.tone === 'info' && 'border-ui-border bg-surface-card text-text-primary',
             ].filter(Boolean).join(' ')}
             role="status"
           >

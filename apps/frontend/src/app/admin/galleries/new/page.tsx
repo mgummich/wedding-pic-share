@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createGallery, ApiError } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
@@ -76,7 +77,13 @@ export default function NewGalleryPage() {
 
   return (
     <main className="min-h-screen bg-surface-base">
-      <header className="flex items-center gap-3 px-4 pt-6 pb-4 border-b border-border">
+      <header className="border-b border-ui-border px-4 pt-4 pb-4">
+        <nav className="mb-2 text-xs text-text-muted">
+          <Link href="/admin" className="hover:text-accent transition-colors">{t('dashboard.title')}</Link>
+          <span className="mx-1">/</span>
+          <span>{t('newGallery.title')}</span>
+        </nav>
+        <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={handleBack}
@@ -86,6 +93,7 @@ export default function NewGalleryPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="font-display text-2xl text-text-primary">{t('newGallery.title')}</h1>
+        </div>
       </header>
 
       <form onSubmit={handleSubmit} className="px-4 py-6 space-y-5 max-w-4xl">
@@ -104,7 +112,7 @@ export default function NewGalleryPage() {
               value={weddingName}
               onChange={(e) => handleWeddingNameChange(e.target.value)}
               placeholder={t('newGallery.wedding.namePlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
             />
           </div>
 
@@ -121,7 +129,7 @@ export default function NewGalleryPage() {
               value={weddingSlug}
               onChange={(e) => setWeddingSlug(e.target.value)}
               placeholder={t('newGallery.wedding.slugPlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
             />
             <p className="text-xs text-text-muted mt-1">{t('newGallery.slugHint')}</p>
           </div>
@@ -142,7 +150,7 @@ export default function NewGalleryPage() {
               value={galleryName}
               onChange={(e) => handleGalleryNameChange(e.target.value)}
               placeholder={t('newGallery.gallery.namePlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
             />
           </div>
 
@@ -159,7 +167,7 @@ export default function NewGalleryPage() {
               value={gallerySlug}
               onChange={(e) => setGallerySlug(e.target.value)}
               placeholder={t('newGallery.gallery.slugPlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary font-mono text-sm"
             />
           </div>
 
@@ -174,7 +182,7 @@ export default function NewGalleryPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('newGallery.descriptionPlaceholder')}
-              className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary resize-none"
+              className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary resize-none"
             />
           </div>
 

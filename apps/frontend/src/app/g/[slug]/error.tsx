@@ -15,7 +15,7 @@ export default function GuestGalleryError({
 
   return (
     <main className="min-h-screen bg-surface-base flex items-center justify-center px-4">
-      <section className="max-w-md w-full rounded-card border border-border bg-surface-card p-6 text-center space-y-3">
+      <section className="max-w-md w-full rounded-card border border-ui-border bg-surface-card p-6 text-center space-y-3">
         <h1 className="font-display text-2xl text-text-primary">Galerie konnte nicht geladen werden</h1>
         <p className="text-sm text-text-muted">Bitte versuche es erneut.</p>
         <button

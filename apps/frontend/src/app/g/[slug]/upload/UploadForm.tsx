@@ -218,14 +218,14 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         </p>
         <button
           onClick={() => { updateFiles(() => []); setSubmitted(false) }}
-          className="mt-6 px-5 py-2 rounded-full border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+          className="mt-6 px-5 py-2 rounded-full border border-ui-border text-text-muted hover:border-accent hover:text-accent transition-colors"
         >
           {t('guest.uploadForm.success.uploadMore')}
         </button>
         {files.some((item) => canDeletePendingUpload(item)) && (
           <ul className="mt-6 w-full max-w-lg space-y-2 text-left">
             {files.filter((item) => canDeletePendingUpload(item)).map((item) => (
-              <li key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-border">
+              <li key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-ui-border">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-text-primary truncate">{item.file.name}</p>
                   <p className="text-xs text-text-muted mt-0.5">
@@ -279,7 +279,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
           tabIndex={0}
           className={[
             'border-2 border-dashed rounded-card p-8 flex flex-col items-center gap-3 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30',
-            isDragActive ? 'border-accent bg-accent/5' : 'border-border hover:border-accent',
+            isDragActive ? 'border-accent bg-accent/5' : 'border-ui-border hover:border-accent',
           ].join(' ')}
         >
           <Camera className="w-8 h-8 text-text-muted" />
@@ -302,7 +302,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       {files.length > 0 && (
         <ul className="space-y-2">
           {files.map((item) => (
-            <li key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-border">
+            <li key={`${item.file.name}-${item.file.size}-${item.file.lastModified}`} className="flex items-center gap-3 p-3 rounded-card bg-surface-card border border-ui-border">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-text-primary truncate">{item.file.name}</p>
                 {item.error && <p className="text-xs text-error mt-0.5">{item.error}</p>}
@@ -345,7 +345,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
 
       {hasUploadInFlight && files.length > 0 && (
         <div className="space-y-1" aria-live="polite">
-          <div className="h-2 w-full rounded-full bg-border">
+          <div className="h-2 w-full rounded-full bg-ui-border">
             <div
               className="h-2 rounded-full bg-accent transition-[width] duration-300"
               style={{ width: `${progressPercent}%` }}
@@ -369,7 +369,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
             onChange={(e) => setGuestName(e.target.value)}
             placeholder={t('guest.uploadForm.namePlaceholder')}
             maxLength={80}
-            className="w-full px-4 py-2.5 rounded-card border border-border
+            className="w-full px-4 py-2.5 rounded-card border border-ui-border
                        focus:outline-none focus:border-accent text-text-primary
                        bg-surface-card"
           />

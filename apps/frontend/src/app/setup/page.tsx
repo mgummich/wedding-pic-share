@@ -101,7 +101,7 @@ export default function SetupPage() {
           <h1 className="font-display text-4xl text-text-primary">{t('setup.title')}</h1>
         </header>
 
-        <div className="rounded-card border border-border bg-surface-card p-6 shadow-soft">
+        <div className="rounded-card border border-ui-border bg-surface-card p-6 shadow-soft">
           {step === 1 ? (
             <form onSubmit={handleStepOneSubmit} className="space-y-5">
               <div>
@@ -121,7 +121,7 @@ export default function SetupPage() {
                   required
                   maxLength={64}
                   autoComplete="username"
-                  className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
                 />
               </div>
 
@@ -138,7 +138,7 @@ export default function SetupPage() {
                   minLength={MIN_PASSWORD_LENGTH}
                   maxLength={128}
                   autoComplete="new-password"
-                  className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
                 />
                 <p className="text-xs text-text-muted mt-1">{t('setup.passwordHint')}</p>
               </div>
@@ -172,7 +172,7 @@ export default function SetupPage() {
                   value={weddingName}
                   onChange={(event) => setWeddingName(event.target.value)}
                   maxLength={100}
-                  className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
                 />
               </div>
 
@@ -186,7 +186,7 @@ export default function SetupPage() {
                   value={galleryName}
                   onChange={(event) => setGalleryName(event.target.value)}
                   maxLength={100}
-                  className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
+                  className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-base text-text-primary"
                 />
               </div>
 
@@ -197,7 +197,7 @@ export default function SetupPage() {
                   type="button"
                   onClick={() => void handleSetupSubmission(false)}
                   disabled={loading}
-                  className="flex-1 py-3 rounded-full border border-border text-text-primary font-medium hover:border-accent transition-colors disabled:opacity-50"
+                  className="flex-1 py-3 rounded-full border border-ui-border text-text-primary font-medium hover:border-accent transition-colors disabled:opacity-50"
                 >
                   {t('setup.skip')}
                 </button>

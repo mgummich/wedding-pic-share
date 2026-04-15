@@ -1,7 +1,7 @@
 export function SkeletonCard() {
   return (
     <div
-      className="rounded-thumb bg-border animate-pulse"
+      className="rounded-thumb bg-ui-border animate-pulse"
       style={{ aspectRatio: '4/3' }}
       aria-hidden="true"
     />

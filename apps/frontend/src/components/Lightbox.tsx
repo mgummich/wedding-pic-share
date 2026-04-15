@@ -144,6 +144,10 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
         <X className="w-6 h-6" />
       </button>
 
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 rounded-full bg-black/50 px-3 py-1 text-xs text-white/90">
+        {t('lightbox.counter', { current: index + 1, total: photos.length })}
+      </div>
+
       {/* Download */}
       {allowDownload && photo.mediaType === 'IMAGE' && (
         <a

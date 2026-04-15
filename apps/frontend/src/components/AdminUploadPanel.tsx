@@ -187,7 +187,7 @@ export function AdminUploadPanel({
 
   return (
     <section className="max-w-4xl px-4 pb-6">
-      <div className="rounded-card border border-border bg-surface-card p-4 space-y-4">
+      <div className="rounded-card border border-ui-border bg-surface-card p-4 space-y-4">
         <div>
           <h2 className="text-sm font-medium uppercase tracking-wide text-text-muted">
             {t('adminUpload.title')}
@@ -228,7 +228,7 @@ export function AdminUploadPanel({
               tabIndex={0}
               className={[
                 'border-2 border-dashed rounded-card p-6 flex cursor-pointer flex-col items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30',
-                isDragActive ? 'border-accent bg-accent/5' : 'border-border hover:border-accent',
+                isDragActive ? 'border-accent bg-accent/5' : 'border-ui-border hover:border-accent',
               ].join(' ')}
             >
               <Camera className="w-8 h-8 text-text-muted" />
@@ -260,12 +260,12 @@ export function AdminUploadPanel({
                 onChange={(event) => setGuestName(event.target.value)}
                 placeholder={t('adminUpload.namePlaceholder')}
                 maxLength={80}
-                className="w-full rounded-card border border-border bg-surface-base px-4 py-2.5 text-text-primary focus:border-accent focus:outline-none"
+                className="w-full rounded-card border border-ui-border bg-surface-base px-4 py-2.5 text-text-primary focus:border-accent focus:outline-none"
               />
             </div>
           )}
 
-          <div className="rounded-card border border-border px-3 py-2.5">
+          <div className="rounded-card border border-ui-border px-3 py-2.5">
             <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
@@ -283,7 +283,7 @@ export function AdminUploadPanel({
           {queue.length > 0 && (
             <ul className="space-y-2" aria-label={t('adminUpload.queueAria')}>
               {queue.map((item) => (
-                <li key={item.id} className="rounded-card border border-border px-3 py-3">
+                <li key={item.id} className="rounded-card border border-ui-border px-3 py-3">
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-text-primary">{item.file.name}</p>
@@ -294,7 +294,7 @@ export function AdminUploadPanel({
                       <button
                         type="button"
                         onClick={() => retryItem(item.id)}
-                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent hover:text-accent"
+                        className="inline-flex items-center gap-1 rounded-full border border-ui-border px-3 py-1 text-xs text-text-muted transition-colors hover:border-accent hover:text-accent"
                       >
                         <RefreshCw className="w-3 h-3" />
                         {t('adminUpload.retry')}
@@ -308,7 +308,7 @@ export function AdminUploadPanel({
 
           {isUploading && queue.length > 0 && (
             <div className="space-y-1" aria-live="polite">
-              <div className="h-2 w-full rounded-full bg-border">
+              <div className="h-2 w-full rounded-full bg-ui-border">
                 <div
                   className="h-2 rounded-full bg-accent transition-[width] duration-300"
                   style={{ width: `${progressPercent}%` }}

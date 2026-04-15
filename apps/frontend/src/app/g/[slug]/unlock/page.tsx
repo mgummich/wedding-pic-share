@@ -53,7 +53,7 @@ export default function GalleryUnlockPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-surface-base flex items-center justify-center px-4">
-      <section className="w-full max-w-sm rounded-card border border-border bg-surface-card p-6 space-y-4">
+      <section className="w-full max-w-sm rounded-card border border-ui-border bg-surface-card p-6 space-y-4">
         <div className="space-y-1">
           <h1 className="font-display text-2xl text-text-primary">{t('guest.unlock.title')}</h1>
           <p className="text-sm text-text-muted">
@@ -71,7 +71,7 @@ export default function GalleryUnlockPage({ params }: PageProps) {
             autoComplete="off"
             value={secretKey}
             onChange={(event) => setSecretKey(event.target.value)}
-            className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+            className="w-full px-4 py-2.5 rounded-card border border-ui-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
           />
           {error && <p className="text-sm text-error">{error}</p>}
           <button
