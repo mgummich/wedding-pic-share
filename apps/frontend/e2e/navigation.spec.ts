@@ -1,21 +1,14 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { TEST_GALLERY_NAME, TEST_GALLERY_SLUG } from './global-setup'
+import { adminPatchWithCsrf, loginAdminAndGetSessionCookie } from './admin-api'
 
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:4000'
 
 async function setActiveGalleryForRootRewrites(request: APIRequestContext) {
-  const loginRes = await request.post(`${API_URL}/api/v1/admin/login`, {
-    data: {
-      username: process.env.ADMIN_USERNAME ?? 'admin',
-      password: process.env.ADMIN_PASSWORD ?? 'admin-local-dev',
-    },
-  })
-  expect(loginRes.ok()).toBeTruthy()
-  const cookie = loginRes.headers()['set-cookie']
-  expect(cookie).toBeTruthy()
+  const sessionCookie = await loginAdminAndGetSessionCookie(request)
 
   const listRes = await request.get(`${API_URL}/api/v1/admin/galleries`, {
-    headers: { cookie: cookie! },
+    headers: { cookie: sessionCookie },
   })
   expect(listRes.ok()).toBeTruthy()
   const weddings = await listRes.json() as Array<{
@@ -26,8 +19,8 @@ async function setActiveGalleryForRootRewrites(request: APIRequestContext) {
     .find((entry) => entry.slug === TEST_GALLERY_SLUG)
   expect(gallery).toBeTruthy()
 
-  const patchRes = await request.patch(`${API_URL}/api/v1/admin/galleries/${gallery!.id}`, {
-    headers: { cookie: cookie! },
+  const patchRes = await adminPatchWithCsrf(request, `/api/v1/admin/galleries/${gallery!.id}`, {
+    sessionCookie,
     data: { isActive: true },
   })
   expect(patchRes.ok()).toBeTruthy()

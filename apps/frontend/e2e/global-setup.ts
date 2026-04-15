@@ -54,7 +54,19 @@ export default async function globalSetup(_config: FullConfig) {
 
   // 3. Create test gallery (idempotent — 409 = already exists)
   const page = await context.newPage()
+  const csrfRes = await page.request.get(`${apiUrl}/api/v1/admin/csrf`)
+  if (!csrfRes.ok()) {
+    throw new Error(`CSRF fetch failed: ${csrfRes.status()} ${await csrfRes.text()}`)
+  }
+  const csrfBody = await csrfRes.json() as { csrfToken?: unknown }
+  if (typeof csrfBody.csrfToken !== 'string' || csrfBody.csrfToken.length < 8) {
+    throw new Error('Invalid CSRF token response during E2E setup')
+  }
+
   const res = await page.request.post(`${apiUrl}/api/v1/admin/galleries`, {
+    headers: {
+      'x-csrf-token': csrfBody.csrfToken,
+    },
     data: {
       weddingName: 'E2E Wedding',
       weddingSlug: TEST_WEDDING_SLUG,

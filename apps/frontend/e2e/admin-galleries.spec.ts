@@ -6,6 +6,7 @@ import { TEST_GALLERY_NAME, TEST_GALLERY_SLUG, TEST_WEDDING_SLUG, TINY_PNG } fro
 import { GallerySettingsPage } from './pages/GallerySettingsPage'
 import { NewGalleryPage } from './pages/NewGalleryPage'
 import type { APIRequestContext } from '@playwright/test'
+import { adminPostWithCsrf } from './admin-api'
 
 function uniquePng() {
   return Buffer.concat([TINY_PNG, randomBytes(8)])
@@ -254,7 +255,7 @@ test.describe('Gallery Settings Actions', () => {
 
   test('admin bulk upload on AUTO gallery marks files approved and updates approved section', async ({ adminPage }) => {
     const suffix = Date.now().toString(36)
-    const createRes = await adminPage.request.post(`${process.env.E2E_API_URL ?? 'http://localhost:4000'}/api/v1/admin/galleries`, {
+    const createRes = await adminPostWithCsrf(adminPage.request, '/api/v1/admin/galleries', {
       data: {
         weddingName: `E2E Auto Wedding ${suffix}`,
         weddingSlug: `e2e-auto-wedding-${suffix}`,

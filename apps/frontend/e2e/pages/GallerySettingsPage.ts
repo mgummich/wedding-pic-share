@@ -21,7 +21,7 @@ export class GallerySettingsPage {
     this.nameInput = page.getByLabel('Name', { exact: true })
     this.descriptionInput = page.getByLabel(/Beschreibung/)
     this.saveButton = page.getByRole('button', { name: 'Speichern' })
-    this.savedMessage = page.getByText('Gespeichert ✓')
+    this.savedMessage = page.locator('form').getByText('Gespeichert.')
     this.deleteButton = page.getByRole('button', { name: 'Galerie löschen' })
     this.confirmDeleteButton = page.getByRole('button', { name: 'Wirklich löschen' })
     this.cancelDeleteButton = page.getByRole('button', { name: 'Abbrechen' })

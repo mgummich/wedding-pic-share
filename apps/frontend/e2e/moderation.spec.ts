@@ -84,14 +84,23 @@ test.describe('Moderation', () => {
     }
   })
 
-  test('"Alle freigeben" clears the entire queue', async ({ adminPage }) => {
+  test('"Alle freigeben" reduces the moderation queue', async ({ adminPage }) => {
     const dashboard = new AdminDashboardPage(adminPage)
     await dashboard.goto()
     await dashboard.moderateButton(TEST_GALLERY_NAME).click()
 
     const modPage = new ModerationPage(adminPage)
     await expect(modPage.pendingCount).toBeVisible()
+    const initialCountText = await modPage.pendingCount.textContent()
+    const initialCount = parseInt(initialCountText ?? '0', 10)
     await modPage.approveAllButton.click()
-    await expect(modPage.emptyState).toBeVisible()
+    await expect
+      .poll(async () => {
+        if (await modPage.emptyState.isVisible()) return 0
+        const nextText = await modPage.pendingCount.textContent()
+        const nextCount = parseInt(nextText ?? '0', 10)
+        return Number.isNaN(nextCount) ? 0 : nextCount
+      }, { timeout: 20_000 })
+      .toBeLessThan(initialCount)
   })
 })

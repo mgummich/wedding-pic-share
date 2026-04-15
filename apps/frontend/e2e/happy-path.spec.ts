@@ -45,6 +45,9 @@ test.describe('Happy Path Smoke', () => {
     await dashboard.moderateButton(TEST_GALLERY_NAME).click()
 
     const approveButtons = adminPage.getByRole('button', { name: /^Freigeben$/ })
+    await expect
+      .poll(async () => approveButtons.count(), { timeout: 10_000 })
+      .toBeGreaterThan(0)
     const before = await approveButtons.count()
     expect(before).toBeGreaterThan(0)
 

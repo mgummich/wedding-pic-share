@@ -7,10 +7,10 @@ export class LoginPage {
   readonly errorMessage: Locator
 
   constructor(private page: Page) {
-    this.usernameInput = page.getByLabel('Benutzername')
-    this.passwordInput = page.getByLabel('Passwort')
+    this.usernameInput = page.locator('#username')
+    this.passwordInput = page.locator('#password')
     this.submitButton = page.getByRole('button', { name: 'Anmelden' })
-    this.errorMessage = page.getByText(/falscher benutzername/i)
+    this.errorMessage = page.locator('form').getByText(/falscher benutzername/i)
   }
 
   async goto() {
