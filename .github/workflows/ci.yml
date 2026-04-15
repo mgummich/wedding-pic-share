@@ -172,7 +172,7 @@ jobs:
 
       - name: Docker metadata (backend)
         id: meta_backend
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}/backend
           tags: |
@@ -194,7 +194,7 @@ jobs:
 
       - name: Docker metadata (frontend)
         id: meta_frontend
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}/frontend
           tags: |
