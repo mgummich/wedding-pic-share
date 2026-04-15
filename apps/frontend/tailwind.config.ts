@@ -7,7 +7,8 @@ const config: Config = {
       colors: {
         'surface-base': 'var(--color-surface-base)',
         'surface-card': 'var(--color-surface-card)',
-        border: 'var(--color-border)',
+        border: 'var(--color-ui-border)',
+        'ui-border': 'var(--color-ui-border)',
         'text-primary': 'var(--color-text-primary)',
         'text-muted': 'var(--color-text-muted)',
         accent: 'var(--color-accent)',

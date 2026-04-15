@@ -3,11 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --font-dm-sans:        "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-playfair:       "Iowan Old Style", Baskerville, "Times New Roman", serif;
+  --font-dm-sans:        "DM Sans", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-playfair:       "Playfair Display", "Iowan Old Style", Baskerville, "Times New Roman", serif;
   --color-surface-base:   #FAF7F4;
   --color-surface-card:   #FFFFFF;
-  --color-border:         #E8E2DC;
+  --color-ui-border:      #E8E2DC;
+  --color-border:         var(--color-ui-border);
   --color-text-primary:   #2C2C2C;
   --color-text-muted:     #7A746E;
   --color-accent:         #C4956A;
@@ -24,9 +25,28 @@
   --slideshow-crossfade-duration: 800ms;
   --slideshow-crossfade-easing:   ease-in-out;
   --slideshow-display-duration:   8000ms;
-  --transition-fast:  150ms ease;
-  --transition-base:  250ms ease;
-  --transition-slow:  400ms ease;
+  --transition-fast:  150ms;
+  --transition-base:  250ms;
+  --transition-slow:  400ms;
+  --transition-ease:  ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface-base: #171512;
+    --color-surface-card: #231f1b;
+    --color-ui-border: #3a332d;
+    --color-text-primary: #f0ebe4;
+    --color-text-muted: #c8bfb4;
+    --color-accent: #d8a679;
+    --color-accent-hover: #e0b387;
+    --color-success: #73b18a;
+    --color-error: #ef8f84;
+    --slideshow-bg: #0a0908;
+    --slideshow-surface: #151310;
+    --slideshow-text: #f2ece4;
+    --slideshow-accent: #dfb07b;
+  }
 }
 
 @keyframes gentle-pulse {
@@ -49,4 +69,25 @@
 body {
   background-color: var(--color-surface-base);
   color: var(--color-text-primary);
+}
+
+:where(a, button, input, select, textarea, [role='button'], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(196 149 106 / 0.25);
+}
+
+:where(a, button, input, select, textarea, [role='button']) {
+  transition-timing-function: var(--transition-ease);
+}
+
+button.rounded-full,
+a.rounded-full {
+  border-radius: var(--radius-card);
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fadeUp 420ms ease forwards;
+  }
 }
