@@ -39,12 +39,14 @@ COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 # Workspace packages: built output + package.json so @wedding/* symlinks resolve
 COPY --from=builder /app/packages/db/package.json ./packages/db/package.json
 COPY --from=builder /app/packages/db/dist ./packages/db/dist
+COPY --from=builder /app/packages/db/generated ./packages/db/generated
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 # Prisma CLI (devDep of packages/db, not hoisted to root)
 COPY --from=builder /app/packages/db/node_modules ./packages/db/node_modules
 # Migration files
-COPY --from=builder /app/packages/db/prisma ./prisma
+COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
+COPY --from=builder /app/packages/db/prisma.config.ts ./packages/db/prisma.config.ts
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN mkdir -p /app/data/uploads && chown -R appuser:appgroup /app/data

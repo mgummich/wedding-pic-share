@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    entrypoint: ["sh", "-c", "packages/db/node_modules/.bin/prisma migrate deploy --schema /app/prisma/schema.prisma"]
+    entrypoint: ["sh", "-c", "cd /app/packages/db && node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma"]
     environment:
       DATABASE_URL: ${DATABASE_URL:-file:/app/data/db.sqlite}
     volumes:
@@ -23,6 +23,8 @@ services:
       - "4000:4000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-file:/app/data/db.sqlite}
+      ALLOW_SQLITE_IN_PRODUCTION: ${ALLOW_SQLITE_IN_PRODUCTION:-true}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       STORAGE_LOCAL_PATH: /app/data/uploads
@@ -44,6 +46,8 @@ services:
     depends_on:
       backend-migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:4000/health"]
@@ -57,6 +61,18 @@ services:
         limits:
           memory: 1g
           cpus: "1.0"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging: *json-file-logging
 
   frontend:
     build:
@@ -92,18 +108,20 @@ services:
 
   backup:
     image: alpine:3.21
-    entrypoint: ["/bin/sh", "-c"]
-    command: |
-      set -eu
-      interval="$${BACKUP_INTERVAL_SECONDS:-86400}"
-      retention="$${BACKUP_RETENTION_DAYS:-14}"
-      mkdir -p /backups
-      while true; do
-        ts="$$(date +%Y%m%d-%H%M%S)"
-        tar -czf "/backups/wps-$${ts}.tar.gz" -C /data .
-        find /backups -type f -name 'wps-*.tar.gz' -mtime +"$${retention}" -delete
-        sleep "$${interval}"
-      done
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        interval="$${BACKUP_INTERVAL_SECONDS:-86400}"
+        retention="$${BACKUP_RETENTION_DAYS:-14}"
+        mkdir -p /backups
+        while true; do
+          ts="$$(date +%Y%m%d-%H%M%S)"
+          tar -czf "/backups/wps-$${ts}.tar.gz" -C /data .
+          find /backups -type f -name 'wps-*.tar.gz' -mtime +"$${retention}" -delete
+          sleep "$${interval}"
+        done
     volumes:
       - wps_data:/data:ro
       - wps_backups:/backups
