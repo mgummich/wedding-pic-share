@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
-import { authenticator } from 'otplib'
+import { generateSecret, generateURI, verifySync } from 'otplib'
 
 // Secrets and setup tokens are encrypted at rest/in transit using AES-256-GCM.
 // Format: version:iv:authTag:ciphertext (hex-encoded parts).
@@ -12,12 +12,6 @@ export type TotpSetupTokenPayload = {
   userId: string
   nonce: string
   exp: number
-}
-
-authenticator.options = {
-  digits: 6,
-  step: 30,
-  window: 1,
 }
 
 function getKeyBuffer(keyHex: string): Buffer {
@@ -122,14 +116,29 @@ export function readTotpSetupToken(token: string, keyHex: string): TotpSetupToke
 }
 
 export function generateTotpSecret(): string {
-  return authenticator.generateSecret()
+  return generateSecret()
 }
 
 export function buildTotpOtpAuthUrl(secret: string, accountName: string, issuer = 'Wedding Pic Share'): string {
-  return authenticator.keyuri(accountName, issuer, secret)
+  return generateURI({
+    strategy: 'totp',
+    issuer,
+    label: accountName,
+    secret,
+    digits: 6,
+    period: 30,
+  })
 }
 
 export function verifyTotpCode(secret: string, code: string): boolean {
   const normalized = code.replace(/\s+/g, '')
-  return authenticator.check(normalized, secret)
+  const result = verifySync({
+    strategy: 'totp',
+    secret,
+    token: normalized,
+    digits: 6,
+    period: 30,
+    epochTolerance: 30,
+  })
+  return result.valid
 }
