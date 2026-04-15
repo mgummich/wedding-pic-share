@@ -1,8 +1,8 @@
 import sharp from 'sharp'
 import { createHash, randomBytes } from 'crypto'
 import { promisify } from 'util'
-import { exec } from 'child_process'
-import { writeFile, readFile, unlink } from 'fs/promises'
+import { exec, execFile } from 'child_process'
+import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -29,6 +29,66 @@ async function runCommand(command: string, timeoutMs: number): Promise<{ stdout:
     }
     throw error
   }
+}
+
+async function runCommandBuffer(
+  binary: string,
+  args: string[],
+  timeoutMs: number
+): Promise<{ stdout: Buffer; stderr: Buffer }> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      binary,
+      args,
+      {
+        timeout: timeoutMs,
+        maxBuffer: COMMAND_MAX_BUFFER,
+        encoding: 'buffer',
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          const timedOut = Boolean(
+            error
+            && typeof error === 'object'
+            && 'killed' in error
+            && (error as { killed?: boolean }).killed
+          )
+          if (timedOut) {
+            reject(new Error(`Command timed out after ${timeoutMs}ms`))
+            return
+          }
+          reject(error)
+          return
+        }
+
+        resolve({
+          stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout),
+          stderr: Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr),
+        })
+      }
+    )
+  })
+}
+
+async function extractVideoPosterFrame(inputPath: string, seekSeconds: number | null): Promise<Buffer> {
+  const args = [
+    '-hide_banner',
+    '-loglevel', 'error',
+    ...(seekSeconds === null ? [] : ['-ss', String(seekSeconds)]),
+    '-i', inputPath,
+    '-frames:v', '1',
+    '-f', 'image2pipe',
+    '-vcodec', 'mjpeg',
+    'pipe:1',
+  ]
+
+  const { stdout } = await runCommandBuffer('ffmpeg', args, FFMPEG_TIMEOUT_MS)
+
+  const frame = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout)
+  if (frame.length === 0) {
+    throw new Error('ffmpeg returned an empty poster frame')
+  }
+  return frame
 }
 
 export interface ImageProcessingResult {
@@ -84,18 +144,13 @@ export async function generateBlurDataUrl(thumbBuffer: Buffer): Promise<string> 
 export async function processVideo(inputBuffer: Buffer): Promise<VideoProcessingResult> {
   const suffix = randomBytes(12).toString('hex')
   const tmpIn = join(tmpdir(), `wps-video-${suffix}.mp4`)
-  const tmpPoster = join(tmpdir(), `wps-poster-${suffix}.jpg`)
 
   try {
     await writeFile(tmpIn, inputBuffer)
 
-    // Extract poster frame at 1s (fallback to 0s if video is shorter)
-    await runCommand(
-      `ffmpeg -y -ss 1 -i "${tmpIn}" -vframes 1 -q:v 2 "${tmpPoster}" 2>/dev/null || ffmpeg -y -i "${tmpIn}" -vframes 1 -q:v 2 "${tmpPoster}"`,
-      FFMPEG_TIMEOUT_MS
-    )
-
-    const posterJpeg = await readFile(tmpPoster)
+    // Try 1s first, then 0s for very short clips.
+    const posterJpeg = await extractVideoPosterFrame(tmpIn, 1)
+      .catch(() => extractVideoPosterFrame(tmpIn, null))
     const poster = await sharp(posterJpeg)
       .resize(400, undefined, { withoutEnlargement: true })
       .webp({ quality: 85 })
@@ -113,7 +168,6 @@ export async function processVideo(inputBuffer: Buffer): Promise<VideoProcessing
     return { poster, blurDataUrl, durationSeconds }
   } finally {
     await unlink(tmpIn).catch(() => {})
-    await unlink(tmpPoster).catch(() => {})
   }
 }
 
