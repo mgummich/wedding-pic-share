@@ -34,9 +34,9 @@ RUN apk add --no-cache curl
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
-COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/public ./apps/frontend/public
+COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/public ./public
 COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/.next/standalone ./
-COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/.next/static ./apps/frontend/.next/static
+COPY --from=builder --chown=appuser:appgroup /app/apps/frontend/.next/static ./.next/static
 RUN ln -s /app/node_modules /node_modules
 
 USER appuser
