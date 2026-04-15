@@ -22,8 +22,9 @@ export class UploadPage {
   async selectFiles(
     files:
       | string
+      | readonly string[]
       | { name: string; mimeType: string; buffer: Buffer }
-      | Array<string | { name: string; mimeType: string; buffer: Buffer }>
+      | ReadonlyArray<{ name: string; mimeType: string; buffer: Buffer }>
   ) {
     await this.fileInput.setInputFiles(files)
   }
