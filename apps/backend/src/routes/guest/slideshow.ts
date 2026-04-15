@@ -49,7 +49,7 @@ export async function guestSlideshowRoutes(
     fastify.log.debug({ galleryId: gallery.id, connectionId }, 'sse.connect')
 
     const heartbeat = setInterval(() => {
-      void opts.sse.sendHeartbeat(gallery.id)
+      send(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`)
     }, HEARTBEAT_INTERVAL_MS)
 
     req.raw.on('close', () => {

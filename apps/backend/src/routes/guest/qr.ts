@@ -25,7 +25,7 @@ export async function guestQrRoutes(fastify: FastifyInstance): Promise<void> {
     const gallery = await db.gallery.findFirst({ where: { slug } })
     if (!gallery) return reply.code(404).send({ type: 'gallery-not-found', status: 404 })
 
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000'
+    const frontendUrl = fastify.config.frontendUrl
     const url = `${frontendUrl}/g/${slug}/upload`
 
     const qrOptions = {

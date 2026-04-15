@@ -28,7 +28,23 @@ export async function adminExportRoutes(
         reply.header('Content-Disposition', `attachment; filename="${gallery.slug}-export.zip"`)
         reply.header('Content-Length', String(archiveStat.size))
 
-        return reply.send(opts.storage.openReadStream(gallery.slug, gallery.archivePath))
+        const archiveStream = opts.storage.openReadStream(gallery.slug, gallery.archivePath)
+        archiveStream.on('error', (error: NodeJS.ErrnoException) => {
+          req.log.warn({ err: error, galleryId: id }, 'failed to stream persisted gallery archive')
+          if (reply.sent) {
+            reply.raw.destroy(error)
+            return
+          }
+
+          if (error.code === 'ENOENT') {
+            reply.code(404).send({ type: 'archive-not-found', status: 404 })
+            return
+          }
+
+          reply.code(500).send({ type: 'internal-server-error', status: 500 })
+        })
+
+        return reply.send(archiveStream)
       } catch {
         // Persisted archive metadata exists but file is missing.
         // Fall back to on-demand stream generation below.
@@ -52,15 +68,41 @@ export async function adminExportRoutes(
     reply.header('Content-Disposition', `attachment; filename="${gallery.slug}-export.zip"`)
 
     const archive = archiver('zip', { zlib: { level: 6 } })
+    let streamFailed = false
+    const handleArchiveError = (error: unknown) => {
+      if (streamFailed) return
+      streamFailed = true
+      req.log.error({ err: error, galleryId: id }, 'failed to build export archive')
+      if (reply.sent) {
+        reply.raw.destroy(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+      void reply.code(500).send({ type: 'internal-server-error', status: 500 })
+    }
+
+    archive.on('warning', handleArchiveError)
+    archive.on('error', handleArchiveError)
     reply.raw.on('close', () => archive.abort())
     archive.pipe(reply.raw)
 
     for (const photo of photos) {
-      const stream = opts.storage.openReadStream(gallery.slug, photo.originalPath)
+      let stream: ReturnType<StorageService['openReadStream']>
+      try {
+        stream = opts.storage.openReadStream(gallery.slug, photo.originalPath)
+      } catch (error) {
+        handleArchiveError(error)
+        return
+      }
+      stream.on('error', handleArchiveError)
       const ext = photo.originalPath.split('.').pop() ?? 'jpg'
       archive.append(stream, { name: `${photo.id}.${ext}` })
+      if (streamFailed) return
     }
 
-    await archive.finalize()
+    try {
+      await archive.finalize()
+    } catch (error) {
+      handleArchiveError(error)
+    }
   })
 }

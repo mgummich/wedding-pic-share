@@ -4,7 +4,6 @@ import type { PhotoResponse } from '@wedding/shared'
 import type { StorageService } from '../../services/storage.js'
 import { ingestUploadedPhoto, PhotoIngestError } from '../../services/photoIngest.js'
 import type { MediaProcessor } from '../../services/mediaProcessor.js'
-import { isPrismaNotFoundError } from '../../services/prismaErrors.js'
 
 const ADMIN_UPLOAD_SHUTDOWN_TIMEOUT_MS = 30 * 1000
 
@@ -222,7 +221,31 @@ export async function adminPhotoRoutes(
     }
 
     const db = fastify.db
-    let photo: {
+    const updated = await db.photo.updateMany({
+      where: { id, deletedAt: null },
+      data: { status, rejectionReason: rejectionReason ?? null },
+    })
+    if (updated.count === 0) {
+      return reply.code(404).send({
+        type: 'photo-not-found',
+        title: 'Photo not found',
+        status: 404,
+      })
+    }
+
+    const photo = await db.photo.findFirst({
+      where: { id, deletedAt: null },
+      include: { gallery: { select: { slug: true } } },
+    })
+    if (!photo) {
+      return reply.code(404).send({
+        type: 'photo-not-found',
+        title: 'Photo not found',
+        status: 404,
+      })
+    }
+
+    const responsePhoto: {
       id: string
       galleryId: string
       mediaType: string
@@ -231,38 +254,22 @@ export async function adminPhotoRoutes(
       createdAt: Date
       status: string
       gallery: { slug: string }
-    }
-    try {
-      photo = await db.photo.update({
-        where: { id },
-        data: { status, rejectionReason: rejectionReason ?? null },
-        include: { gallery: { select: { slug: true } } },
-      })
-    } catch (error) {
-      if (isPrismaNotFoundError(error)) {
-        return reply.code(404).send({
-          type: 'photo-not-found',
-          title: 'Photo not found',
-          status: 404,
-        })
-      }
-      throw error
-    }
+    } = photo
 
     if (status === 'APPROVED') {
       const photoResponse: PhotoResponse = {
-        id: photo.id,
-        mediaType: photo.mediaType as 'IMAGE' | 'VIDEO',
-        thumbUrl: `/api/v1/files/${photo.gallery.slug}/${photo.id}?v=thumb`,
-        displayUrl: `/api/v1/files/${photo.gallery.slug}/${photo.id}?v=display`,
-        duration: photo.duration,
-        guestName: photo.guestName,
-        createdAt: photo.createdAt.toISOString(),
+        id: responsePhoto.id,
+        mediaType: responsePhoto.mediaType as 'IMAGE' | 'VIDEO',
+        thumbUrl: `/api/v1/files/${responsePhoto.gallery.slug}/${responsePhoto.id}?v=thumb`,
+        displayUrl: `/api/v1/files/${responsePhoto.gallery.slug}/${responsePhoto.id}?v=display`,
+        duration: responsePhoto.duration,
+        guestName: responsePhoto.guestName,
+        createdAt: responsePhoto.createdAt.toISOString(),
       }
-      await opts.sse.broadcast(photo.galleryId, 'new-photo', photoResponse)
+      await opts.sse.broadcast(responsePhoto.galleryId, 'new-photo', photoResponse)
     }
 
-    return reply.send({ ...photo, status: photo.status })
+    return reply.send({ ...responsePhoto, status: responsePhoto.status })
   })
 
   // POST batch action
@@ -289,17 +296,32 @@ export async function adminPhotoRoutes(
     const db = fastify.db
     const status = action === 'approve' ? 'APPROVED' : 'REJECTED'
 
-    const result = await db.photo.updateMany({
-      where: { id: { in: photoIds } },
-      data: { status, rejectionReason: action === 'reject' ? (rejectionReason ?? null) : null },
+    const existing = await db.photo.findMany({
+      where: { id: { in: photoIds }, deletedAt: null },
+      select: { id: true },
     })
+    const existingIds = new Set(existing.map((photo) => photo.id))
+    const updatableIds = photoIds.filter((id) => existingIds.has(id))
+    const failedIds = photoIds.filter((id) => !existingIds.has(id))
 
-    if (status === 'APPROVED') {
+    let processed = 0
+    if (updatableIds.length > 0) {
+      const result = await db.photo.updateMany({
+        where: { id: { in: updatableIds }, deletedAt: null },
+        data: { status, rejectionReason: action === 'reject' ? (rejectionReason ?? null) : null },
+      })
+      processed = result.count
+    }
+
+    if (status === 'APPROVED' && updatableIds.length > 0) {
       const photos = await db.photo.findMany({
-        where: { id: { in: photoIds } },
+        where: { id: { in: updatableIds }, deletedAt: null },
         include: { gallery: true },
       })
-      for (const photo of photos) {
+      const photosById = new Map(photos.map((photo) => [photo.id, photo]))
+      for (const id of updatableIds) {
+        const photo = photosById.get(id)
+        if (!photo) continue
         const photoResponse: PhotoResponse = {
           id: photo.id,
           mediaType: photo.mediaType as 'IMAGE' | 'VIDEO',
@@ -313,7 +335,7 @@ export async function adminPhotoRoutes(
       }
     }
 
-    return reply.send({ processed: result.count, failed: [] })
+    return reply.send({ processed, failed: failedIds })
   })
 
   // DELETE single photo (soft delete)
@@ -325,17 +347,16 @@ export async function adminPhotoRoutes(
   }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const db = fastify.db
-    try {
-      await db.photo.update({ where: { id }, data: { deletedAt: new Date() } })
-    } catch (error) {
-      if (isPrismaNotFoundError(error)) {
-        return reply.code(404).send({
-          type: 'photo-not-found',
-          title: 'Photo not found',
-          status: 404,
-        })
-      }
-      throw error
+    const result = await db.photo.updateMany({
+      where: { id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    })
+    if (result.count === 0) {
+      return reply.code(404).send({
+        type: 'photo-not-found',
+        title: 'Photo not found',
+        status: 404,
+      })
     }
     return reply.send({ ok: true })
   })
