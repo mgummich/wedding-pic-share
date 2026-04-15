@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Upload, Camera } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Upload, Camera, CheckCircle2 } from 'lucide-react'
 import { uploadFile, deletePendingUpload, ApiError } from '@/lib/api'
 import type { UploadResponse } from '@wedding/shared'
 import { validateUploadFile, getUploadErrorMessage, validateGuestName } from '@/lib/uploadValidation'
@@ -25,12 +26,23 @@ const UPLOAD_RETRY_BACKOFF_MS = [500, 1500]
 const UPLOAD_CONCURRENCY = 3
 
 export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
+  const router = useRouter()
   const { locale, t } = useGuestI18n()
   const [files, setFiles] = useState<FileStatus[]>([])
   const [guestName, setGuestName] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [isDragActive, setIsDragActive] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const completedCount = useMemo(
+    () => files.filter((item) => item.status === 'done').length,
+    [files]
+  )
+  const hasUploadInFlight = files.some((item) => item.status === 'uploading' || item.status === 'deleting')
+  const progressPercent = files.length > 0
+    ? Math.min(100, Math.round((completedCount / files.length) * 100))
+    : 0
 
   function updateFiles(updater: (prev: FileStatus[]) => FileStatus[]) {
     setFiles((prev) => updater(prev))
@@ -41,6 +53,23 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       return getUploadErrorMessage(error.status, locale) ?? t('guest.uploadForm.error.generic')
     }
     return t('guest.uploadForm.error.network')
+  }
+
+  function buildUnlockRedirectPath(): string {
+    return `/g/${gallerySlug}/unlock?next=${encodeURIComponent(`/g/${gallerySlug}/upload`)}`
+  }
+
+  function queueSelectedFiles(selectedFiles: File[]) {
+    const validated = selectedFiles.map((f): FileStatus => {
+      const validationError = validateUploadFile(f, locale)
+      if (validationError) {
+        return { file: f, status: 'error', error: validationError }
+      }
+      return { file: f, status: 'pending' }
+    })
+    updateFiles(() => validated)
+    setFormError(null)
+    setSubmitted(false)
   }
 
   function canDeletePendingUpload(item: FileStatus): boolean {
@@ -84,6 +113,11 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       return true
     }
 
+    if (result.error instanceof ApiError && result.error.status === 401) {
+      router.replace(buildUnlockRedirectPath())
+      return false
+    }
+
     updateFiles((prev) =>
       prev.map((item) => item.file === file
         ? { ...item, status: 'error', error: toUploadErrorMessage(result.error) }
@@ -95,16 +129,17 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
-    const validated = selected.map((f): FileStatus => {
-      const validationError = validateUploadFile(f, locale)
-      if (validationError) {
-        return { file: f, status: 'error', error: validationError }
-      }
-      return { file: f, status: 'pending' }
-    })
-    updateFiles(() => validated)
-    setFormError(null)
-    setSubmitted(false)
+    if (selected.length === 0) return
+    queueSelectedFiles(selected)
+    setIsDragActive(false)
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    const selected = Array.from(event.dataTransfer.files ?? [])
+    setIsDragActive(false)
+    if (selected.length === 0) return
+    queueSelectedFiles(selected)
   }
 
   async function handleRetry(file: File) {
@@ -125,6 +160,10 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       await deletePendingUpload(gallerySlug, target.result.id, target.result.deleteToken)
       updateFiles((prev) => prev.filter((item) => item.file !== file))
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        router.replace(buildUnlockRedirectPath())
+        return
+      }
       const message = error instanceof ApiError
         ? (getUploadErrorMessage(error.status, locale) ?? t('guest.uploadForm.error.deleteFailed'))
         : t('guest.uploadForm.error.deleteFailed')
@@ -171,7 +210,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center px-6">
         <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
-          <span className="text-3xl">✓</span>
+          <CheckCircle2 className="h-8 w-8 text-success" aria-hidden="true" />
         </div>
         <h2 className="font-display text-2xl text-text-primary mb-2">{t('guest.uploadForm.success.title')}</h2>
         <p className="text-text-muted">
@@ -210,16 +249,38 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="px-4 py-6 space-y-6">
-      {/* File picker */}
       <div>
         <label htmlFor="file-input" className="block text-sm font-medium text-text-primary mb-2">
           {t('guest.uploadForm.filesLabel')}
         </label>
         <div
           onClick={() => inputRef.current?.click()}
-          className="border-2 border-dashed border-border rounded-card p-8
-                     flex flex-col items-center gap-3 cursor-pointer
-                     hover:border-accent transition-colors"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              inputRef.current?.click()
+            }
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            setIsDragActive(true)
+          }}
+          onDragEnter={(event) => {
+            event.preventDefault()
+            setIsDragActive(true)
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault()
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+            setIsDragActive(false)
+          }}
+          onDrop={handleDrop}
+          role="button"
+          tabIndex={0}
+          className={[
+            'border-2 border-dashed rounded-card p-8 flex flex-col items-center gap-3 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30',
+            isDragActive ? 'border-accent bg-accent/5' : 'border-border hover:border-accent',
+          ].join(' ')}
         >
           <Camera className="w-8 h-8 text-text-muted" />
           <span className="text-text-muted text-sm text-center">
@@ -238,7 +299,6 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         />
       </div>
 
-      {/* File list */}
       {files.length > 0 && (
         <ul className="space-y-2">
           {files.map((item) => (
@@ -251,7 +311,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
                 <button
                   type="button"
                   onClick={() => handleRetry(item.file)}
-                  disabled={files.some((f) => f.status === 'uploading' || f.status === 'deleting')}
+                  disabled={hasUploadInFlight}
                   className="text-xs font-medium text-accent hover:text-accent-hover disabled:opacity-50"
                 >
                   {t('guest.uploadForm.retry')}
@@ -266,11 +326,16 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
                   {t('guest.uploadForm.deletePending')}
                 </button>
               ) : (
-                <span className="text-xs text-text-muted flex-shrink-0">
+                <span className="text-xs text-text-muted flex-shrink-0 inline-flex items-center gap-1">
                   {item.status === 'uploading' && t('guest.uploadForm.status.uploading')}
                   {item.status === 'deleting' && t('guest.uploadForm.status.deleting')}
                   {item.status === 'done' && item.result?.status === 'PENDING' && t('guest.uploadForm.status.pending')}
-                  {item.status === 'done' && item.result?.status !== 'PENDING' && '✓'}
+                  {item.status === 'done' && item.result?.status !== 'PENDING' && (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+                      <span>{t('guest.uploadForm.status.done')}</span>
+                    </>
+                  )}
                 </span>
               )}
             </li>
@@ -278,7 +343,20 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
         </ul>
       )}
 
-      {/* Guest name */}
+      {hasUploadInFlight && files.length > 0 && (
+        <div className="space-y-1" aria-live="polite">
+          <div className="h-2 w-full rounded-full bg-border">
+            <div
+              className="h-2 rounded-full bg-accent transition-[width] duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <p className="text-xs text-text-muted">
+            {t('guest.uploadForm.progress', { done: completedCount, total: files.length })}
+          </p>
+        </div>
+      )}
+
       {guestNameMode !== 'HIDDEN' && (
         <div>
           <label htmlFor="guest-name" className="block text-sm font-medium text-text-primary mb-2">
@@ -302,7 +380,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
 
       <button
         type="submit"
-        disabled={files.some((f) => f.status === 'uploading' || f.status === 'deleting')}
+        disabled={hasUploadInFlight}
         className="w-full py-3 rounded-full bg-accent hover:bg-accent-hover text-white
                    font-medium transition-colors disabled:opacity-50"
       >

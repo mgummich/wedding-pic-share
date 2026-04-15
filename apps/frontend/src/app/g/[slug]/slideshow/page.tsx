@@ -31,6 +31,8 @@ export default function SlideshowPage({ params }: PageProps) {
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [galleryName, setGalleryName] = useState('')
   const [galleryClosed, setGalleryClosed] = useState(false)
+  const [sseState, setSseState] = useState<'connecting' | 'connected' | 'reconnecting' | 'closed'>('connecting')
+  const [liveAnnouncement, setLiveAnnouncement] = useState('')
 
   useEffect(() => {
     getGallery(slug, { limit: 50 })
@@ -51,10 +53,16 @@ export default function SlideshowPage({ params }: PageProps) {
         if (prev.some((p) => p.id === photo.id)) return prev
         return [...prev, photo]
       })
-    }, []),
+      setLiveAnnouncement(t('guest.gallery.live.newPhoto'))
+    }, [t]),
     onGalleryClosed: useCallback(() => {
       setGalleryClosed(true)
     }, []),
+    onConnectionStateChange: useCallback((state: 'connecting' | 'connected' | 'reconnecting' | 'closed') => {
+      setSseState(state)
+      if (state === 'reconnecting') setLiveAnnouncement(t('guest.gallery.live.reconnecting'))
+      if (state === 'connected') setLiveAnnouncement(t('guest.gallery.live.connected'))
+    }, [t]),
   })
 
   useEffect(() => {
@@ -73,6 +81,7 @@ export default function SlideshowPage({ params }: PageProps) {
 
   return (
     <>
+      <p className="sr-only" aria-live="polite">{liveAnnouncement}</p>
       {/* GuestNav floats above the full-screen slideshow */}
       <div className="fixed top-0 left-0 right-0 z-30">
         <GuestNav gallerySlug={slug} galleryName={galleryName} />
@@ -155,6 +164,12 @@ export default function SlideshowPage({ params }: PageProps) {
               <p className="text-base opacity-50">/g/{slug}/upload</p>
             </div>
           </div>
+
+          {sseState === 'reconnecting' && (
+            <div className="absolute top-20 right-4 z-20 rounded-card border border-white/20 bg-black/50 px-3 py-2">
+              <p className="text-xs text-white/85">{t('guest.gallery.live.reconnecting')}</p>
+            </div>
+          )}
 
           {/* Progress dots */}
           {photos.length > 1 && (

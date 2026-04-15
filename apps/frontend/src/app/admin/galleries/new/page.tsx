@@ -2,7 +2,6 @@
 
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createGallery, ApiError } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
@@ -67,16 +66,29 @@ export default function NewGalleryPage() {
     }
   }
 
+  function handleBack() {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back()
+      return
+    }
+    router.push('/admin')
+  }
+
   return (
     <main className="min-h-screen bg-surface-base">
       <header className="flex items-center gap-3 px-4 pt-6 pb-4 border-b border-border">
-        <Link href="/admin" className="p-1.5 text-text-muted hover:text-text-primary transition-colors">
+        <button
+          type="button"
+          onClick={handleBack}
+          aria-label={t('newGallery.backAria')}
+          className="p-1.5 text-text-muted hover:text-text-primary transition-colors"
+        >
           <ArrowLeft className="w-5 h-5" />
-        </Link>
+        </button>
         <h1 className="font-display text-2xl text-text-primary">{t('newGallery.title')}</h1>
       </header>
 
-      <form onSubmit={handleSubmit} className="px-4 py-6 space-y-5 max-w-lg">
+      <form onSubmit={handleSubmit} className="px-4 py-6 space-y-5 max-w-4xl">
         <fieldset className="space-y-4">
           <legend className="text-sm font-medium text-text-muted uppercase tracking-wide">{t('newGallery.wedding.section')}</legend>
 

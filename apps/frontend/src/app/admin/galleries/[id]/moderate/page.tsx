@@ -1,19 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { CheckCircle, XCircle } from 'lucide-react'
+import { CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
 import { getAdminPhotos, moderatePhoto, batchModerate, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import type { AdminPhotoResponse } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
+import { useToast } from '@/components/ToastProvider'
+
+const APPROVE_ALL_UNDO_MS = process.env.NODE_ENV === 'test' ? 0 : 5000
 
 export default function ModerationPage() {
   const params = useParams<{ id: string }>()
   const id = params.id ?? ''
   const router = useRouter()
   const { t } = useAdminI18n()
+  const { showToast } = useToast()
   const [photos, setPhotos] = useState<AdminPhotoResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -23,6 +27,8 @@ export default function ModerationPage() {
   const [loadError, setLoadError] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pendingApproveAllIds, setPendingApproveAllIds] = useState<string[] | null>(null)
+  const approveAllTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -48,6 +54,22 @@ export default function ModerationPage() {
     }
   }, [id, router])
 
+  useEffect(() => {
+    return () => {
+      if (approveAllTimerRef.current) {
+        clearTimeout(approveAllTimerRef.current)
+      }
+    }
+  }, [])
+
+  function handleBack() {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back()
+      return
+    }
+    router.push('/admin')
+  }
+
   async function handleModerate(photoId: string, action: 'APPROVED' | 'REJECTED') {
     setActionError(null)
     setIsSubmitting(true)
@@ -56,14 +78,16 @@ export default function ModerationPage() {
       setPhotos((prev) => prev.filter((p) => p.id !== photoId))
       setOpenIndex(null)
     } catch {
-      setActionError(t('moderation.error.moderateFailed'))
+      const message = t('moderation.error.moderateFailed')
+      setActionError(message)
+      showToast(message, 'error')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  async function handleApproveAll() {
-    const ids = photos.map((p) => p.id)
+  async function runApproveAll(ids: string[]) {
+    setPendingApproveAllIds(null)
     if (ids.length === 0) return
     setActionError(null)
     setIsSubmitting(true)
@@ -72,16 +96,41 @@ export default function ModerationPage() {
       if (result.failed.length > 0) {
         const failedIds = new Set(result.failed)
         setPhotos((prev) => prev.filter((photo) => failedIds.has(photo.id)))
-        setActionError(t('moderation.error.partialApprove', { count: result.failed.length }))
+        const message = t('moderation.error.partialApprove', { count: result.failed.length })
+        setActionError(message)
+        showToast(message, 'error')
       } else {
         setPhotos([])
+        showToast(t('moderation.approveAllSuccess'), 'success')
       }
       setOpenIndex(null)
     } catch {
-      setActionError(t('moderation.error.approveAllFailed'))
+      const message = t('moderation.error.approveAllFailed')
+      setActionError(message)
+      showToast(message, 'error')
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  function handleApproveAll() {
+    if (pendingApproveAllIds || isSubmitting) return
+    const ids = photos.map((p) => p.id)
+    if (ids.length === 0) return
+    setPendingApproveAllIds(ids)
+    setActionError(null)
+    approveAllTimerRef.current = setTimeout(() => {
+      approveAllTimerRef.current = null
+      void runApproveAll(ids)
+    }, APPROVE_ALL_UNDO_MS)
+  }
+
+  function handleUndoApproveAll() {
+    if (approveAllTimerRef.current) {
+      clearTimeout(approveAllTimerRef.current)
+      approveAllTimerRef.current = null
+    }
+    setPendingApproveAllIds(null)
   }
 
   async function handleLoadMore() {
@@ -98,7 +147,9 @@ export default function ModerationPage() {
       setNextCursor(result.pagination.nextCursor)
       setHasMore(result.pagination.hasMore)
     } catch {
-      setActionError(t('moderation.error.loadMoreFailed'))
+      const message = t('moderation.error.loadMoreFailed')
+      setActionError(message)
+      showToast(message, 'error')
     } finally {
       setLoadingMore(false)
     }
@@ -128,17 +179,38 @@ export default function ModerationPage() {
   return (
     <main className="min-h-screen bg-surface-base">
       <header className="flex items-center justify-between px-4 pt-6 pb-4 border-b border-border sticky top-0 bg-surface-base z-10">
-        <div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label={t('moderation.backAria')}
+            className="p-1.5 text-text-muted hover:text-text-primary transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <h1 className="font-medium text-text-primary">{t('moderation.pending', { count: photos.length })}</h1>
         </div>
         <button
           onClick={handleApproveAll}
-          disabled={isSubmitting}
+          disabled={isSubmitting || pendingApproveAllIds !== null}
           className="text-sm px-4 py-2 rounded-full bg-success text-white hover:opacity-90 transition-opacity"
         >
           {t('moderation.approveAll')}
         </button>
       </header>
+
+      {pendingApproveAllIds && (
+        <div className="px-4 py-3 border-b border-border bg-accent/10 flex items-center justify-between gap-3" role="status" aria-live="polite">
+          <p className="text-sm text-text-primary">{t('moderation.undo.message')}</p>
+          <button
+            type="button"
+            onClick={handleUndoApproveAll}
+            className="text-sm px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-accent hover:text-accent transition-colors"
+          >
+            {t('moderation.undo.action')}
+          </button>
+        </div>
+      )}
 
       {loadError && (
         <div className="px-4 py-3">
@@ -162,11 +234,12 @@ export default function ModerationPage() {
             >
               <Image
                 src={photo.thumbUrl}
-                alt={t('moderation.pendingPhotoAlt')}
+                alt={photo.guestName
+                  ? t('lightbox.photoAltByGuest', { guest: photo.guestName })
+                  : t('moderation.pendingPhotoAlt', { index: index + 1 })}
                 width={400}
                 height={400}
                 className="w-full aspect-square object-cover"
-                unoptimized
               />
             </button>
             {photo.guestName && (

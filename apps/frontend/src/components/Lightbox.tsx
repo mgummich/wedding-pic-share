@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import type { PhotoResponse } from '@wedding/shared'
@@ -26,6 +26,9 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
   const hasPrev = index > 0
   const hasNext = index < photos.length - 1
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const lastFocusedElementRef = useRef<HTMLElement | null>(null)
   const keyboardHandlersRef = useRef({
     onClose,
     onNext,
@@ -66,6 +69,39 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
     return () => { document.body.style.overflow = prev }
   }, [])
 
+  useEffect(() => {
+    lastFocusedElementRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    closeButtonRef.current?.focus()
+    return () => {
+      lastFocusedElementRef.current?.focus()
+    }
+  }, [])
+
+  function handleDialogKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return
+    const container = dialogRef.current
+    if (!container) return
+    const focusable = container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), video[controls], [tabindex]:not([tabindex="-1"])'
+    )
+    if (focusable.length === 0) {
+      event.preventDefault()
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+    if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault()
+      last.focus()
+    }
+  }
+
   function handlePointerDown(e: React.PointerEvent) {
     pointerStart.current = { x: e.clientX, y: e.clientY }
   }
@@ -85,7 +121,13 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
 
   return createPortal(
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('lightbox.photoAltDefault')}
+      tabIndex={-1}
+      onKeyDown={handleDialogKeyDown}
       onClick={onClose}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
@@ -93,6 +135,7 @@ export function Lightbox({ photos, index, onClose, onNext, onPrev, allowDownload
     >
       {/* Close */}
       <button
+        ref={closeButtonRef}
         onClick={(e) => { e.stopPropagation(); onClose() }}
         className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white
                    hover:bg-black/70 transition-colors"

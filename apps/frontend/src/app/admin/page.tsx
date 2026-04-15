@@ -11,7 +11,7 @@ import {
   setupAdminTwoFactor,
   verifyAdminTwoFactor,
 } from '@/lib/api'
-import { Settings } from 'lucide-react'
+import { Settings, Eye, EyeOff } from 'lucide-react'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
 import type { AdminMessageKey } from '@/lib/adminI18n'
 
@@ -151,6 +151,7 @@ function TwoFactorSetupPanel({
   const [secret, setSecret] = useState<string | null>(null)
   const [otpAuthUrl, setOtpAuthUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
@@ -246,6 +247,22 @@ function TwoFactorSetupPanel({
   return (
     <section className="bg-surface-card border border-border rounded-card p-4 space-y-3">
       <h2 className="font-medium text-text-primary">{t('dashboard.2fa.title')}</h2>
+      {!configured && (
+        <ol className="grid grid-cols-2 gap-2" aria-label={t('dashboard.2fa.progressAria')}>
+          <li className={[
+            'rounded-card border px-3 py-2 text-xs',
+            setupToken ? 'border-border text-text-muted' : 'border-accent text-accent',
+          ].join(' ')}>
+            {t('dashboard.2fa.step1')}
+          </li>
+          <li className={[
+            'rounded-card border px-3 py-2 text-xs',
+            setupToken ? 'border-accent text-accent' : 'border-border text-text-muted',
+          ].join(' ')}>
+            {t('dashboard.2fa.step2')}
+          </li>
+        </ol>
+      )}
       {configured ? (
         <p className="text-sm text-text-muted">{t('dashboard.2fa.enabled')}</p>
       ) : (
@@ -256,15 +273,25 @@ function TwoFactorSetupPanel({
             <label htmlFor="two-factor-password" className="block text-sm font-medium text-text-primary">
               {t('dashboard.2fa.password')}
             </label>
-            <input
-              id="two-factor-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full px-4 py-2.5 rounded-card border border-border
-                         focus:outline-none focus:border-accent bg-surface-card text-text-primary"
-            />
+            <div className="relative">
+              <input
+                id="two-factor-password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full px-4 py-2.5 pr-11 rounded-card border border-border
+                           focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <button
               type="button"
               disabled={busy || password.length === 0}
@@ -286,7 +313,6 @@ function TwoFactorSetupPanel({
                   width={192}
                   height={192}
                   className="h-48 w-48 rounded-card border border-border bg-white p-2"
-                  unoptimized
                 />
               )}
               <p className="text-xs text-text-muted">

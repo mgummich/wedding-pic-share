@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState, use, FormEvent, useCallback } from 'react'
+import { useEffect, useState, use, FormEvent, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Trash2, QrCode, Download, FileText, Archive } from 'lucide-react'
+import { ArrowLeft, Trash2, QrCode, Download, FileText, Archive, Eye, EyeOff } from 'lucide-react'
 import { getAdminGalleries, updateGallery, deleteGallery, getAdminPhotos, archiveGallery, exportGallery, ApiError } from '@/lib/api'
 import { Lightbox } from '@/components/Lightbox'
 import { AdminUploadPanel } from '@/components/AdminUploadPanel'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
+import { useToast } from '@/components/ToastProvider'
 import type { AdminPhotoResponse } from '@/lib/api'
 import type { UploadWindowResponse } from '@wedding/shared'
 
@@ -18,6 +19,7 @@ interface PageProps {
 
 type GalleryData = Awaited<ReturnType<typeof getAdminGalleries>>[number]
 type UploadWindowDraft = Pick<UploadWindowResponse, 'id'> & { start: string; end: string }
+type UploadWindowValidation = 'incomplete' | 'invalidDateTime' | 'endBeforeStart' | null
 const ARCHIVE_POLL_INTERVAL_MS = 1500
 const ARCHIVE_POLL_TIMEOUT_MS = 90 * 1000
 
@@ -53,10 +55,20 @@ function sleep(ms: number): Promise<void> {
   })
 }
 
+function validateUploadWindow(window: UploadWindowDraft): UploadWindowValidation {
+  if (!window.start || !window.end) return 'incomplete'
+  const startIso = toIsoString(window.start)
+  const endIso = toIsoString(window.end)
+  if (!startIso || !endIso) return 'invalidDateTime'
+  if (new Date(startIso) >= new Date(endIso)) return 'endBeforeStart'
+  return null
+}
+
 export default function GallerySettingsPage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
   const { locale, t } = useAdminI18n()
+  const { showToast } = useToast()
 
   const [gallery, setGallery] = useState<GalleryData | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -70,6 +82,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [allowGuestDownload, setAllowGuestDownload] = useState(false)
   const [stripExif, setStripExif] = useState(true)
   const [secretKeyInput, setSecretKeyInput] = useState('')
+  const [showSecretKeyInput, setShowSecretKeyInput] = useState(false)
   const [clearSecretKey, setClearSecretKey] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const [uploadWindowsVersion, setUploadWindowsVersion] = useState('')
@@ -78,9 +91,15 @@ export default function GallerySettingsPage({ params }: PageProps) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [archiving, setArchiving] = useState(false)
+
+  const uploadWindowValidationErrors = useMemo(
+    () => uploadWindows.map(validateUploadWindow),
+    [uploadWindows]
+  )
 
   const refreshApprovedPhotos = useCallback(async () => {
     try {
@@ -125,23 +144,23 @@ export default function GallerySettingsPage({ params }: PageProps) {
     setSaving(true)
     setSaved(false)
     try {
-      if (uploadWindows.some((window) => !window.start || !window.end)) {
+      const firstWindowError = uploadWindowValidationErrors.find((value) => value !== null)
+      if (firstWindowError === 'incomplete') {
         setSaveError(t('gallerySettings.saveError.incompleteWindow'))
         return
       }
-      const isoWindows = uploadWindows.map((window) => ({
-        start: toIsoString(window.start),
-        end: toIsoString(window.end),
-      }))
-      if (isoWindows.some((window) => window.start === null || window.end === null)) {
+      if (firstWindowError === 'invalidDateTime') {
         setSaveError(t('gallerySettings.saveError.invalidDateTime'))
         return
       }
-      const normalizedUploadWindows = isoWindows as Array<{ start: string; end: string }>
-      if (normalizedUploadWindows.some((window) => new Date(window.start) >= new Date(window.end))) {
+      if (firstWindowError === 'endBeforeStart') {
         setSaveError(t('gallerySettings.saveError.invalidWindow'))
         return
       }
+      const normalizedUploadWindows = uploadWindows.map((window) => ({
+        start: toIsoString(window.start) ?? '',
+        end: toIsoString(window.end) ?? '',
+      }))
       const normalizedSecretKey = secretKeyInput.trim()
 
       const updated = await updateGallery(id, {
@@ -168,23 +187,46 @@ export default function GallerySettingsPage({ params }: PageProps) {
       setSecretKeyInput('')
       setClearSecretKey(false)
       setSaved(true)
+      showToast(t('gallerySettings.saveSuccess'), 'success')
     } catch {
-      setSaveError(t('gallerySettings.saveError.saveFailed'))
+      const message = t('gallerySettings.saveError.saveFailed')
+      setSaveError(message)
+      showToast(message, 'error')
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDelete() {
+    if (!gallery || deleteConfirmText.trim() !== gallery.slug) return
     setDeleting(true)
     try {
       await deleteGallery(id)
+      showToast(t('gallerySettings.danger.deletedSuccess'), 'success')
       router.replace('/admin')
     } catch {
-      setSaveError(t('gallerySettings.saveError.deleteFailed'))
+      const message = t('gallerySettings.saveError.deleteFailed')
+      setSaveError(message)
+      showToast(message, 'error')
       setDeleting(false)
       setConfirmDelete(false)
+      setDeleteConfirmText('')
     }
+  }
+
+  function handleBack() {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back()
+      return
+    }
+    router.push('/admin')
+  }
+
+  function inlineUploadWindowError(error: UploadWindowValidation): string | null {
+    if (error === 'incomplete') return t('gallerySettings.windows.error.incomplete')
+    if (error === 'invalidDateTime') return t('gallerySettings.windows.error.invalidDateTime')
+    if (error === 'endBeforeStart') return t('gallerySettings.windows.error.endBeforeStart')
+    return null
   }
 
   async function handleExport() {
@@ -201,7 +243,9 @@ export default function GallerySettingsPage({ params }: PageProps) {
       document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 100)
     } catch {
-      setSaveError(t('gallerySettings.saveError.exportFailed'))
+      const message = t('gallerySettings.saveError.exportFailed')
+      setSaveError(message)
+      showToast(message, 'error')
     } finally {
       setExporting(false)
     }
@@ -230,15 +274,20 @@ export default function GallerySettingsPage({ params }: PageProps) {
       }
 
       if (!latest.isArchived) {
-        setSaveError(latest.archiveError ?? t('gallerySettings.saveError.archiveFailed'))
+        const message = latest.archiveError ?? t('gallerySettings.saveError.archiveFailed')
+        setSaveError(message)
+        showToast(message, 'error')
         return
       }
 
       setUploadWindows([])
       setUploadWindowsVersion(latest.uploadWindowsVersion)
       setSaved(false)
+      showToast(t('gallerySettings.actions.archived'), 'success')
     } catch {
-      setSaveError(t('gallerySettings.saveError.archiveFailed'))
+      const message = t('gallerySettings.saveError.archiveFailed')
+      setSaveError(message)
+      showToast(message, 'error')
     } finally {
       setArchiving(false)
     }
@@ -256,7 +305,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
   if (!gallery) {
     return (
       <main className="min-h-screen bg-surface-base px-4 py-6">
-        <div className="space-y-3 max-w-lg">
+        <div className="space-y-3 max-w-4xl">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-12 rounded-card bg-border animate-pulse" />
           ))}
@@ -268,16 +317,27 @@ export default function GallerySettingsPage({ params }: PageProps) {
   return (
     <main className="min-h-screen bg-surface-base">
       <header className="flex items-center gap-3 px-4 pt-6 pb-4 border-b border-border">
-        <Link href="/admin" className="p-1.5 text-text-muted hover:text-text-primary transition-colors">
+        <button
+          type="button"
+          onClick={handleBack}
+          aria-label={t('gallerySettings.backAria')}
+          className="p-1.5 text-text-muted hover:text-text-primary transition-colors"
+        >
           <ArrowLeft className="w-5 h-5" />
-        </Link>
+        </button>
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-2xl text-text-primary truncate">{gallery.name}</h1>
           <p className="text-xs text-text-muted font-mono mt-0.5">/g/{gallery.slug}</p>
         </div>
       </header>
 
-      <form onSubmit={handleSave} className="px-4 py-6 space-y-5 max-w-lg">
+      <form onSubmit={handleSave} className="px-4 py-6 space-y-5 max-w-4xl">
+        {saveError && (
+          <div className="rounded-card border border-error/40 bg-error/5 px-3 py-2" role="alert">
+            <p className="text-sm text-error">{saveError}</p>
+          </div>
+        )}
+
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-text-primary mb-1">
             {t('gallerySettings.field.name')}
@@ -387,22 +447,32 @@ export default function GallerySettingsPage({ params }: PageProps) {
           <label htmlFor="secretKey" className="block text-sm text-text-primary">
             {t('gallerySettings.pin.new')}
           </label>
-          <input
-            id="secretKey"
-            type="password"
-            autoComplete="new-password"
-            minLength={4}
-            maxLength={32}
-            value={secretKeyInput}
-            onChange={(e) => {
-              setSecretKeyInput(e.target.value)
-              if (clearSecretKey) {
-                setClearSecretKey(false)
-              }
-            }}
-            placeholder={t('gallerySettings.pin.placeholder')}
-            className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
-          />
+          <div className="relative">
+            <input
+              id="secretKey"
+              type={showSecretKeyInput ? 'text' : 'password'}
+              autoComplete="new-password"
+              minLength={4}
+              maxLength={32}
+              value={secretKeyInput}
+              onChange={(e) => {
+                setSecretKeyInput(e.target.value)
+                if (clearSecretKey) {
+                  setClearSecretKey(false)
+                }
+              }}
+              placeholder={t('gallerySettings.pin.placeholder')}
+              className="w-full px-4 py-2.5 pr-11 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecretKeyInput((current) => !current)}
+              aria-label={showSecretKeyInput ? t('gallerySettings.pin.hide') : t('gallerySettings.pin.show')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors"
+            >
+              {showSecretKeyInput ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -469,6 +539,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
                           )))
                           setSaved(false)
                         }}
+                        aria-invalid={uploadWindowValidationErrors[index] !== null}
                         className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
                       />
                     </label>
@@ -483,10 +554,16 @@ export default function GallerySettingsPage({ params }: PageProps) {
                           )))
                           setSaved(false)
                         }}
+                        aria-invalid={uploadWindowValidationErrors[index] !== null}
                         className="w-full px-4 py-2.5 rounded-card border border-border focus:outline-none focus:border-accent bg-surface-card text-text-primary"
                       />
                     </label>
                   </div>
+                  {inlineUploadWindowError(uploadWindowValidationErrors[index]) && (
+                    <p className="text-xs text-error">
+                      {inlineUploadWindowError(uploadWindowValidationErrors[index])}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -521,7 +598,6 @@ export default function GallerySettingsPage({ params }: PageProps) {
           </button>
         </section>
 
-        {saveError && <p className="text-sm text-error">{saveError}</p>}
         {saved && <p className="text-sm text-success">{t('gallerySettings.saveSuccess')}</p>}
 
         <button
@@ -535,7 +611,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
 
       {/* Gallery actions: QR download + ZIP export */}
       {gallery && (
-        <section className="px-4 pb-6 max-w-lg">
+        <section className="px-4 pb-6 max-w-4xl">
           <h2 className="text-sm font-medium text-text-muted uppercase tracking-wide mb-3">
             {t('gallerySettings.actions.title')}
           </h2>
@@ -613,7 +689,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       />
 
       {photos.length > 0 && (
-        <section className="max-w-lg px-4 pb-8">
+        <section className="max-w-4xl px-4 pb-8">
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-text-muted">
             {t('gallerySettings.approvedPhotos', { count: photos.length })}
           </h2>
@@ -630,7 +706,6 @@ export default function GallerySettingsPage({ params }: PageProps) {
                   alt={photo.guestName ?? t('lightbox.photoAltDefault')}
                   fill
                   className="object-cover transition-transform duration-200 group-hover:scale-105"
-                  unoptimized
                 />
               </button>
             ))}
@@ -639,7 +714,7 @@ export default function GallerySettingsPage({ params }: PageProps) {
       )}
 
       {/* Danger zone */}
-      <div className="px-4 pb-10 max-w-lg">
+      <div className="px-4 pb-10 max-w-4xl">
         <div className="border border-error/30 rounded-card p-4">
           <p className="text-sm font-medium text-text-primary mb-1">{t('gallerySettings.danger.title')}</p>
           <p className="text-xs text-text-muted mb-3">
@@ -647,27 +722,45 @@ export default function GallerySettingsPage({ params }: PageProps) {
           </p>
           {!confirmDelete ? (
             <button
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => {
+                setConfirmDelete(true)
+                setDeleteConfirmText('')
+              }}
               className="flex items-center gap-2 px-4 py-2 rounded-full border border-error text-error text-sm hover:bg-error hover:text-white transition-colors"
             >
               <Trash2 className="w-4 h-4" />
               {t('gallerySettings.danger.delete')}
             </button>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="space-y-3">
+              <p className="text-xs text-text-muted">
+                {t('gallerySettings.danger.typeConfirmHint', { slug: gallery.slug })}
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(event) => setDeleteConfirmText(event.target.value)}
+                className="w-full rounded-card border border-border bg-surface-card px-3 py-2 text-sm text-text-primary focus:border-error focus:outline-none"
+                aria-label={t('gallerySettings.danger.typeConfirmAria')}
+              />
+              <div className="flex items-center gap-3">
               <button
                 onClick={handleDelete}
-                disabled={deleting}
+                disabled={deleting || deleteConfirmText.trim() !== gallery.slug}
                 className="px-4 py-2 rounded-full bg-error text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {deleting ? t('gallerySettings.danger.deleting') : t('gallerySettings.danger.confirmDelete')}
               </button>
               <button
-                onClick={() => setConfirmDelete(false)}
+                onClick={() => {
+                  setConfirmDelete(false)
+                  setDeleteConfirmText('')
+                }}
                 className="px-4 py-2 rounded-full border border-border text-text-muted text-sm hover:border-accent hover:text-accent transition-colors"
               >
                 {t('common.cancel')}
               </button>
+              </div>
             </div>
           )}
         </div>

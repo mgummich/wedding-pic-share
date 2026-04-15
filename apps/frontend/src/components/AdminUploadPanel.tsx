@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Camera, RefreshCw, Upload } from 'lucide-react'
 import { adminUploadFile, ApiError } from '@/lib/api'
 import { getUploadErrorMessage, validateGuestName, validateUploadFile } from '@/lib/uploadValidation'
@@ -40,6 +40,15 @@ export function AdminUploadPanel({
   const [summary, setSummary] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [autoApproveMode, setAutoApproveMode] = useState(false)
+  const [isDragActive, setIsDragActive] = useState(false)
+
+  const processedCount = useMemo(
+    () => queue.filter((item) => item.status === 'approved' || item.status === 'pending' || item.status === 'error').length,
+    [queue]
+  )
+  const progressPercent = queue.length > 0
+    ? Math.min(100, Math.round((processedCount / queue.length) * 100))
+    : 0
 
   function toUploadErrorMessage(error: unknown): string {
     if (error instanceof ApiError) {
@@ -48,10 +57,7 @@ export function AdminUploadPanel({
     return t('adminUpload.error.network')
   }
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(event.target.files ?? [])
-    if (selected.length === 0) return
-
+  function appendSelectedFiles(selected: File[]) {
     setQueue((prev) => [
       ...prev,
       ...selected.map((file) => {
@@ -66,7 +72,21 @@ export function AdminUploadPanel({
     ])
     setFormError(null)
     setSummary(null)
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? [])
+    if (selected.length === 0) return
+    appendSelectedFiles(selected)
     event.target.value = ''
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setIsDragActive(false)
+    const selected = Array.from(event.dataTransfer.files ?? [])
+    if (selected.length === 0) return
+    appendSelectedFiles(selected)
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -166,7 +186,7 @@ export function AdminUploadPanel({
   }
 
   return (
-    <section className="max-w-lg px-4 pb-6">
+    <section className="max-w-4xl px-4 pb-6">
       <div className="rounded-card border border-border bg-surface-card p-4 space-y-4">
         <div>
           <h2 className="text-sm font-medium uppercase tracking-wide text-text-muted">
@@ -184,7 +204,32 @@ export function AdminUploadPanel({
             </label>
             <div
               onClick={() => inputRef.current?.click()}
-              className="border-2 border-dashed border-border rounded-card p-6 flex cursor-pointer flex-col items-center gap-3 hover:border-accent transition-colors"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  inputRef.current?.click()
+                }
+              }}
+              onDragOver={(event) => {
+                event.preventDefault()
+                setIsDragActive(true)
+              }}
+              onDragEnter={(event) => {
+                event.preventDefault()
+                setIsDragActive(true)
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault()
+                if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+                setIsDragActive(false)
+              }}
+              onDrop={handleDrop}
+              role="button"
+              tabIndex={0}
+              className={[
+                'border-2 border-dashed rounded-card p-6 flex cursor-pointer flex-col items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30',
+                isDragActive ? 'border-accent bg-accent/5' : 'border-border hover:border-accent',
+              ].join(' ')}
             >
               <Camera className="w-8 h-8 text-text-muted" />
               <span className="text-center text-sm text-text-muted">
@@ -259,6 +304,20 @@ export function AdminUploadPanel({
                 </li>
               ))}
             </ul>
+          )}
+
+          {isUploading && queue.length > 0 && (
+            <div className="space-y-1" aria-live="polite">
+              <div className="h-2 w-full rounded-full bg-border">
+                <div
+                  className="h-2 rounded-full bg-accent transition-[width] duration-300"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <p className="text-xs text-text-muted">
+                {t('adminUpload.progress', { done: processedCount, total: queue.length })}
+              </p>
+            </div>
           )}
 
           {formError && <p className="text-sm text-error">{formError}</p>}

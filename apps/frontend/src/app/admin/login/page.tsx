@@ -2,17 +2,21 @@
 
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import { adminLogin, ApiError } from '@/lib/api'
 import { useAdminI18n } from '@/components/AdminLocaleContext'
+import { useToast } from '@/components/ToastProvider'
 import type { AdminLocale } from '@/lib/adminI18n'
 
 export default function AdminLoginPage() {
   const router = useRouter()
   const { locale, setLocale, t } = useAdminI18n()
+  const { showToast } = useToast()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
   const [totpRequired, setTotpRequired] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -28,20 +32,27 @@ export default function AdminLoginPage() {
         const type = (err.body as { type?: unknown })?.type
         if (type === 'totp-required') {
           setTotpRequired(true)
-          setError(t('login.error.totpRequired'))
+          const message = t('login.error.totpRequired')
+          setError(message)
+          showToast(message, 'error')
         } else if (type === 'invalid-totp') {
           setTotpRequired(true)
-          setError(t('login.error.invalidTotp'))
+          const message = t('login.error.invalidTotp')
+          setError(message)
+          showToast(message, 'error')
         } else {
-          setError(t('login.error.invalidCredentials'))
+          const message = t('login.error.invalidCredentials')
+          setError(message)
+          showToast(message, 'error')
         }
       } else if (err instanceof ApiError && err.status === 429) {
-        const title = (err.body as { title?: unknown })?.title
-        setError(typeof title === 'string'
-          ? title
-          : t('login.error.rateLimited'))
+        const message = t('login.error.rateLimited')
+        setError(message)
+        showToast(message, 'error')
       } else {
-        setError(t('login.error.generic'))
+        const message = t('login.error.generic')
+        setError(message)
+        showToast(message, 'error')
       }
     } finally {
       setLoading(false)
@@ -89,16 +100,26 @@ export default function AdminLoginPage() {
             <label htmlFor="password" className="block text-sm font-medium text-text-primary mb-1">
               {t('login.password')}
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-2.5 rounded-card border border-border
-                         focus:outline-none focus:border-accent bg-surface-card text-text-primary"
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 pr-11 rounded-card border border-border
+                           focus:outline-none focus:border-accent bg-surface-card text-text-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
           {totpRequired && (
             <div>

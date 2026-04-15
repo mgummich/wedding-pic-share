@@ -13,6 +13,7 @@ const MAX_RECONNECT_DELAY_MS = 30_000
 interface UseSSEOptions {
   onPhoto: (photo: PhotoResponse) => void
   onGalleryClosed?: () => void
+  onConnectionStateChange?: (state: 'connecting' | 'connected' | 'reconnecting' | 'closed') => void
   enabled?: boolean
 }
 
@@ -30,7 +31,12 @@ export function useSSE(gallerySlug: string, opts: UseSSEOptions): void {
 
     function connect() {
       if (destroyed) return
+      optsRef.current.onConnectionStateChange?.('connecting')
       es = new EventSource(`${BASE_URL}/api/v1/g/${gallerySlug}/slideshow/stream`)
+
+      es.onopen = () => {
+        optsRef.current.onConnectionStateChange?.('connected')
+      }
 
       es.addEventListener('new-photo', (event: MessageEvent) => {
         try {
@@ -42,12 +48,14 @@ export function useSSE(gallerySlug: string, opts: UseSSEOptions): void {
 
       es.addEventListener('gallery-closed', () => {
         optsRef.current.onGalleryClosed?.()
+        optsRef.current.onConnectionStateChange?.('closed')
         es?.close()
       })
 
       es.onerror = () => {
         es?.close()
         if (destroyed) return
+        optsRef.current.onConnectionStateChange?.('reconnecting')
         timeoutId = setTimeout(() => {
           reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS)
           connect()
@@ -61,6 +69,7 @@ export function useSSE(gallerySlug: string, opts: UseSSEOptions): void {
       destroyed = true
       if (timeoutId) clearTimeout(timeoutId)
       es?.close()
+      optsRef.current.onConnectionStateChange?.('closed')
     }
   }, [gallerySlug, opts.enabled])
 }
