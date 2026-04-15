@@ -67,7 +67,7 @@ export function UploadForm({ gallerySlug, guestNameMode }: UploadFormProps) {
       }
       return { file: f, status: 'pending' }
     })
-    updateFiles(() => validated)
+    updateFiles((prev) => [...prev, ...validated])
     setFormError(null)
     setSubmitted(false)
   }

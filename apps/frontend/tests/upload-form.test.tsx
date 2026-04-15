@@ -90,6 +90,22 @@ describe('UploadForm', () => {
     expect(await screen.findByText(/bitte.*datei/i)).toBeInTheDocument()
   })
 
+  it('keeps previously queued files when selecting more files', async () => {
+    const user = userEvent.setup()
+    render(<UploadForm {...defaultProps} />)
+
+    const input = screen.getByLabelText(/fotos/i)
+    const first = new File(['one'], 'first.png', { type: 'image/png' })
+    const second = new File(['two'], 'second.png', { type: 'image/png' })
+
+    await user.upload(input, first)
+    expect(screen.getByText('first.png')).toBeInTheDocument()
+
+    await user.upload(input, second)
+    expect(screen.getByText('first.png')).toBeInTheDocument()
+    expect(screen.getByText('second.png')).toBeInTheDocument()
+  })
+
   it('uploads multiple files in parallel', async () => {
     const resolvers: Array<(value: ReturnType<typeof createUploadResponse>) => void> = []
     vi.mocked(uploadFile).mockImplementation(() => new Promise((resolve) => {

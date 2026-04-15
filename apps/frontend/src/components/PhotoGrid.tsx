@@ -10,16 +10,22 @@ interface PhotoGridProps {
 }
 
 export function PhotoGrid({ photos, layout, onPhotoClick }: PhotoGridProps) {
+  const optimizeLargeList = photos.length > 50
+
   if (layout === 'GRID') {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
         {photos.map((photo, i) => (
-          <PhotoCard
+          <div
             key={photo.id}
-            photo={photo}
-            onClick={onPhotoClick}
-            priority={i < 4}
-          />
+            style={optimizeLargeList ? { contentVisibility: 'auto', containIntrinsicSize: '300px 300px' } : undefined}
+          >
+            <PhotoCard
+              photo={photo}
+              onClick={onPhotoClick}
+              priority={i < 4}
+            />
+          </div>
         ))}
       </div>
     )
@@ -32,7 +38,13 @@ export function PhotoGrid({ photos, layout, onPhotoClick }: PhotoGridProps) {
         <div
           key={photo.id}
           className="mb-2 break-inside-avoid opacity-0 animate-fade-up"
-          style={{ animationDelay: i < 20 ? `${i * 60}ms` : '0ms' }}
+          style={optimizeLargeList
+            ? {
+              animationDelay: i < 20 ? `${i * 60}ms` : '0ms',
+              contentVisibility: 'auto',
+              containIntrinsicSize: '300px 300px',
+            }
+            : { animationDelay: i < 20 ? `${i * 60}ms` : '0ms' }}
         >
           <PhotoCard photo={photo} onClick={onPhotoClick} priority={i < 4} />
         </div>

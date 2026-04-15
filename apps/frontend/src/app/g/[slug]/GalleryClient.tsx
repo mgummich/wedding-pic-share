@@ -59,7 +59,11 @@ export function GalleryClient({
     setLoading(true)
     try {
       const result = await getGallery(gallery.slug, { cursor })
-      setPhotos((prev) => [...prev, ...result.data])
+      setPhotos((prev) => {
+        const existingIds = new Set(prev.map((photo) => photo.id))
+        const next = result.data.filter((photo) => !existingIds.has(photo.id))
+        return [...prev, ...next]
+      })
       setCursor(result.pagination.nextCursor)
       setHasMore(result.pagination.hasMore)
     } catch {

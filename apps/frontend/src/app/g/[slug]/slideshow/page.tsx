@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, use, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { getGallery } from '@/lib/api'
@@ -33,6 +33,7 @@ export default function SlideshowPage({ params }: PageProps) {
   const [galleryClosed, setGalleryClosed] = useState(false)
   const [sseState, setSseState] = useState<'connecting' | 'connected' | 'reconnecting' | 'closed'>('connecting')
   const [liveAnnouncement, setLiveAnnouncement] = useState('')
+  const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     getGallery(slug, { limit: 50 })
@@ -68,13 +69,23 @@ export default function SlideshowPage({ params }: PageProps) {
   useEffect(() => {
     if (photos.length < 2) return
     const timer = setInterval(() => {
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current)
+      }
       setIsTransitioning(true)
-      setTimeout(() => {
+      transitionTimeoutRef.current = setTimeout(() => {
         setCurrentIndex((i) => (i + 1) % photos.length)
         setIsTransitioning(false)
+        transitionTimeoutRef.current = null
       }, 800)
     }, DISPLAY_DURATION_MS)
-    return () => clearInterval(timer)
+    return () => {
+      clearInterval(timer)
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current)
+        transitionTimeoutRef.current = null
+      }
+    }
   }, [photos.length])
 
   const current = photos[currentIndex]

@@ -17,7 +17,9 @@ vi.mock('../src/lib/sse', () => ({
 }))
 
 vi.mock('../src/components/PhotoGrid', () => ({
-  PhotoGrid: () => <div data-testid="photo-grid" />,
+  PhotoGrid: ({ photos }: { photos: Array<{ id: string }> }) => (
+    <div data-testid="photo-grid">{photos.map((photo) => photo.id).join(',')}</div>
+  ),
 }))
 
 vi.mock('../src/components/UploadButton', () => ({
@@ -83,5 +85,39 @@ describe('GalleryClient', () => {
     await user.click(screen.getByRole('button', { name: /mehr laden/i }))
 
     expect(await screen.findByText(/mehr laden fehlgeschlagen/i)).toBeInTheDocument()
+  })
+
+  it('deduplicates photos when load-more returns already visible items', async () => {
+    vi.mocked(getGallery).mockResolvedValueOnce({
+      ...gallery,
+      data: [
+        photo,
+        {
+          ...photo,
+          id: 'p2',
+          thumbUrl: '/thumb/p2.webp',
+          displayUrl: '/display/p2.webp',
+        },
+      ],
+      pagination: {
+        nextCursor: null,
+        hasMore: false,
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <GalleryClient
+        gallery={gallery}
+        initialPhotos={[photo]}
+        initialCursor="cursor-1"
+        initialHasMore
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /mehr laden/i }))
+
+    const grid = await screen.findByTestId('photo-grid')
+    expect(grid.textContent).toBe('p1,p2')
   })
 })
