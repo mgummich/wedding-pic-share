@@ -14,16 +14,16 @@
     "lint": "echo 'lint ok'"
   },
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.7.0",
-    "@prisma/client": "^7.7.0",
-    "@prisma/client-runtime-utils": "^7.7.0"
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@prisma/client-runtime-utils": "^7.8.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
     "dotenv": "^17.2.3",
-    "prisma": "^7.7.0",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.4"
+    "prisma": "^7.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }
